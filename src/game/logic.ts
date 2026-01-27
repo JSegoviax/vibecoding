@@ -1,4 +1,4 @@
-import type { GameState, Terrain } from './types'
+import type { GameState, Terrain, PlayerId } from './types'
 
 function getEdgesForVertex(edges: Record<string, { v1: string; v2: string }>, vid: string): string[] {
   return Object.entries(edges)
@@ -334,7 +334,7 @@ function findLongestPathFromEdge(
 export function updateLongestRoad(state: GameState): void {
   const MIN_LONGEST_ROAD = 6
   let maxLength = 0
-  let newLongestPlayerId: number | null = null
+  let newLongestPlayerId: PlayerId | null = null
 
   // Find player with longest road
   for (const player of state.players) {

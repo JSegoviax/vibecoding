@@ -28,8 +28,8 @@ function ResourceChip({ type, count, flash }: { type: Terrain; count: number; fl
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 4,
-        padding: '2px 8px',
+        gap: 6,
+        padding: '4px 10px',
         borderRadius: 6,
         background: `${TERRAIN_COLORS[type]}33`,
         border: `1px solid ${TERRAIN_COLORS[type]}`,
@@ -40,13 +40,15 @@ function ResourceChip({ type, count, flash }: { type: Terrain; count: number; fl
     >
       <span
         style={{
-          width: 6,
-          height: 6,
+          width: 8,
+          height: 8,
           borderRadius: '50%',
           background: TERRAIN_COLORS[type],
+          flexShrink: 0,
         }}
       />
-      <span>{count}</span>
+      <span style={{ fontWeight: 500 }}>{TERRAIN_LABELS[type]}</span>
+      <span style={{ fontWeight: 600, marginLeft: 2 }}>{count}</span>
     </div>
   )
 }
