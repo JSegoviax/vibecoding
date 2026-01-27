@@ -1,0 +1,615 @@
+import { useState, useRef, useEffect } from 'react'
+import { HexBoard } from './components/HexBoard'
+import { PlayerResources } from './components/PlayerResources'
+import { VictoryPointTracker } from './components/VictoryPointTracker'
+import { createInitialState } from './game/state'
+import { runAISetup, runAITurn, runAITrade, runAIRobberMove, runAISelectPlayerToRob } from './game/ai'
+import {
+  canPlaceSettlement,
+  canPlaceRoad,
+  canPlaceRoadInSetup,
+  getPlaceableVertices,
+  getPlaceableRoadsForVertex,
+  getPlaceableRoads,
+  canAfford,
+  canBuildCity,
+  getMissingResources,
+  distributeResources,
+  giveInitialResources,
+  getPlayersOnHex,
+  stealResource,
+} from './game/logic'
+import { TERRAIN_LABELS } from './game/terrain'
+
+const SETUP_ORDER: Record<number, number[]> = {
+  2: [0, 1, 1, 0],
+  3: [0, 1, 2, 2, 1, 0],
+  4: [0, 1, 2, 3, 3, 2, 1, 0],
+}
+
+function getSetupPlayerIndex(state: { phase: string; setupPlacements: number; players: unknown[] }): number {
+  const n = state.players.length
+  const order = SETUP_ORDER[n as 2 | 3 | 4] ?? SETUP_ORDER[2]
+  return order[Math.min(state.setupPlacements, order.length - 1)] ?? 0
+}
+
+export default function App() {
+  const [game, setGame] = useState(() => createInitialState(2))
+  const [setupPendingRoadVertex, setSetupPendingRoadVertex] = useState<string | null>(null)
+  const [buildMode, setBuildMode] = useState<'road' | 'settlement' | 'city' | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [tradeFormOpen, setTradeFormOpen] = useState(false)
+  const [tradeGive, setTradeGive] = useState<'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'>('wood')
+  const [tradeGet, setTradeGet] = useState<'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'>('brick')
+  const [robberMode, setRobberMode] = useState<{ moving: boolean; newHexId: string | null; playersToRob: Set<number> }>({ moving: false, newHexId: null, playersToRob: new Set() })
+  const aiNextRoadEdge = useRef<string | null>(null)
+  const aiBuildTarget = useRef<{ type: string; vertexId?: string; edgeId?: string } | null>(null)
+
+  const RESOURCE_OPTIONS: ('wood' | 'brick' | 'sheep' | 'wheat' | 'ore')[] = ['wood', 'brick', 'sheep', 'wheat', 'ore']
+
+  const n = game.players.length
+  const setupOrder = SETUP_ORDER[n as 2 | 3 | 4] ?? SETUP_ORDER[2]
+  const setupPlayerIndex = getSetupPlayerIndex(game)
+  const currentPlayer = game.players[game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex]
+  const playerId = currentPlayer?.id ?? 1
+
+  const vertexStates: Record<string, { player: number; type: 'settlement' | 'city' }> = {}
+  const edgeStates: Record<string, number> = {}
+  for (const [id, v] of Object.entries(game.vertices)) {
+    if (v.structure) vertexStates[id] = { player: v.structure.player, type: v.structure.type }
+  }
+  for (const [id, e] of Object.entries(game.edges)) {
+    if (e.road) edgeStates[id] = e.road
+  }
+
+  const isSetupRoad = game.phase === 'setup' && setupPendingRoadVertex != null
+  const isAITurn = n === 2 && (game.phase === 'setup' ? setupPlayerIndex === 1 : game.currentPlayerIndex === 1)
+  const placeableVertices = new Set(
+    isAITurn ? [] : game.phase === 'setup' && !isSetupRoad
+      ? getPlaceableVertices(game, playerId)
+      : buildMode === 'settlement'
+        ? getPlaceableVertices(game, playerId)
+        : []
+  )
+  const placeableEdges = new Set(
+    isAITurn ? [] : isSetupRoad && setupPendingRoadVertex
+      ? getPlaceableRoadsForVertex(game, setupPendingRoadVertex, playerId)
+      : buildMode === 'road'
+        ? getPlaceableRoads(game, playerId)
+        : []
+  )
+  const placeableCityVertices = new Set(
+    isAITurn ? [] : buildMode === 'city'
+      ? Object.keys(game.vertices).filter(id => canBuildCity(game, id, playerId))
+      : []
+  )
+  const highlightedVertices = new Set([...placeableVertices, ...placeableCityVertices])
+  const highlightedEdges = placeableEdges
+  // Hexes that can be selected for robber (all except current robber hex)
+  const selectableRobberHexes = robberMode.moving
+    ? new Set(game.hexes.filter(h => h.id !== game.robberHexId).map(h => h.id))
+    : new Set<string>()
+
+  const handleSelectVertex = (vid: string) => {
+    if (game.phase === 'setup' && !isSetupRoad) {
+      if (!canPlaceSettlement(game, vid, playerId)) return
+      setGame(g => {
+        const next = { ...g, vertices: { ...g.vertices } }
+        next.vertices[vid] = { ...next.vertices[vid], structure: { player: playerId, type: 'settlement' } }
+        next.players = g.players.map((p, i) =>
+          i === playerId - 1 ? { ...p, resources: { ...p.resources }, settlementsLeft: p.settlementsLeft - 1, victoryPoints: p.victoryPoints + 1 } : p
+        )
+        if (g.setupPlacements >= n) giveInitialResources(next, vid)
+        return next
+      })
+      setSetupPendingRoadVertex(vid)
+      return
+    }
+    if (game.phase === 'setup' && isSetupRoad) return
+
+    if (buildMode === 'settlement' && canPlaceSettlement(game, vid, playerId)) {
+      if (!canAfford(currentPlayer, 'settlement')) {
+        setErrorMessage('Insufficient resources. Need: ' + getMissingResources(currentPlayer, 'settlement').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
+        return
+      }
+      setGame(g => {
+        const cost = { wood: 1, brick: 1, sheep: 1, wheat: 1 }
+        const next = { ...g, vertices: { ...g.vertices } }
+        next.vertices[vid] = { ...next.vertices[vid], structure: { player: playerId, type: 'settlement' } }
+        next.players = g.players.map((p, i) => {
+          if (i !== playerId - 1) return p
+          const res = { ...p.resources }
+          for (const [t, n] of Object.entries(cost)) { res[t as keyof typeof res] = Math.max(0, (res[t as keyof typeof res] || 0) - n!) }
+          return { ...p, resources: res, settlementsLeft: p.settlementsLeft - 1, victoryPoints: p.victoryPoints + 1 }
+        })
+        return next
+      })
+      setBuildMode(null)
+      setErrorMessage(null)
+    }
+    if (buildMode === 'city' && canBuildCity(game, vid, playerId)) {
+      if (!canAfford(currentPlayer, 'city')) {
+        setErrorMessage('Insufficient resources. Need: ' + getMissingResources(currentPlayer, 'city').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
+        return
+      }
+      setGame(g => {
+        const cost = { wheat: 2, ore: 3 }
+        const next = { ...g, vertices: { ...g.vertices } }
+        const v = next.vertices[vid]
+        if (v?.structure) {
+          next.vertices[vid] = { ...v, structure: { player: playerId, type: 'city' } }
+          next.players = g.players.map((p, i) => {
+            if (i !== playerId - 1) return p
+            const res = { ...p.resources }
+            for (const [t, n] of Object.entries(cost)) { res[t as keyof typeof res] = Math.max(0, (res[t as keyof typeof res] || 0) - n!) }
+            return { ...p, resources: res, settlementsLeft: p.settlementsLeft + 1, citiesLeft: p.citiesLeft - 1, victoryPoints: p.victoryPoints + 1 }
+          })
+        }
+        return next
+      })
+      setBuildMode(null)
+      setErrorMessage(null)
+    }
+  }
+
+  const handleSelectEdge = (eid: string) => {
+    if (game.phase === 'setup' && isSetupRoad && setupPendingRoadVertex) {
+      if (!canPlaceRoadInSetup(game, eid, playerId, setupPendingRoadVertex)) return
+      setGame(g => {
+        const next = { ...g, edges: { ...g.edges } }
+        next.edges[eid] = { ...next.edges[eid], road: playerId }
+        next.players = g.players.map((p, i) =>
+          i === playerId - 1 ? { ...p, roadsLeft: p.roadsLeft - 1 } : p
+        )
+        next.setupPlacements++
+        if (next.setupPlacements >= 2 * n) next.phase = 'playing'
+        return next
+      })
+      setSetupPendingRoadVertex(null)
+      return
+    }
+    if (buildMode === 'road' && canPlaceRoad(game, eid, playerId)) {
+      if (!canAfford(currentPlayer, 'road')) {
+        setErrorMessage('Insufficient resources. Need: ' + getMissingResources(currentPlayer, 'road').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
+        return
+      }
+      setGame(g => {
+        const cost = { wood: 1, brick: 1 }
+        const next = { ...g, edges: { ...g.edges } }
+        next.edges[eid] = { ...next.edges[eid], road: playerId }
+        next.players = g.players.map((p, i) => {
+          if (i !== playerId - 1) return p
+          const res = { ...p.resources }
+          res.wood = Math.max(0, (res.wood || 0) - 1)
+          res.brick = Math.max(0, (res.brick || 0) - 1)
+          return { ...p, resources: res, roadsLeft: p.roadsLeft - 1 }
+        })
+        return next
+      })
+      setBuildMode(null)
+      setErrorMessage(null)
+    }
+  }
+
+  const handleRoll = () => {
+    const a = 1 + Math.floor(Math.random() * 6)
+    const b = 1 + Math.floor(Math.random() * 6)
+    const sum = a + b
+    setGame(g => {
+      const next = {
+        ...g,
+        lastDice: [a, b],
+        players: g.players.map(p => ({ ...p, resources: { ...p.resources } })),
+        lastResourceFlash: null,
+      }
+      if (sum === 7) {
+        // Enable robber mode
+        setRobberMode({ moving: true, newHexId: null, playersToRob: new Set() })
+      } else {
+        next.lastResourceFlash = distributeResources(next, sum)
+      }
+      return next
+    })
+  }
+
+  const handleSelectRobberHex = (hexId: string) => {
+    if (!robberMode.moving) return
+    if (hexId === game.robberHexId) {
+      setErrorMessage('Robber must move to a different hex')
+      return
+    }
+
+    const playersOnHex = getPlayersOnHex(game, hexId)
+    // Filter out the current player (can't rob yourself)
+    const playersToRob = new Set(Array.from(playersOnHex).filter(pid => pid !== playerId))
+
+    if (playersToRob.size > 0) {
+      // Need to select which player to rob
+      setRobberMode({ moving: false, newHexId: hexId, playersToRob })
+    } else {
+      // No players to rob, just move the robber
+      setGame(g => ({
+        ...g,
+        robberHexId: hexId,
+      }))
+      setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
+      setErrorMessage(null)
+    }
+  }
+
+  const handleSelectPlayerToRob = (targetPlayerId: number) => {
+    if (!robberMode.newHexId) return
+
+    const stolen = stealResource(game, playerId, targetPlayerId)
+    setGame(g => ({
+      ...g,
+      robberHexId: robberMode.newHexId!,
+    }))
+    setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
+    if (stolen) {
+      setErrorMessage(`Stole ${stolen} from ${game.players[targetPlayerId - 1]?.name || 'player'}`)
+    } else {
+      setErrorMessage('Target player has no resources to steal')
+    }
+  }
+
+  const handleEndTurn = () => {
+    setGame(g => ({
+      ...g,
+      currentPlayerIndex: (g.currentPlayerIndex + 1) % g.players.length,
+      lastDice: null,
+      lastResourceFlash: null,
+    }))
+    setBuildMode(null)
+    setTradeFormOpen(false)
+    setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
+  }
+
+  const handleTrade = (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => {
+    setGame(g => {
+      const idx = g.currentPlayerIndex
+      const p = g.players[idx]
+      if (!p || (p.resources[give] || 0) < 4) return g
+      const next = { ...g, players: g.players.map((pl, i) => {
+        if (i !== idx) return pl
+        const res = { ...pl.resources }
+        res[give] = Math.max(0, (res[give] || 0) - 4)
+        res[get] = (res[get] || 0) + 1
+        return { ...pl, resources: res }
+      }) }
+      return next
+    })
+    setTradeFormOpen(false)
+    setErrorMessage(null)
+  }
+
+  const winner = game.players.find(p => p.victoryPoints >= 10)
+
+  // AI: setup — place settlement then road
+  useEffect(() => {
+    if (game.phase !== 'setup' || setupPlayerIndex !== 1 || setupPendingRoadVertex) return
+    const t = setTimeout(() => {
+      try {
+        const { vertexId, edgeId } = runAISetup(game)
+        aiNextRoadEdge.current = edgeId
+        handleSelectVertex(vertexId)
+      } catch {
+        aiNextRoadEdge.current = null
+      }
+    }, 700)
+    return () => clearTimeout(t)
+  }, [game.phase, game.setupPlacements, setupPendingRoadVertex])
+
+  useEffect(() => {
+    if (!setupPendingRoadVertex || !aiNextRoadEdge.current) return
+    const t = setTimeout(() => {
+      const eid = aiNextRoadEdge.current
+      aiNextRoadEdge.current = null
+      if (eid) handleSelectEdge(eid)
+    }, 400)
+    return () => clearTimeout(t)
+  }, [setupPendingRoadVertex])
+
+  // AI: playing — roll, then build or end
+  useEffect(() => {
+    if (game.phase !== 'playing' || game.currentPlayerIndex !== 1 || game.lastDice || winner) return
+    const t = setTimeout(() => handleRoll(), 600)
+    return () => clearTimeout(t)
+  }, [game.phase, game.currentPlayerIndex, game.lastDice, winner])
+
+  // AI: handle robber move when 7 is rolled
+  useEffect(() => {
+    if (game.phase !== 'playing' || game.currentPlayerIndex !== 1 || !game.lastDice || game.lastDice[0] + game.lastDice[1] !== 7 || !robberMode.moving || winner) return
+    const t = setTimeout(() => {
+      const hexId = runAIRobberMove(game)
+      handleSelectRobberHex(hexId)
+    }, 600)
+    return () => clearTimeout(t)
+  }, [game.phase, game.currentPlayerIndex, game.lastDice, robberMode.moving, winner])
+
+  // AI: select player to rob
+  useEffect(() => {
+    if (game.phase !== 'playing' || game.currentPlayerIndex !== 1 || !robberMode.newHexId || robberMode.playersToRob.size === 0 || winner) return
+    const t = setTimeout(() => {
+      const targetPlayerId = runAISelectPlayerToRob(game, robberMode.newHexId!)
+      if (targetPlayerId) {
+        handleSelectPlayerToRob(targetPlayerId)
+      } else {
+        // No valid player to rob, just move the robber
+        setGame(g => ({
+          ...g,
+          robberHexId: robberMode.newHexId!,
+        }))
+        setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
+      }
+    }, 600)
+    return () => clearTimeout(t)
+  }, [robberMode.newHexId, robberMode.playersToRob, game.phase, game.currentPlayerIndex, winner])
+
+  useEffect(() => {
+    if (game.phase !== 'playing' || game.currentPlayerIndex !== 1 || !game.lastDice || winner || buildMode || robberMode.moving || robberMode.newHexId) return
+    const t = setTimeout(() => {
+      const trade = runAITrade(game)
+      if (trade) {
+        handleTrade(trade.give, trade.get)
+        return
+      }
+      const decision = runAITurn(game)
+      if (decision.action === 'end') {
+        handleEndTurn()
+      } else {
+        setBuildMode(decision.action as 'road' | 'settlement' | 'city')
+        aiBuildTarget.current = {
+          type: decision.action,
+          vertexId: 'vertexId' in decision ? decision.vertexId : undefined,
+          edgeId: 'edgeId' in decision ? decision.edgeId : undefined,
+        }
+      }
+    }, 800)
+    return () => clearTimeout(t)
+  }, [game.phase, game.currentPlayerIndex, game.lastDice, game.players, buildMode, winner, robberMode.moving, robberMode.newHexId])
+
+  useEffect(() => {
+    if (!buildMode || !aiBuildTarget.current || aiBuildTarget.current.type !== buildMode) return
+    const target = aiBuildTarget.current
+    const t = setTimeout(() => {
+      if (target.vertexId) handleSelectVertex(target.vertexId)
+      else if (target.edgeId) handleSelectEdge(target.edgeId)
+      aiBuildTarget.current = null
+    }, 50)
+    return () => clearTimeout(t)
+  }, [buildMode])
+
+  useEffect(() => {
+    if (!errorMessage) return
+    const t = setTimeout(() => setErrorMessage(null), 4000)
+    return () => clearTimeout(t)
+  }, [errorMessage])
+
+  useEffect(() => {
+    if (!game.lastResourceFlash || Object.keys(game.lastResourceFlash).length === 0) return
+    const t = setTimeout(() => setGame(g => ({ ...g, lastResourceFlash: null })), 800)
+    return () => clearTimeout(t)
+  }, [game.lastResourceFlash])
+
+  const isPlaying = game.phase === 'playing' && !winner
+
+  return (
+    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
+      <h1 style={{ textAlign: 'center', marginBottom: '0.5rem' }}>BAYC #1855 Game Time</h1>
+      <p style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 0 }}>
+        {game.phase === 'setup' && !isSetupRoad && `Place a settlement`}
+        {game.phase === 'setup' && isSetupRoad && `Place a road next to it`}
+        {isPlaying && robberMode.moving && `Rolled 7! Click a hex to move the robber`}
+        {isPlaying && robberMode.newHexId && robberMode.playersToRob.size > 0 && `Select a player to rob`}
+        {isPlaying && !robberMode.moving && !robberMode.newHexId && `Roll dice, then build or end turn`}
+        {winner && `${winner.name} wins with ${winner.victoryPoints} VP!`}
+      </p>
+
+      {errorMessage && (
+        <div
+          role="alert"
+          style={{
+            margin: '0 auto 16px',
+            maxWidth: 500,
+            padding: '10px 14px',
+            borderRadius: 8,
+            background: 'rgba(185, 28, 28, 0.2)',
+            border: '1px solid rgba(185, 28, 28, 0.5)',
+            color: '#fca5a5',
+            fontSize: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <span>{errorMessage}</span>
+          <button onClick={() => setErrorMessage(null)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+        <div
+          style={{
+            flex: '1 1 auto',
+            minWidth: 600,
+            borderRadius: 12,
+            overflow: 'hidden',
+            backgroundColor: '#e0d5c4',
+            border: '3px solid #c4b59a',
+            boxShadow: 'inset 0 0 60px rgba(139,115,85,0.15)',
+          }}
+        >
+          <HexBoard
+            hexes={game.hexes}
+            vertexStates={vertexStates}
+            edgeStates={edgeStates}
+            selectVertex={isAITurn ? undefined : handleSelectVertex}
+            selectEdge={isAITurn ? undefined : handleSelectEdge}
+            highlightedVertices={highlightedVertices}
+            highlightedEdges={highlightedEdges}
+            robberHexId={game.robberHexId}
+            selectableRobberHexes={selectableRobberHexes}
+            selectHex={robberMode.moving ? handleSelectRobberHex : undefined}
+          />
+        </div>
+
+        <aside style={{ flex: '0 0 280px', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <VictoryPointTracker
+            vertices={game.vertices}
+            players={game.players}
+            activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
+            phase={game.phase}
+          />
+
+          <PlayerResources
+            players={game.players}
+            activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
+            phase={game.phase}
+            lastResourceFlash={game.lastResourceFlash}
+          />
+
+          {game.phase === 'setup' && (
+            <p style={{ fontSize: 14, color: 'var(--muted)' }}>
+              {isAITurn ? 'Player 2 (AI) is placing…' : !isSetupRoad ? 'Click an empty spot to place a settlement.' : 'Click an edge connected to your settlement to place a road.'}
+            </p>
+          )}
+
+          {isPlaying && isAITurn && (
+            <p style={{ fontSize: 14, color: 'var(--muted)' }}>
+              {game.lastDice ? `Player 2 (AI) rolled ${game.lastDice[0]} + ${game.lastDice[1]} = ${game.lastDice[0] + game.lastDice[1]}` : 'Player 2 (AI) is thinking…'}
+            </p>
+          )}
+
+          {robberMode.newHexId && robberMode.playersToRob.size > 0 && (
+            <div style={{ padding: 12, borderRadius: 8, background: 'rgba(100,181,246,0.1)', border: '1px solid rgba(100,181,246,0.3)', marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>Select player to rob:</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {Array.from(robberMode.playersToRob).map(pid => {
+                  const p = game.players[pid - 1]
+                  if (!p) return null
+                  const totalResources = (p.resources.wood || 0) + (p.resources.brick || 0) + (p.resources.sheep || 0) + (p.resources.wheat || 0) + (p.resources.ore || 0)
+                  return (
+                    <button
+                      key={pid}
+                      onClick={() => handleSelectPlayerToRob(pid)}
+                      disabled={totalResources === 0}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '1px solid var(--muted)',
+                        background: 'var(--surface)',
+                        color: p.color,
+                        cursor: totalResources === 0 ? 'not-allowed' : 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: 13,
+                        opacity: totalResources === 0 ? 0.5 : 1,
+                      }}
+                    >
+                      {p.name} ({totalResources} resources)
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {isPlaying && !isAITurn && (
+            <>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                {game.lastDice == null ? (
+                  <button onClick={handleRoll} style={{ padding: '10px 20px', background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>
+                    Roll dice
+                  </button>
+                ) : (
+                  <>
+                    <span style={{ alignSelf: 'center' }}>Dice: {game.lastDice[0]} + {game.lastDice[1]} = {game.lastDice[0] + game.lastDice[1]}</span>
+                    {!robberMode.moving && !robberMode.newHexId && (
+                      <button onClick={handleEndTurn} style={{ padding: '8px 16px', background: 'var(--surface)', border: '1px solid var(--muted)', borderRadius: 8, color: 'var(--text)', cursor: 'pointer' }}>End turn</button>
+                    )}
+                  </>
+                )}
+              </div>
+              {game.lastDice != null && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => {
+                        if (currentPlayer.roadsLeft <= 0) return
+                        if (!canAfford(currentPlayer, 'road')) {
+                          setErrorMessage('Insufficient resources. Need: ' + getMissingResources(currentPlayer, 'road').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
+                          return
+                        }
+                        setBuildMode(b => b === 'road' ? null : 'road')
+                        setErrorMessage(null)
+                      }}
+                      disabled={currentPlayer.roadsLeft <= 0}
+                      style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: buildMode === 'road' ? 'rgba(100,181,246,0.3)' : 'transparent', color: 'var(--text)', cursor: 'pointer' }}
+                    >Road</button>
+                    <button
+                      onClick={() => {
+                        if (currentPlayer.settlementsLeft <= 0) return
+                        if (!canAfford(currentPlayer, 'settlement')) {
+                          setErrorMessage('Insufficient resources. Need: ' + getMissingResources(currentPlayer, 'settlement').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
+                          return
+                        }
+                        setBuildMode(b => b === 'settlement' ? null : 'settlement')
+                        setErrorMessage(null)
+                      }}
+                      disabled={currentPlayer.settlementsLeft <= 0}
+                      style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: buildMode === 'settlement' ? 'rgba(100,181,246,0.3)' : 'transparent', color: 'var(--text)', cursor: 'pointer' }}
+                    >Settlement</button>
+                    <button
+                      onClick={() => {
+                        if (currentPlayer.citiesLeft <= 0) return
+                        if (!canAfford(currentPlayer, 'city')) {
+                          setErrorMessage('Insufficient resources. Need: ' + getMissingResources(currentPlayer, 'city').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
+                          return
+                        }
+                        setBuildMode(b => b === 'city' ? null : 'city')
+                        setErrorMessage(null)
+                      }}
+                      disabled={currentPlayer.citiesLeft <= 0}
+                      style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: buildMode === 'city' ? 'rgba(100,181,246,0.3)' : 'transparent', color: 'var(--text)', cursor: 'pointer' }}
+                    >City</button>
+                    <button
+                      onClick={() => { setTradeFormOpen(o => !o); setErrorMessage(null) }}
+                      style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: tradeFormOpen ? 'rgba(100,181,246,0.3)' : 'transparent', color: 'var(--text)', cursor: 'pointer' }}
+                    >Trade (4:1)</button>
+                  </div>
+                  {tradeFormOpen && (
+                    <div style={{ padding: 10, borderRadius: 8, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--muted)' }}>
+                      <div style={{ fontSize: 12, marginBottom: 6 }}>Give 4 of one, get 1 of another:</div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <label style={{ fontSize: 12 }}>
+                          Give 4: <select value={tradeGive} onChange={e => setTradeGive(e.target.value as typeof tradeGive)} style={{ marginLeft: 4, padding: 4, borderRadius: 4, background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--muted)' }}>
+                            {RESOURCE_OPTIONS.map(t => <option key={t} value={t}>{TERRAIN_LABELS[t]} ({currentPlayer.resources[t] || 0})</option>)}
+                          </select>
+                        </label>
+                        <label style={{ fontSize: 12 }}>
+                          Get 1: <select value={tradeGet} onChange={e => setTradeGet(e.target.value as typeof tradeGet)} style={{ marginLeft: 4, padding: 4, borderRadius: 4, background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--muted)' }}>
+                            {RESOURCE_OPTIONS.map(t => <option key={t} value={t}>{TERRAIN_LABELS[t]}</option>)}
+                          </select>
+                        </label>
+                        <button onClick={() => { if ((currentPlayer.resources[tradeGive] || 0) < 4) { setErrorMessage(`Insufficient resources. Need 4 ${TERRAIN_LABELS[tradeGive]} to trade.`) } else { handleTrade(tradeGive, tradeGet) } }} style={{ padding: '4px 10px', borderRadius: 6, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 12 }}>Confirm</button>
+                        <button onClick={() => setTradeFormOpen(false)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--muted)', background: 'transparent', color: 'var(--text)', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {winner && (
+            <button
+              onClick={() => { setGame(createInitialState(2)); setSetupPendingRoadVertex(null); setBuildMode(null); }}
+              style={{ padding: '10px 20px', background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 'bold', cursor: 'pointer', marginTop: 8 }}
+            >New game</button>
+          )}
+        </aside>
+      </div>
+    </div>
+  )
+}
