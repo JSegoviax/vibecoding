@@ -38,15 +38,39 @@ function ResourceChip({ type, count, flash }: { type: Terrain; count: number; fl
       }}
       title={TERRAIN_LABELS[type]}
     >
-      <span
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          background: TERRAIN_COLORS[type],
-          flexShrink: 0,
-        }}
-      />
+      {type === 'wheat' ? (
+        <img
+          src="/wheat-icon.png"
+          alt="Wheat"
+          style={{
+            width: 16,
+            height: 16,
+            flexShrink: 0,
+            imageRendering: 'pixelated',
+          }}
+        />
+      ) : type === 'wood' ? (
+        <img
+          src="/wood-icon.png"
+          alt="Wood"
+          style={{
+            width: 16,
+            height: 16,
+            flexShrink: 0,
+            imageRendering: 'pixelated',
+          }}
+        />
+      ) : (
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: TERRAIN_COLORS[type],
+            flexShrink: 0,
+          }}
+        />
+      )}
       <span style={{ fontWeight: 500 }}>{TERRAIN_LABELS[type]}</span>
       <span style={{ fontWeight: 600, marginLeft: 2 }}>{count}</span>
     </div>

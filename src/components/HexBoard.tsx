@@ -62,6 +62,19 @@ export function HexBoard({
 
   return (
     <svg viewBox={`${cx - w / 2} ${cy - h / 2} ${w} ${h}`} width="100%" height="100%" style={{ maxHeight: '85vh', minHeight: 420 }}>
+      {/* Define clip paths for hexes */}
+      <defs>
+        {hexes.map(h => {
+          const center = hexToPixel(h.q, h.r)
+          const pts = [0, 1, 2, 3, 4, 5].map(i => hexCorner(center, i))
+          const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z'
+          return (
+            <clipPath key={`clip-${h.id}`} id={`hex-clip-${h.id}`}>
+              <path d={d} />
+            </clipPath>
+          )
+        })}
+      </defs>
       {/* Water hex ring (behind land) */}
       {waterPositions.map(([q, r]) => {
         const center = hexToPixel(q, r)
@@ -96,28 +109,34 @@ export function HexBoard({
               onClick={() => selectHex?.(h.id)}
               style={{ cursor: selectHex && isSelectable ? 'pointer' : 'default' }}
             />
-            {h.number != null && (
-              <>
-                <circle
-                  cx={center.x}
-                  cy={center.y}
-                  r={TOKEN_R}
-                  fill="#f5f0e6"
-                  stroke="#8b7355"
-                  strokeWidth={3}
+            {h.terrain === 'wood' && (
+              <g clipPath={`url(#hex-clip-${h.id})`}>
+                <image
+                  href="/wood-icon.png"
+                  x={center.x - HEX_R * 1.2}
+                  y={center.y - HEX_R * 1.2}
+                  width={HEX_R * 2.4}
+                  height={HEX_R * 2.4}
+                  preserveAspectRatio="xMidYMid meet"
+                  style={{ imageRendering: 'pixelated' }}
                 />
-                <text
-                  x={center.x}
-                  y={center.y}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fill={h.number === 6 || h.number === 8 ? '#b91c1c' : '#2d2216'}
-                  fontWeight="bold"
-                  fontSize={38}
-                >
-                  {h.number}
-                </text>
-              </>
+              </g>
+            )}
+            {h.number != null && (
+              <text
+                x={center.x}
+                y={center.y}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill={h.number === 6 || h.number === 8 ? '#b91c1c' : '#2d2216'}
+                fontWeight="bold"
+                fontSize={47.5}
+                stroke="#ffffff"
+                strokeWidth={2}
+                paintOrder="stroke"
+              >
+                {h.number}
+              </text>
             )}
             {isRobberHex && (
               <circle
