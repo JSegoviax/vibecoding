@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { HexBoard } from './components/HexBoard'
 import { PlayerResources } from './components/PlayerResources'
 import { VictoryPointTracker } from './components/VictoryPointTracker'
+import { BuildCostsLegend } from './components/BuildCostsLegend'
 import { createInitialState } from './game/state'
 import { runAISetup, runAITurn, runAITrade, runAIRobberMove, runAISelectPlayerToRob } from './game/ai'
 import {
@@ -18,6 +19,7 @@ import {
   giveInitialResources,
   getPlayersOnHex,
   stealResource,
+  updateLongestRoad,
 } from './game/logic'
 import { TERRAIN_LABELS } from './game/terrain'
 
@@ -163,6 +165,7 @@ export default function App() {
         )
         next.setupPlacements++
         if (next.setupPlacements >= 2 * n) next.phase = 'playing'
+        updateLongestRoad(next)
         return next
       })
       setSetupPendingRoadVertex(null)
@@ -184,6 +187,7 @@ export default function App() {
           res.brick = Math.max(0, (res.brick || 0) - 1)
           return { ...p, resources: res, roadsLeft: p.roadsLeft - 1 }
         })
+        updateLongestRoad(next)
         return next
       })
       setBuildMode(null)
@@ -461,6 +465,7 @@ export default function App() {
             players={game.players}
             activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
             phase={game.phase}
+            longestRoadPlayerId={game.longestRoadPlayerId}
           />
 
           <PlayerResources
@@ -469,6 +474,8 @@ export default function App() {
             phase={game.phase}
             lastResourceFlash={game.lastResourceFlash}
           />
+
+          <BuildCostsLegend />
 
           {game.phase === 'setup' && (
             <p style={{ fontSize: 14, color: 'var(--muted)' }}>

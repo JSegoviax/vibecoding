@@ -56,5 +56,6 @@ export function createInitialState(numPlayers: 2 | 3 | 4): GameState {
     lastDice: null,
     lastResourceFlash: null,
     robberHexId: desertHex?.id ?? null,
+    longestRoadPlayerId: null,
   }
 }

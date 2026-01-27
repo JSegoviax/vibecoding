@@ -11,6 +11,7 @@ interface VictoryPointTrackerProps {
   players: PlayerInfo[]
   activePlayerIndex: number
   phase: string
+  longestRoadPlayerId?: number | null
 }
 
 function getVPBreakdown(vertices: Record<string, Vertex>, playerId: number) {
@@ -26,7 +27,7 @@ function getVPBreakdown(vertices: Record<string, Vertex>, playerId: number) {
   return { settlements, cities, fromSettlements, fromCities, total: fromSettlements + fromCities }
 }
 
-export function VictoryPointTracker({ vertices, players, activePlayerIndex, phase }: VictoryPointTrackerProps) {
+export function VictoryPointTracker({ vertices, players, activePlayerIndex, phase, longestRoadPlayerId }: VictoryPointTrackerProps) {
   return (
     <div style={{ marginBottom: 16 }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -34,6 +35,7 @@ export function VictoryPointTracker({ vertices, players, activePlayerIndex, phas
       </div>
       {players.map((p, i) => {
         const { settlements, cities, fromSettlements, fromCities, total } = getVPBreakdown(vertices, p.id)
+        const hasLongestRoad = longestRoadPlayerId === p.id
         const isActive = phase === 'setup' ? activePlayerIndex === i : activePlayerIndex === i
         return (
           <div
@@ -57,7 +59,10 @@ export function VictoryPointTracker({ vertices, players, activePlayerIndex, phas
               {cities > 0 && (
                 <div>Cities: {cities} × 2 = {fromCities}</div>
               )}
-              {settlements === 0 && cities === 0 && (
+              {hasLongestRoad && (
+                <div style={{ color: '#fbbf24', fontWeight: 600 }}>Longest Road: +2 VP</div>
+              )}
+              {settlements === 0 && cities === 0 && !hasLongestRoad && (
                 <div style={{ fontStyle: 'italic' }}>No structures yet</div>
               )}
             </div>

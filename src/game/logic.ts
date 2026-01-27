@@ -231,3 +231,141 @@ export function stealResource(state: GameState, robbingPlayerId: number, targetP
   return stolen
 }
 
+/** Calculate the longest continuous road for a player */
+export function calculateLongestRoad(state: GameState, playerId: number): number {
+  // Get all edges owned by this player
+  const playerEdges = Object.entries(state.edges)
+    .filter(([, e]) => e.road === playerId)
+    .map(([id]) => id)
+
+  if (playerEdges.length === 0) return 0
+
+  // Build adjacency: for each vertex, which edges connect to it
+  const vertexToEdges = new Map<string, string[]>()
+  for (const eid of playerEdges) {
+    const e = state.edges[eid]
+    if (!e) continue
+    if (!vertexToEdges.has(e.v1)) vertexToEdges.set(e.v1, [])
+    if (!vertexToEdges.has(e.v2)) vertexToEdges.set(e.v2, [])
+    vertexToEdges.get(e.v1)!.push(eid)
+    vertexToEdges.get(e.v2)!.push(eid)
+  }
+
+  // Find connected components using DFS
+  const visited = new Set<string>()
+  let maxLength = 0
+
+  for (const startEdge of playerEdges) {
+    if (visited.has(startEdge)) continue
+
+    // DFS to find all edges in this component
+    const component = new Set<string>()
+    const stack = [startEdge]
+    while (stack.length) {
+      const eid = stack.pop()!
+      if (visited.has(eid)) continue
+      visited.add(eid)
+      component.add(eid)
+
+      const e = state.edges[eid]
+      if (!e) continue
+
+      // Add adjacent edges through vertices
+      for (const vid of [e.v1, e.v2]) {
+        const adjEdges = vertexToEdges.get(vid) || []
+        for (const adjEid of adjEdges) {
+          if (!visited.has(adjEid) && !component.has(adjEid)) {
+            stack.push(adjEid)
+          }
+        }
+      }
+    }
+
+    // Find longest path in this component
+    // Use DFS from each edge to find longest path
+    const componentEdges = Array.from(component)
+    let componentMax = 0
+
+    for (const start of componentEdges) {
+      const pathLength = findLongestPathFromEdge(state, component, start, vertexToEdges)
+      componentMax = Math.max(componentMax, pathLength)
+    }
+
+    maxLength = Math.max(maxLength, componentMax)
+  }
+
+  return maxLength
+}
+
+/** Find longest path starting from a given edge using DFS */
+function findLongestPathFromEdge(
+  state: GameState,
+  component: Set<string>,
+  startEdge: string,
+  vertexToEdges: Map<string, string[]>
+): number {
+  let maxPath = 0
+
+  const dfs = (currentEdge: string, visited: Set<string>, pathLength: number) => {
+    maxPath = Math.max(maxPath, pathLength)
+    const e = state.edges[currentEdge]
+    if (!e) return
+
+    // Try continuing through each vertex
+    for (const vid of [e.v1, e.v2]) {
+      const adjEdges = vertexToEdges.get(vid) || []
+      for (const nextEdge of adjEdges) {
+        if (nextEdge === currentEdge) continue
+        if (!component.has(nextEdge)) continue
+        if (visited.has(nextEdge)) continue
+
+        visited.add(nextEdge)
+        dfs(nextEdge, visited, pathLength + 1)
+        visited.delete(nextEdge)
+      }
+    }
+  }
+
+  dfs(startEdge, new Set([startEdge]), 1)
+  return maxPath
+}
+
+/** Update longest road and adjust victory points accordingly */
+export function updateLongestRoad(state: GameState): void {
+  const MIN_LONGEST_ROAD = 6
+  let maxLength = 0
+  let newLongestPlayerId: number | null = null
+
+  // Find player with longest road
+  for (const player of state.players) {
+    const length = calculateLongestRoad(state, player.id)
+    if (length >= MIN_LONGEST_ROAD && length > maxLength) {
+      maxLength = length
+      newLongestPlayerId = player.id
+    }
+  }
+
+  const oldLongestPlayerId = state.longestRoadPlayerId
+
+  // If longest road changed
+  if (oldLongestPlayerId !== newLongestPlayerId) {
+    // Remove 2 VP from old holder
+    if (oldLongestPlayerId) {
+      const oldPlayer = state.players[oldLongestPlayerId - 1]
+      if (oldPlayer) {
+        oldPlayer.victoryPoints = Math.max(0, oldPlayer.victoryPoints - 2)
+      }
+    }
+
+    // Add 2 VP to new holder
+    if (newLongestPlayerId) {
+      const newPlayer = state.players[newLongestPlayerId - 1]
+      if (newPlayer) {
+        newPlayer.victoryPoints += 2
+      }
+    }
+
+    state.longestRoadPlayerId = newLongestPlayerId
+  }
+}
+

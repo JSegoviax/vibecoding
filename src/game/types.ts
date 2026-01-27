@@ -55,4 +55,6 @@ export interface GameState {
   lastResourceFlash: Record<number, Terrain[]> | null
   /** Hex ID where the robber is currently located */
   robberHexId: string | null
+  /** Player ID who currently has the longest road (minimum 5 roads) */
+  longestRoadPlayerId: PlayerId | null
 }
