@@ -25,6 +25,17 @@ function ResourceIcon({ type }: { type: Terrain }) {
           alt="Wheat"
           size={12}
         />
+      ) : type === 'wood' ? (
+        <img
+          src="/wood-icon.png"
+          alt="Wood"
+          style={{
+            width: 12,
+            height: 12,
+            flexShrink: 0,
+            imageRendering: 'pixelated',
+          }}
+        />
       ) : type === 'ore' ? (
         <img
           src="/ore-icon.png"

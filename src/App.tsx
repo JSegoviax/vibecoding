@@ -4,6 +4,7 @@ import { PlayerResources } from './components/PlayerResources'
 import { VictoryPointTracker } from './components/VictoryPointTracker'
 import { BuildCostsLegend } from './components/BuildCostsLegend'
 import { GameGuide } from './components/GameGuide'
+import { DiceRollAnimation } from './components/DiceRollAnimation'
 import { createInitialState } from './game/state'
 import { runAISetup, runAITurn, runAITrade, runAIRobberMove, runAISelectPlayerToRob } from './game/ai'
 import {
@@ -45,6 +46,7 @@ export default function App() {
   const [tradeGive, setTradeGive] = useState<'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'>('wood')
   const [tradeGet, setTradeGet] = useState<'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'>('brick')
   const [robberMode, setRobberMode] = useState<{ moving: boolean; newHexId: string | null; playersToRob: Set<number> }>({ moving: false, newHexId: null, playersToRob: new Set() })
+  const [diceRolling, setDiceRolling] = useState<{ dice1: number; dice2: number } | null>(null)
   const aiNextRoadEdge = useRef<string | null>(null)
   const aiBuildTarget = useRef<{ type: string; vertexId?: string; edgeId?: string } | null>(null)
 
@@ -199,11 +201,18 @@ export default function App() {
   const handleRoll = () => {
     const a = 1 + Math.floor(Math.random() * 6)
     const b = 1 + Math.floor(Math.random() * 6)
-    const sum = a + b
+    // Start animation
+    setDiceRolling({ dice1: a, dice2: b })
+  }
+
+  const handleDiceRollComplete = () => {
+    if (!diceRolling) return
+    const { dice1, dice2 } = diceRolling
+    const sum = dice1 + dice2
     setGame(g => {
       const next = {
         ...g,
-        lastDice: [a, b],
+        lastDice: [dice1, dice2],
         players: g.players.map(p => ({ ...p, resources: { ...p.resources } })),
         lastResourceFlash: null,
       }
@@ -215,6 +224,7 @@ export default function App() {
       }
       return next
     })
+    setDiceRolling(null)
   }
 
   const handleSelectRobberHex = (hexId: string) => {
@@ -317,10 +327,10 @@ export default function App() {
 
   // AI: playing — roll, then build or end
   useEffect(() => {
-    if (game.phase !== 'playing' || game.currentPlayerIndex !== 1 || game.lastDice || winner) return
+    if (game.phase !== 'playing' || game.currentPlayerIndex !== 1 || game.lastDice || winner || diceRolling) return
     const t = setTimeout(() => handleRoll(), 600)
     return () => clearTimeout(t)
-  }, [game.phase, game.currentPlayerIndex, game.lastDice, winner])
+  }, [game.phase, game.currentPlayerIndex, game.lastDice, winner, diceRolling])
 
   // AI: handle robber move when 7 is rolled
   useEffect(() => {
@@ -441,13 +451,14 @@ export default function App() {
             flex: '1 1 auto',
             minWidth: 600,
             borderRadius: 12,
-            overflow: 'hidden',
+            overflow: 'visible',
             backgroundColor: '#e0d5c4',
             border: '3px solid #c4b59a',
             boxShadow: 'inset 0 0 60px rgba(139,115,85,0.15)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            position: 'relative',
           }}
         >
           <HexBoard
@@ -462,6 +473,13 @@ export default function App() {
             selectableRobberHexes={selectableRobberHexes}
             selectHex={robberMode.moving ? handleSelectRobberHex : undefined}
           />
+          {diceRolling && (
+            <DiceRollAnimation
+              dice1={diceRolling.dice1}
+              dice2={diceRolling.dice2}
+              onComplete={handleDiceRollComplete}
+            />
+          )}
         </div>
 
         <aside style={{ flex: '0 0 280px', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
