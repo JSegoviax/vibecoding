@@ -1,4 +1,5 @@
 import { TERRAIN_COLORS, TERRAIN_LABELS } from '../game/terrain'
+import { AnimatedResourceIcon } from './AnimatedResourceIcon'
 import type { Terrain } from '../game/types'
 
 const RESOURCE_TYPES: Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore']
@@ -39,15 +40,11 @@ function ResourceChip({ type, count, flash }: { type: Terrain; count: number; fl
       title={TERRAIN_LABELS[type]}
     >
       {type === 'wheat' ? (
-        <img
-          src="/wheat-icon.png"
+        <AnimatedResourceIcon
+          image1="/wheat-icon.png"
+          image2="/wheat-icon.png"
           alt="Wheat"
-          style={{
-            width: 16,
-            height: 16,
-            flexShrink: 0,
-            imageRendering: 'pixelated',
-          }}
+          size={16}
         />
       ) : type === 'wood' ? (
         <img
@@ -59,6 +56,13 @@ function ResourceChip({ type, count, flash }: { type: Terrain; count: number; fl
             flexShrink: 0,
             imageRendering: 'pixelated',
           }}
+        />
+      ) : type === 'ore' ? (
+        <AnimatedResourceIcon
+          image1="/ore-icon-1.png"
+          image2="/ore-icon-2.png"
+          alt="Ore"
+          size={16}
         />
       ) : (
         <span

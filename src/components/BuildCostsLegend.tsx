@@ -1,5 +1,6 @@
 import { TERRAIN_COLORS, TERRAIN_LABELS } from '../game/terrain'
 import { getBuildCost } from '../game/logic'
+import { AnimatedResourceIcon } from './AnimatedResourceIcon'
 import type { Terrain } from '../game/types'
 
 function ResourceIcon({ type }: { type: Terrain }) {
@@ -17,14 +18,30 @@ function ResourceIcon({ type }: { type: Terrain }) {
         color: 'var(--text)',
       }}
     >
-      <span
-        style={{
-          width: 5,
-          height: 5,
-          borderRadius: '50%',
-          background: TERRAIN_COLORS[type],
-        }}
-      />
+      {type === 'wheat' ? (
+        <AnimatedResourceIcon
+          image1="/wheat-icon.png"
+          image2="/wheat-icon.png"
+          alt="Wheat"
+          size={12}
+        />
+      ) : type === 'ore' ? (
+        <AnimatedResourceIcon
+          image1="/ore-icon-1.png"
+          image2="/ore-icon-2.png"
+          alt="Ore"
+          size={12}
+        />
+      ) : (
+        <span
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: '50%',
+            background: TERRAIN_COLORS[type],
+          }}
+        />
+      )}
       <span>{TERRAIN_LABELS[type]}</span>
     </span>
   )
