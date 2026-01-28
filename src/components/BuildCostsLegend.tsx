@@ -32,6 +32,28 @@ function ResourceIcon({ type }: { type: Terrain }) {
           alt="Ore"
           size={12}
         />
+      ) : type === 'sheep' ? (
+        <img
+          src="/sheep-icon.png"
+          alt="Sheep"
+          style={{
+            width: 12,
+            height: 12,
+            flexShrink: 0,
+            imageRendering: 'pixelated',
+          }}
+        />
+      ) : type === 'brick' ? (
+        <img
+          src="/brick-icon.png"
+          alt="Brick"
+          style={{
+            width: 12,
+            height: 12,
+            flexShrink: 0,
+            imageRendering: 'pixelated',
+          }}
+        />
       ) : (
         <span
           style={{

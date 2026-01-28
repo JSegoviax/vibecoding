@@ -64,6 +64,28 @@ function ResourceChip({ type, count, flash }: { type: Terrain; count: number; fl
           alt="Ore"
           size={16}
         />
+      ) : type === 'sheep' ? (
+        <img
+          src="/sheep-icon.png"
+          alt="Sheep"
+          style={{
+            width: 16,
+            height: 16,
+            flexShrink: 0,
+            imageRendering: 'pixelated',
+          }}
+        />
+      ) : type === 'brick' ? (
+        <img
+          src="/brick-icon.png"
+          alt="Brick"
+          style={{
+            width: 16,
+            height: 16,
+            flexShrink: 0,
+            imageRendering: 'pixelated',
+          }}
+        />
       ) : (
         <span
           style={{
