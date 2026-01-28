@@ -443,6 +443,9 @@ export default function App() {
             backgroundColor: '#e0d5c4',
             border: '3px solid #c4b59a',
             boxShadow: 'inset 0 0 60px rgba(139,115,85,0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
           <HexBoard

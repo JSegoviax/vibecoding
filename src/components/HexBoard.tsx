@@ -33,20 +33,30 @@ export function HexBoard({
   const vById = useMemo(() => Object.fromEntries(vertices.map(v => [v.id, v])), [vertices])
   const eById = useMemo(() => Object.fromEntries(edges.map(e => [e.id, e])), [edges])
 
-  const cx = useMemo(() => {
-    const xs = hexes.flatMap(h => {
-      const c = hexToPixel(h.q, h.r)
-      return [c.x - HEX_R, c.x + HEX_R]
-    })
-    return (Math.min(...xs) + Math.max(...xs)) / 2
-  }, [hexes])
-  const cy = useMemo(() => {
-    const ys = hexes.flatMap(h => {
-      const c = hexToPixel(h.q, h.r)
-      return [c.y - HEX_R, c.y + HEX_R]
-    })
-    return (Math.min(...ys) + Math.max(...ys)) / 2
-  }, [hexes])
+  const waterPositions = useMemo(() => getWaterHexPositions(), [])
+
+  // Calculate actual bounds including both land and water hexes
+  const bounds = useMemo(() => {
+    const allHexes = [
+      ...hexes.map(h => hexToPixel(h.q, h.r)),
+      ...waterPositions.map(([q, r]) => hexToPixel(q, r))
+    ]
+    const xs = allHexes.flatMap(c => [c.x - HEX_R, c.x + HEX_R])
+    const ys = allHexes.flatMap(c => [c.y - HEX_R, c.y + HEX_R])
+    const minX = Math.min(...xs)
+    const maxX = Math.max(...xs)
+    const minY = Math.min(...ys)
+    const maxY = Math.max(...ys)
+    return { minX, maxX, minY, maxY }
+  }, [hexes, waterPositions])
+
+  const cx = useMemo(() => (bounds.minX + bounds.maxX) / 2, [bounds])
+  const cy = useMemo(() => (bounds.minY + bounds.maxY) / 2, [bounds])
+  
+  // Use actual bounds with minimal padding (reduce padding to make board larger)
+  const padding = HEX_R * 0.3 // Reduced from 2 * HEX_R to make board fill more space
+  const w = useMemo(() => (bounds.maxX - bounds.minX) + padding * 2, [bounds, padding])
+  const h = useMemo(() => (bounds.maxY - bounds.minY) + padding * 2, [bounds, padding])
 
   const PLAYER_COLORS: Record<number, string> = {
     1: '#e53935',
@@ -55,13 +65,10 @@ export function HexBoard({
     4: '#fb8c00',
   }
 
-  const waterPositions = useMemo(() => getWaterHexPositions(), [])
-  const w = 1800 + 2 * HEX_R
-  const h = 1560 + 2 * HEX_R
   const TOKEN_R = 36
 
   return (
-    <svg viewBox={`${cx - w / 2} ${cy - h / 2} ${w} ${h}`} width="100%" height="100%" style={{ maxHeight: '85vh', minHeight: 420 }}>
+    <svg viewBox={`${bounds.minX - padding} ${bounds.minY - padding} ${w} ${h}`} width="100%" height="100%" style={{ maxHeight: '90vh', minHeight: 500, width: '100%' }}>
       {/* Define clip paths for hexes */}
       <defs>
         {hexes.map(h => {
@@ -76,18 +83,42 @@ export function HexBoard({
         })}
       </defs>
       {/* Water hex ring (behind land) */}
+      <defs>
+        {waterPositions.map(([q, r]) => {
+          const center = hexToPixel(q, r)
+          const pts = [0, 1, 2, 3, 4, 5].map(i => hexCorner(center, i))
+          const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z'
+          return (
+            <clipPath key={`water-clip-${q},${r}`} id={`water-clip-${q},${r}`}>
+              <path d={d} />
+            </clipPath>
+          )
+        })}
+      </defs>
       {waterPositions.map(([q, r]) => {
         const center = hexToPixel(q, r)
         const pts = [0, 1, 2, 3, 4, 5].map(i => hexCorner(center, i))
         const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z'
         return (
-          <path
-            key={`w${q},${r}`}
-            d={d}
-            fill="#1e3a5f"
-            stroke="#152a47"
-            strokeWidth={4}
-          />
+          <g key={`w${q},${r}`}>
+            <g clipPath={`url(#water-clip-${q},${r})`}>
+              <image
+                href="/water-hex.png"
+                x={center.x - HEX_R * 2}
+                y={center.y - HEX_R * 2}
+                width={HEX_R * 4}
+                height={HEX_R * 4}
+                preserveAspectRatio="none"
+                style={{ imageRendering: 'pixelated' }}
+              />
+            </g>
+            <path
+              d={d}
+              fill="none"
+              stroke="#152a47"
+              strokeWidth={4}
+            />
+          </g>
         )
       })}
 
@@ -112,12 +143,64 @@ export function HexBoard({
             {h.terrain === 'wood' && (
               <g clipPath={`url(#hex-clip-${h.id})`}>
                 <image
-                  href="/wood-icon.png"
-                  x={center.x - HEX_R * 1.2}
-                  y={center.y - HEX_R * 1.2}
-                  width={HEX_R * 2.4}
-                  height={HEX_R * 2.4}
-                  preserveAspectRatio="xMidYMid meet"
+                  href="/wood-hex.png"
+                  x={center.x - HEX_R * 2}
+                  y={center.y - HEX_R * 2}
+                  width={HEX_R * 4}
+                  height={HEX_R * 4}
+                  preserveAspectRatio="none"
+                  style={{ imageRendering: 'pixelated' }}
+                />
+              </g>
+            )}
+            {h.terrain === 'brick' && (
+              <g clipPath={`url(#hex-clip-${h.id})`}>
+                <image
+                  href="/brick-hex.png"
+                  x={center.x - HEX_R * 2}
+                  y={center.y - HEX_R * 2}
+                  width={HEX_R * 4}
+                  height={HEX_R * 4}
+                  preserveAspectRatio="none"
+                  style={{ imageRendering: 'pixelated' }}
+                />
+              </g>
+            )}
+            {h.terrain === 'wheat' && (
+              <g clipPath={`url(#hex-clip-${h.id})`}>
+                <image
+                  href="/wheat-hex.png"
+                  x={center.x - HEX_R * 2}
+                  y={center.y - HEX_R * 2}
+                  width={HEX_R * 4}
+                  height={HEX_R * 4}
+                  preserveAspectRatio="none"
+                  style={{ imageRendering: 'pixelated' }}
+                />
+              </g>
+            )}
+            {h.terrain === 'ore' && (
+              <g clipPath={`url(#hex-clip-${h.id})`}>
+                <image
+                  href="/ore-hex.png"
+                  x={center.x - HEX_R * 2}
+                  y={center.y - HEX_R * 2}
+                  width={HEX_R * 4}
+                  height={HEX_R * 4}
+                  preserveAspectRatio="none"
+                  style={{ imageRendering: 'pixelated' }}
+                />
+              </g>
+            )}
+            {h.terrain === 'sheep' && (
+              <g clipPath={`url(#hex-clip-${h.id})`}>
+                <image
+                  href="/sheep-hex.png"
+                  x={center.x - HEX_R * 2}
+                  y={center.y - HEX_R * 2}
+                  width={HEX_R * 4}
+                  height={HEX_R * 4}
+                  preserveAspectRatio="none"
                   style={{ imageRendering: 'pixelated' }}
                 />
               </g>
