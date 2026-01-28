@@ -57,7 +57,7 @@ export function DiceRollAnimation({ dice1, dice2, onComplete }: DiceRollAnimatio
       3: [{ cx: 30, cy: 30 }, { cx: 50, cy: 50 }, { cx: 70, cy: 70 }],
       4: [{ cx: 30, cy: 30 }, { cx: 70, cy: 30 }, { cx: 30, cy: 70 }, { cx: 70, cy: 70 }],
       5: [{ cx: 30, cy: 30 }, { cx: 70, cy: 30 }, { cx: 50, cy: 50 }, { cx: 30, cy: 70 }, { cx: 70, cy: 70 }],
-      6: [{ cx: 30, cy: 25 }, { cx: 30, cy: 50 }, { cx: 30, cy: 75 }, { cx: 70, cy: 25 }, { cx: 70, cy: 50 }, { cx: 70, cy: 75 }],
+      6: [{ cx: 30, cy: 30 }, { cx: 30, cy: 50 }, { cx: 30, cy: 70 }, { cx: 70, cy: 30 }, { cx: 70, cy: 50 }, { cx: 70, cy: 70 }],
     }
     return positions[value] || []
   }

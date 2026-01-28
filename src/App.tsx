@@ -224,7 +224,7 @@ export default function App() {
       }
       return next
     })
-    setDiceRolling(null)
+    // Don't set diceRolling to null - keep dice visible in corner until next roll
   }
 
   const handleSelectRobberHex = (hexId: string) => {
@@ -269,6 +269,8 @@ export default function App() {
   }
 
   const handleEndTurn = () => {
+    // Clear diceRolling when turn ends so next player can roll
+    setDiceRolling(null)
     setGame(g => ({
       ...g,
       currentPlayerIndex: (g.currentPlayerIndex + 1) % g.players.length,
@@ -311,7 +313,7 @@ export default function App() {
       } catch {
         aiNextRoadEdge.current = null
       }
-    }, 700)
+    }, 300)
     return () => clearTimeout(t)
   }, [game.phase, game.setupPlacements, setupPendingRoadVertex])
 
@@ -321,14 +323,14 @@ export default function App() {
       const eid = aiNextRoadEdge.current
       aiNextRoadEdge.current = null
       if (eid) handleSelectEdge(eid)
-    }, 400)
+    }, 200)
     return () => clearTimeout(t)
   }, [setupPendingRoadVertex])
 
   // AI: playing — roll, then build or end
   useEffect(() => {
     if (game.phase !== 'playing' || game.currentPlayerIndex !== 1 || game.lastDice || winner || diceRolling) return
-    const t = setTimeout(() => handleRoll(), 600)
+    const t = setTimeout(() => handleRoll(), 300)
     return () => clearTimeout(t)
   }, [game.phase, game.currentPlayerIndex, game.lastDice, winner, diceRolling])
 
@@ -338,7 +340,7 @@ export default function App() {
     const t = setTimeout(() => {
       const hexId = runAIRobberMove(game)
       handleSelectRobberHex(hexId)
-    }, 600)
+    }, 300)
     return () => clearTimeout(t)
   }, [game.phase, game.currentPlayerIndex, game.lastDice, robberMode.moving, winner])
 
@@ -357,7 +359,7 @@ export default function App() {
         }))
         setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
       }
-    }, 600)
+    }, 300)
     return () => clearTimeout(t)
   }, [robberMode.newHexId, robberMode.playersToRob, game.phase, game.currentPlayerIndex, winner])
 
@@ -380,7 +382,7 @@ export default function App() {
           edgeId: 'edgeId' in decision ? decision.edgeId : undefined,
         }
       }
-    }, 800)
+    }, 400)
     return () => clearTimeout(t)
   }, [game.phase, game.currentPlayerIndex, game.lastDice, game.players, buildMode, winner, robberMode.moving, robberMode.newHexId])
 
@@ -482,7 +484,7 @@ export default function App() {
           )}
         </div>
 
-        <aside style={{ flex: '0 0 280px', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <aside style={{ flex: '0 0 280px', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <VictoryPointTracker
             vertices={game.vertices}
             players={game.players}
@@ -496,6 +498,22 @@ export default function App() {
             activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
             phase={game.phase}
             lastResourceFlash={game.lastResourceFlash}
+            lastDice={game.lastDice}
+            onRollDice={isPlaying && !isAITurn ? handleRoll : undefined}
+            onEndTurn={isPlaying && !isAITurn ? handleEndTurn : undefined}
+            robberMode={robberMode}
+            buildMode={buildMode}
+            onSetBuildMode={setBuildMode}
+            tradeFormOpen={tradeFormOpen}
+            onSetTradeFormOpen={setTradeFormOpen}
+            tradeGive={tradeGive}
+            onSetTradeGive={setTradeGive}
+            tradeGet={tradeGet}
+            onSetTradeGet={setTradeGet}
+            onTrade={handleTrade}
+            onSetErrorMessage={setErrorMessage}
+            canAfford={canAfford}
+            getMissingResources={getMissingResources}
           />
 
           <BuildCostsLegend />
@@ -545,92 +563,6 @@ export default function App() {
             </div>
           )}
 
-          {isPlaying && !isAITurn && (
-            <>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                {game.lastDice == null ? (
-                  <button onClick={handleRoll} style={{ padding: '10px 20px', background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>
-                    Roll dice
-                  </button>
-                ) : (
-                  <>
-                    <span style={{ alignSelf: 'center' }}>Dice: {game.lastDice[0]} + {game.lastDice[1]} = {game.lastDice[0] + game.lastDice[1]}</span>
-                    {!robberMode.moving && !robberMode.newHexId && (
-                      <button onClick={handleEndTurn} style={{ padding: '8px 16px', background: 'var(--surface)', border: '1px solid var(--muted)', borderRadius: 8, color: 'var(--text)', cursor: 'pointer' }}>End turn</button>
-                    )}
-                  </>
-                )}
-              </div>
-              {game.lastDice != null && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button
-                      onClick={() => {
-                        if (currentPlayer.roadsLeft <= 0) return
-                        if (!canAfford(currentPlayer, 'road')) {
-                          setErrorMessage('Insufficient resources. Need: ' + getMissingResources(currentPlayer, 'road').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
-                          return
-                        }
-                        setBuildMode(b => b === 'road' ? null : 'road')
-                        setErrorMessage(null)
-                      }}
-                      disabled={currentPlayer.roadsLeft <= 0}
-                      style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: buildMode === 'road' ? 'rgba(100,181,246,0.3)' : 'transparent', color: 'var(--text)', cursor: 'pointer' }}
-                    >Road</button>
-                    <button
-                      onClick={() => {
-                        if (currentPlayer.settlementsLeft <= 0) return
-                        if (!canAfford(currentPlayer, 'settlement')) {
-                          setErrorMessage('Insufficient resources. Need: ' + getMissingResources(currentPlayer, 'settlement').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
-                          return
-                        }
-                        setBuildMode(b => b === 'settlement' ? null : 'settlement')
-                        setErrorMessage(null)
-                      }}
-                      disabled={currentPlayer.settlementsLeft <= 0}
-                      style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: buildMode === 'settlement' ? 'rgba(100,181,246,0.3)' : 'transparent', color: 'var(--text)', cursor: 'pointer' }}
-                    >Settlement</button>
-                    <button
-                      onClick={() => {
-                        if (currentPlayer.citiesLeft <= 0) return
-                        if (!canAfford(currentPlayer, 'city')) {
-                          setErrorMessage('Insufficient resources. Need: ' + getMissingResources(currentPlayer, 'city').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
-                          return
-                        }
-                        setBuildMode(b => b === 'city' ? null : 'city')
-                        setErrorMessage(null)
-                      }}
-                      disabled={currentPlayer.citiesLeft <= 0}
-                      style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: buildMode === 'city' ? 'rgba(100,181,246,0.3)' : 'transparent', color: 'var(--text)', cursor: 'pointer' }}
-                    >City</button>
-                    <button
-                      onClick={() => { setTradeFormOpen(o => !o); setErrorMessage(null) }}
-                      style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: tradeFormOpen ? 'rgba(100,181,246,0.3)' : 'transparent', color: 'var(--text)', cursor: 'pointer' }}
-                    >Trade (4:1)</button>
-                  </div>
-                  {tradeFormOpen && (
-                    <div style={{ padding: 10, borderRadius: 8, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--muted)' }}>
-                      <div style={{ fontSize: 12, marginBottom: 6 }}>Give 4 of one, get 1 of another:</div>
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <label style={{ fontSize: 12 }}>
-                          Give 4: <select value={tradeGive} onChange={e => setTradeGive(e.target.value as typeof tradeGive)} style={{ marginLeft: 4, padding: 4, borderRadius: 4, background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--muted)' }}>
-                            {RESOURCE_OPTIONS.map(t => <option key={t} value={t}>{TERRAIN_LABELS[t]} ({currentPlayer.resources[t] || 0})</option>)}
-                          </select>
-                        </label>
-                        <label style={{ fontSize: 12 }}>
-                          Get 1: <select value={tradeGet} onChange={e => setTradeGet(e.target.value as typeof tradeGet)} style={{ marginLeft: 4, padding: 4, borderRadius: 4, background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--muted)' }}>
-                            {RESOURCE_OPTIONS.map(t => <option key={t} value={t}>{TERRAIN_LABELS[t]}</option>)}
-                          </select>
-                        </label>
-                        <button onClick={() => { if ((currentPlayer.resources[tradeGive] || 0) < 4) { setErrorMessage(`Insufficient resources. Need 4 ${TERRAIN_LABELS[tradeGive]} to trade.`) } else { handleTrade(tradeGive, tradeGet) } }} style={{ padding: '4px 10px', borderRadius: 6, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 12 }}>Confirm</button>
-                        <button onClick={() => setTradeFormOpen(false)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--muted)', background: 'transparent', color: 'var(--text)', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
 
           {winner && (
             <button

@@ -90,13 +90,13 @@ export function BuildCostsLegend() {
   const cityCost = getBuildCost('city')
 
   return (
-    <div style={{ marginTop: 16, padding: 12, borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.1)' }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+    <div style={{ padding: 10, borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.1)' }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         Build Costs
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Road</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 3 }}>Road</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {Object.entries(roadCost).map(([terrain, count]) => (
               <span key={terrain} style={{ fontSize: 11, color: 'var(--muted)' }}>
@@ -106,7 +106,7 @@ export function BuildCostsLegend() {
           </div>
         </div>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Settlement</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 3 }}>Settlement</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {Object.entries(settlementCost).map(([terrain, count]) => (
               <span key={terrain} style={{ fontSize: 11, color: 'var(--muted)' }}>
@@ -116,7 +116,7 @@ export function BuildCostsLegend() {
           </div>
         </div>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>City</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 3 }}>City</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {Object.entries(cityCost).map(([terrain, count]) => (
               <span key={terrain} style={{ fontSize: 11, color: 'var(--muted)' }}>

@@ -29,8 +29,8 @@ function getVPBreakdown(vertices: Record<string, Vertex>, playerId: number) {
 
 export function VictoryPointTracker({ vertices, players, activePlayerIndex, phase, longestRoadPlayerId }: VictoryPointTrackerProps) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         Victory points
       </div>
       {players.map((p, i) => {
@@ -41,18 +41,18 @@ export function VictoryPointTracker({ vertices, players, activePlayerIndex, phas
           <div
             key={p.id}
             style={{
-              marginBottom: 10,
-              padding: 10,
+              marginBottom: 6,
+              padding: 8,
               borderRadius: 8,
               background: isActive ? 'rgba(100,181,246,0.12)' : 'rgba(255,255,255,0.03)',
               border: `1px solid ${isActive ? 'rgba(100,181,246,0.35)' : 'transparent'}`,
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
               <span style={{ fontWeight: 'bold', color: p.color, fontSize: 13 }}>{p.name}</span>
               <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{total} VP</span>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
               {settlements > 0 && (
                 <div>Settlements: {settlements} × 1 = {fromSettlements}</div>
               )}
