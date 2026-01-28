@@ -26,11 +26,15 @@ function ResourceIcon({ type }: { type: Terrain }) {
           size={12}
         />
       ) : type === 'ore' ? (
-        <AnimatedResourceIcon
-          image1="/ore-icon-1.png"
-          image2="/ore-icon-2.png"
+        <img
+          src="/ore-icon.png"
           alt="Ore"
-          size={12}
+          style={{
+            width: 12,
+            height: 12,
+            flexShrink: 0,
+            imageRendering: 'pixelated',
+          }}
         />
       ) : type === 'sheep' ? (
         <img

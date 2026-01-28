@@ -58,11 +58,15 @@ function ResourceChip({ type, count, flash }: { type: Terrain; count: number; fl
           }}
         />
       ) : type === 'ore' ? (
-        <AnimatedResourceIcon
-          image1="/ore-icon-1.png"
-          image2="/ore-icon-2.png"
+        <img
+          src="/ore-icon.png"
           alt="Ore"
-          size={16}
+          style={{
+            width: 16,
+            height: 16,
+            flexShrink: 0,
+            imageRendering: 'pixelated',
+          }}
         />
       ) : type === 'sheep' ? (
         <img
