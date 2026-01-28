@@ -149,7 +149,7 @@ export function HexBoard({
                   width={HEX_R * 4}
                   height={HEX_R * 4}
                   preserveAspectRatio="none"
-                  style={{ imageRendering: 'pixelated' }}
+                  style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
                 />
               </g>
             )}
@@ -162,7 +162,7 @@ export function HexBoard({
                   width={HEX_R * 4}
                   height={HEX_R * 4}
                   preserveAspectRatio="none"
-                  style={{ imageRendering: 'pixelated' }}
+                  style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
                 />
               </g>
             )}
@@ -175,7 +175,7 @@ export function HexBoard({
                   width={HEX_R * 4}
                   height={HEX_R * 4}
                   preserveAspectRatio="none"
-                  style={{ imageRendering: 'pixelated' }}
+                  style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
                 />
               </g>
             )}
@@ -188,7 +188,7 @@ export function HexBoard({
                   width={HEX_R * 4}
                   height={HEX_R * 4}
                   preserveAspectRatio="none"
-                  style={{ imageRendering: 'pixelated' }}
+                  style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
                 />
               </g>
             )}
@@ -201,7 +201,20 @@ export function HexBoard({
                   width={HEX_R * 4}
                   height={HEX_R * 4}
                   preserveAspectRatio="none"
-                  style={{ imageRendering: 'pixelated' }}
+                  style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
+                />
+              </g>
+            )}
+            {h.terrain === 'desert' && (
+              <g clipPath={`url(#hex-clip-${h.id})`}>
+                <image
+                  href="/desert-hex.png"
+                  x={center.x - HEX_R * 2}
+                  y={center.y - HEX_R * 2}
+                  width={HEX_R * 4}
+                  height={HEX_R * 4}
+                  preserveAspectRatio="none"
+                  style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
                 />
               </g>
             )}
@@ -217,6 +230,7 @@ export function HexBoard({
                 stroke="#ffffff"
                 strokeWidth={2}
                 paintOrder="stroke"
+                style={{ pointerEvents: 'none' }}
               >
                 {h.number}
               </text>
@@ -229,6 +243,7 @@ export function HexBoard({
                 fill="#2d1f14"
                 stroke="#1a120c"
                 strokeWidth={2}
+                style={{ pointerEvents: 'none' }}
               />
             )}
           </g>
@@ -262,7 +277,9 @@ export function HexBoard({
       {vertices.map(v => {
         const s = vertexStates[v.id]
         const hl = highlightedVertices?.has(v.id)
-        const col = s ? (PLAYER_COLORS[s.player] ?? '#888') : (hl ? '#64b5f6' : 'transparent')
+        // Only render vertices that have a structure or are highlighted
+        if (!s && !hl) return null
+        const col = s ? (PLAYER_COLORS[s.player] ?? '#888') : '#64b5f6'
         const isCity = s?.type === 'city'
         return isCity ? (
           <rect
@@ -272,7 +289,7 @@ export function HexBoard({
             width={60}
             height={60}
             fill={col}
-            stroke={col ? '#1a1f2e' : (hl ? '#64b5f6' : 'transparent')}
+            stroke={s ? '#1a1f2e' : '#64b5f6'}
             strokeWidth={6}
             onClick={() => selectVertex?.(v.id)}
             style={{ cursor: selectVertex ? 'pointer' : 'default' }}
@@ -284,7 +301,7 @@ export function HexBoard({
             cy={v.y}
             r={24}
             fill={col}
-            stroke={col ? '#1a1f2e' : (hl ? '#64b5f6' : 'transparent')}
+            stroke={s ? '#1a1f2e' : '#64b5f6'}
             strokeWidth={6}
             onClick={() => selectVertex?.(v.id)}
             style={{ cursor: selectVertex ? 'pointer' : 'default' }}
