@@ -3,6 +3,7 @@ import { HexBoard } from './components/HexBoard'
 import { PlayerResources } from './components/PlayerResources'
 import { VictoryPointTracker } from './components/VictoryPointTracker'
 import { BuildCostsLegend } from './components/BuildCostsLegend'
+import { GameGuide } from './components/GameGuide'
 import { createInitialState } from './game/state'
 import { runAISetup, runAITurn, runAITrade, runAIRobberMove, runAISelectPlayerToRob } from './game/ai'
 import {
@@ -400,6 +401,7 @@ export default function App() {
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
+      <GameGuide />
       <h1 style={{ textAlign: 'center', marginBottom: '0.5rem' }}>BAYC #1855 Game Time</h1>
       <p style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 0 }}>
         {game.phase === 'setup' && !isSetupRoad && `Place a settlement`}
