@@ -46,10 +46,13 @@ function updateGameState(g: GameState | null, updater: (state: GameState) => Gam
   return updater(g)
 }
 
+type StartScreen = 'mode' | 'colors' | 'multiplayer' | 'game'
+
 export default function App() {
-  const [showColorSelection, setShowColorSelection] = useState(true)
+  const [startScreen, setStartScreen] = useState<StartScreen>('mode')
   const [, setSelectedColors] = useState<string[]>([])
   const [numPlayers] = useState<2 | 3 | 4>(2)
+  const showColorSelection = startScreen === 'colors'
   const [game, setGame] = useState<ReturnType<typeof createInitialState> | null>(null)
   const [setupPendingRoadVertex, setSetupPendingRoadVertex] = useState<string | null>(null)
   const [buildMode, setBuildMode] = useState<'road' | 'settlement' | 'city' | null>(null)
@@ -68,7 +71,7 @@ export default function App() {
   const handleColorsSelected = (colors: string[]) => {
     setSelectedColors(colors)
     setGame(createInitialState(numPlayers, colors))
-    setShowColorSelection(false)
+    setStartScreen('game')
   }
 
   // All hooks must be called before any early returns to avoid React hooks violations
@@ -195,6 +198,99 @@ export default function App() {
   }, [game?.edges, game?.vertices])
 
   // Now we can do early returns after all hooks are called
+  if (startScreen === 'mode') {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 24,
+          padding: 24,
+          background: 'linear-gradient(180deg, rgb(26, 31, 46) 0%, rgb(45, 55, 72) 100%)',
+          color: 'var(--text)',
+        }}
+      >
+        <GameGuide />
+        <h1 style={{ margin: 0, fontSize: 28 }}>Settlers of Oregon</h1>
+        <p style={{ color: 'var(--muted)', margin: 0 }}>Choose how to play</p>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <button
+            onClick={() => setStartScreen('colors')}
+            style={{
+              padding: '16px 32px',
+              fontSize: 18,
+              fontWeight: 'bold',
+              background: 'var(--accent)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 12,
+              cursor: 'pointer',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+            }}
+          >
+            Play vs AI
+          </button>
+          <button
+            onClick={() => setStartScreen('multiplayer')}
+            style={{
+              padding: '16px 32px',
+              fontSize: 18,
+              fontWeight: 'bold',
+              background: 'var(--surface)',
+              color: 'var(--text)',
+              border: '2px solid var(--muted)',
+              borderRadius: 12,
+              cursor: 'pointer',
+            }}
+          >
+            Multiplayer
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (startScreen === 'multiplayer') {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 24,
+          padding: 24,
+          background: 'linear-gradient(180deg, rgb(26, 31, 46) 0%, rgb(45, 55, 72) 100%)',
+          color: 'var(--text)',
+        }}
+      >
+        <h1 style={{ margin: 0, fontSize: 24 }}>Multiplayer</h1>
+        <p style={{ color: 'var(--muted)', margin: 0, maxWidth: 400, textAlign: 'center' }}>
+          Remote multiplayer is coming soon. You’ll be able to create a game, share a link, and play with friends online.
+        </p>
+        <button
+          onClick={() => setStartScreen('mode')}
+          style={{
+            padding: '12px 24px',
+            fontSize: 16,
+            fontWeight: 'bold',
+            background: 'var(--surface)',
+            color: 'var(--text)',
+            border: '2px solid var(--muted)',
+            borderRadius: 8,
+            cursor: 'pointer',
+          }}
+        >
+          Back
+        </button>
+      </div>
+    )
+  }
+
   if (showColorSelection) {
     return <ColorSelection numPlayers={numHumanPlayers} onColorsSelected={handleColorsSelected} />
   }
@@ -479,15 +575,6 @@ export default function App() {
     }))
     setTradeFormOpen(false)
     setErrorMessage(null)
-  }
-
-  // Now we can do early returns after all hooks are called
-  if (showColorSelection) {
-    return <ColorSelection numPlayers={numHumanPlayers} onColorsSelected={handleColorsSelected} />
-  }
-
-  if (!game) {
-    return <div>Loading...</div>
   }
 
   const isPlaying = game.phase === 'playing' && !actualWinner

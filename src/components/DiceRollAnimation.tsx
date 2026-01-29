@@ -67,7 +67,7 @@ export function DiceRollAnimation({ dice1, dice2, onComplete }: DiceRollAnimatio
       className={movedToCorner ? 'dice-in-corner' : 'dice-in-center'}
       style={{
         position: 'absolute',
-        zIndex: 9999,
+        zIndex: 500,
         display: 'flex',
         gap: 20,
         alignItems: 'center',
