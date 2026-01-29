@@ -342,7 +342,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
       )}
 
       <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-        <div className="game-board" style={{ flex: '1 1 auto', minWidth: 600, borderRadius: 12, overflow: 'visible', backgroundColor: '#e0d5c4', border: '3px solid #c4b59a', boxShadow: 'inset 0 0 60px rgba(139,115,85,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+        <div className="game-board" style={{ flex: '1 1 auto', minWidth: 600, borderRadius: 12, overflow: 'visible', backgroundColor: '#e0d5c4', backgroundImage: 'url(/harbor-docks.png)', backgroundSize: 'cover', backgroundPosition: 'center', border: '3px solid #c4b59a', boxShadow: 'inset 0 0 60px rgba(139,115,85,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
           <HexBoard
             hexes={game.hexes}
             vertexStates={vertexStates}
@@ -356,6 +356,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
             selectHex={robberMode.moving ? handleSelectRobberHex : undefined}
             harbors={game.harbors}
             players={game.players.map(p => ({ colorImage: p.colorImage, color: p.color }))}
+            activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
           />
           {diceRolling && <DiceRollAnimation dice1={diceRolling.dice1} dice2={diceRolling.dice2} onComplete={handleDiceRollComplete} />}
         </div>
@@ -397,8 +398,12 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
                   if (!p) return null
                   const totalResources = (p.resources.wood || 0) + (p.resources.brick || 0) + (p.resources.sheep || 0) + (p.resources.wheat || 0) + (p.resources.ore || 0)
                   return (
-                    <button key={pid} onClick={() => handleSelectPlayerToRob(pid)} disabled={totalResources === 0} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: 'var(--surface)', color: p.color, cursor: totalResources === 0 ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: 13, opacity: totalResources === 0 ? 0.5 : 1 }}>
-                      {p.name} ({totalResources} resources)
+                    <button
+                      key={pid}
+                      onClick={() => handleSelectPlayerToRob(pid)}
+                      style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: 'var(--surface)', color: p.color, cursor: 'pointer', fontWeight: 'bold', fontSize: 13, opacity: totalResources === 0 ? 0.8 : 1 }}
+                    >
+                      {p.name} ({totalResources} resources){totalResources === 0 ? ' — rob anyway' : ''}
                     </button>
                   )
                 })}

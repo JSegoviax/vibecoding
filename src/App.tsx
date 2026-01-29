@@ -624,6 +624,9 @@ export default function App() {
             borderRadius: 12,
             overflow: 'visible',
             backgroundColor: '#e0d5c4',
+            backgroundImage: 'url(/harbor-docks.png)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
             border: '3px solid #c4b59a',
             boxShadow: 'inset 0 0 60px rgba(139,115,85,0.15)',
             display: 'flex',
@@ -645,6 +648,7 @@ export default function App() {
             selectHex={robberMode.moving ? handleSelectRobberHex : undefined}
             harbors={game.harbors}
             players={game.players.map(p => ({ colorImage: p.colorImage, color: p.color }))}
+            activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
           />
           {diceRolling && (
             <DiceRollAnimation
@@ -714,20 +718,19 @@ export default function App() {
                     <button
                       key={pid}
                       onClick={() => handleSelectPlayerToRob(pid)}
-                      disabled={totalResources === 0}
                       style={{
                         padding: '8px 12px',
                         borderRadius: 6,
                         border: '1px solid var(--muted)',
                         background: 'var(--surface)',
                         color: p.color,
-                        cursor: totalResources === 0 ? 'not-allowed' : 'pointer',
+                        cursor: 'pointer',
                         fontWeight: 'bold',
                         fontSize: 13,
-                        opacity: totalResources === 0 ? 0.5 : 1,
+                        opacity: totalResources === 0 ? 0.8 : 1,
                       }}
                     >
-                      {p.name} ({totalResources} resources)
+                      {p.name} ({totalResources} resources){totalResources === 0 ? ' — rob anyway' : ''}
                     </button>
                   )
                 })}

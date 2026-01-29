@@ -4,6 +4,17 @@ import { buildTopology } from '../game/topology'
 import { TERRAIN_COLORS } from '../game/terrain'
 import type { Hex, Harbor, Terrain } from '../game/types'
 
+// Map player color image to matching potential settlement spot image (by color family)
+const COLOR_TO_SPOT_IMAGE: Record<string, string> = {
+  '/player-teal.png': '/settlement-spot-blue.png',
+  '/player-green.png': '/settlement-spot-green.png',
+  '/player-green2.png': '/settlement-spot-bush.png',
+  '/player-pink.png': '/settlement-spot-magenta.png',
+  '/player-purple.png': '/settlement-spot-purple.png',
+  '/player-white.png': '/settlement-spot-gray.png',
+}
+const DEFAULT_SPOT_IMAGE = '/settlement-spot-gray.png'
+
 interface HexBoardProps {
   hexes: Hex[]
   vertexStates?: Record<string, { player: number; type: 'settlement' | 'city' }>
@@ -17,6 +28,7 @@ interface HexBoardProps {
   selectHex?: (hexId: string) => void
   harbors?: Harbor[]
   players?: Array<{ colorImage: string; color: string }>
+  activePlayerIndex?: number
 }
 
 export function HexBoard({
@@ -32,6 +44,7 @@ export function HexBoard({
   selectHex,
   harbors = [],
   players = [],
+  activePlayerIndex = 0,
 }: HexBoardProps) {
   const { vertices, edges } = useMemo(() => buildTopology(hexes), [hexes])
   const vById = useMemo(() => Object.fromEntries(vertices.map(v => [v.id, v])), [vertices])
@@ -287,8 +300,8 @@ export function HexBoard({
         )
       })}
 
-      {/* Vertices (settlements = house images, cities = larger house images) */}
-      {vertices.map(v => {
+      {/* Vertices (settlements = house images, cities = larger house images; potential spots = pixel-art icons) */}
+      {vertices.map((v) => {
         const s = vertexStates[v.id]
         const hl = highlightedVertices?.has(v.id)
         // Only render vertices that have a structure or are highlighted
@@ -297,9 +310,12 @@ export function HexBoard({
         const player = s ? players[s.player - 1] : null
         const isCity = s?.type === 'city'
         const size = isCity ? 72 : 54  // Increased by 50%: city was 48, settlement was 36
+
+        // Potential settlement spot: rendered after harbors so it sits above the port (see below)
+        if (hl && !s) return null
         
         if (player?.colorImage) {
-          // Use house image
+          // Use house image for built settlement/city
           return (
             <g key={v.id}>
               <image
@@ -315,17 +331,6 @@ export function HexBoard({
                   pointerEvents: 'auto',
                 }}
               />
-              {hl && !s && (
-                <circle
-                  cx={v.x}
-                  cy={v.y}
-                  r={size / 2 + 4}
-                  fill="none"
-                  stroke="#64b5f6"
-                  strokeWidth={4}
-                  style={{ pointerEvents: 'none' }}
-                />
-              )}
             </g>
           )
         } else {
@@ -374,11 +379,11 @@ export function HexBoard({
           return null
         }
         
-        // Position harbor icon at the midpoint of the edge, offset outward toward water
+        // Dock extends FROM a settlement spot (vertex) OUT into water — anchor at vertex
         const midX = (v1.x + v2.x) / 2
         const midY = (v1.y + v2.y) / 2
         
-        // Calculate perpendicular vector to the edge (two possible directions)
+        // Perpendicular to edge (two possible directions)
         const dx = v2.x - v1.x
         const dy = v2.y - v1.y
         const perpX1 = -dy
@@ -386,42 +391,79 @@ export function HexBoard({
         const perpX2 = dy
         const perpY2 = -dx
         
-        // Determine which direction points outward (away from board center, toward water)
-        // Calculate vector from board center to midpoint
+        // Which perpendicular points outward (toward water)
         const centerToMidX = midX - cx
         const centerToMidY = midY - cy
-        
-        // Dot product to determine which perpendicular points outward
         const dot1 = perpX1 * centerToMidX + perpY1 * centerToMidY
         const dot2 = perpX2 * centerToMidX + perpY2 * centerToMidY
-        
-        // Use the perpendicular that points outward (positive dot product)
         const perpX = dot1 > dot2 ? perpX1 : perpX2
         const perpY = dot1 > dot2 ? perpY1 : perpY2
         
-        // Normalize and scale the offset (offset further out onto the water hex)
         const len = Math.sqrt(perpX * perpX + perpY * perpY)
-        const offsetDistance = HEX_R * 0.6 // Offset further out onto water hex
-        const offsetX = len > 0 ? (perpX / len) * offsetDistance : 0
-        const offsetY = len > 0 ? (perpY / len) * offsetDistance : 0
+        const normX = len > 0 ? perpX / len : 0
+        const normY = len > 0 ? perpY / len : 0
         
-        const harborX = midX + offsetX
-        const harborY = midY + offsetY
+        // Two docks: one from each settlement spot (v1 and v2), both extending outward into water
+        const halfDockLength = 18
+        const angleRad = Math.atan2(perpY, perpX)
+        const angleDeg = (angleRad * 180) / Math.PI
+        const dockW = 38
+        const dockH = 14
+        
+        // Dock center = vertex + halfDockLength * outward (landward end at vertex)
+        const dock1CenterX = v1.x + halfDockLength * normX
+        const dock1CenterY = v1.y + halfDockLength * normY
+        const dock2CenterX = v2.x + halfDockLength * normX
+        const dock2CenterY = v2.y + halfDockLength * normY
+        
+        // Trade-rate badge between the two docks (slightly further out into water)
+        const badgeOffset = halfDockLength + 16
+        const harborX = midX + badgeOffset * normX
+        const harborY = midY + badgeOffset * normY
         
         return (
           <g key={harbor.id} style={{ zIndex: 100 }}>
-            {/* Harbor background circle - larger and more visible */}
+            {/* Dock 1: from first settlement spot into water (clipped port image) */}
+            <g
+              transform={`translate(${dock1CenterX}, ${dock1CenterY}) rotate(${angleDeg})`}
+              style={{ pointerEvents: 'none' }}
+            >
+              <image
+                href="/port-dock.png"
+                x={-dockW / 2}
+                y={-dockH / 2}
+                width={dockW}
+                height={dockH}
+                preserveAspectRatio="none"
+                style={{ imageRendering: 'auto' }}
+              />
+            </g>
+            {/* Dock 2: from second settlement spot into water */}
+            <g
+              transform={`translate(${dock2CenterX}, ${dock2CenterY}) rotate(${angleDeg})`}
+              style={{ pointerEvents: 'none' }}
+            >
+              <image
+                href="/port-dock.png"
+                x={-dockW / 2}
+                y={-dockH / 2}
+                width={dockW}
+                height={dockH}
+                preserveAspectRatio="none"
+                style={{ imageRendering: 'auto' }}
+              />
+            </g>
+            {/* Harbor trade rate badge (between the two docks) */}
             <circle
               cx={harborX}
               cy={harborY}
-              r={24}
+              r={14}
               fill="#fff8dc"
               stroke="#8b4513"
-              strokeWidth={3}
+              strokeWidth={2}
               style={{ pointerEvents: 'none' }}
               opacity={0.95}
             />
-            {/* Harbor type indicator */}
             {harbor.type === 'generic' ? (
               <text
                 x={harborX}
@@ -449,7 +491,6 @@ export function HexBoard({
                 >
                   2:1
                 </text>
-                {/* Small resource icon for 2:1 harbors */}
                 <circle
                   cx={harborX}
                   cy={harborY + 10}
@@ -461,6 +502,35 @@ export function HexBoard({
                 />
               </>
             )}
+          </g>
+        )
+      })}
+
+      {/* Potential settlement spots - render after harbors so they sit above the port */}
+      {vertices.map((v) => {
+        const s = vertexStates[v.id]
+        const hl = highlightedVertices?.has(v.id)
+        if (!hl || s) return null
+        const activePlayer = players[activePlayerIndex]
+        const spotImage = activePlayer?.colorImage
+          ? (COLOR_TO_SPOT_IMAGE[activePlayer.colorImage] ?? DEFAULT_SPOT_IMAGE)
+          : DEFAULT_SPOT_IMAGE
+        const spotSize = 48
+        return (
+          <g key={`spot-${v.id}`}>
+            <image
+              href={spotImage}
+              x={v.x - spotSize / 2}
+              y={v.y - spotSize / 2}
+              width={spotSize}
+              height={spotSize}
+              onClick={() => selectVertex?.(v.id)}
+              style={{
+                cursor: selectVertex ? 'pointer' : 'default',
+                imageRendering: 'pixelated',
+                pointerEvents: 'auto',
+              }}
+            />
           </g>
         )
       })}
