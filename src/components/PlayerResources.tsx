@@ -257,7 +257,7 @@ export function PlayerResources({
                   >Trade (4:1)</button>
                 </div>
                 {tradeFormOpen && onSetTradeGive && onSetTradeGet && tradeGive && tradeGet && (() => {
-                  const tradeRate = getTradeRate ? getTradeRate(tradeGive) : 4
+                  const tradeRate = getTradeRate && tradeGive !== 'desert' ? getTradeRate(tradeGive as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') : 4
                   return (
                     <div style={{ padding: 10, borderRadius: 8, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--muted)' }}>
                       <div style={{ fontSize: 12, marginBottom: 6 }}>
@@ -270,13 +270,13 @@ export function PlayerResources({
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                         <label style={{ fontSize: 12 }}>
-                          Give {tradeRate}: <select value={tradeGive} onChange={e => onSetTradeGive(e.target.value as Terrain)} style={{ marginLeft: 4, padding: 4, borderRadius: 4, background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--muted)' }}>
-                            {RESOURCE_OPTIONS.map(t => <option key={t} value={t}>{TERRAIN_LABELS[t]} ({p.resources[t] || 0})</option>)}
+                          Give {tradeRate}: <select value={tradeGive} onChange={e => onSetTradeGive(e.target.value as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')} style={{ marginLeft: 4, padding: 4, borderRadius: 4, background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--muted)' }}>
+                            {RESOURCE_OPTIONS.filter(t => t !== 'desert').map(t => <option key={t} value={t}>{TERRAIN_LABELS[t]} ({p.resources[t] || 0})</option>)}
                           </select>
                         </label>
                         <label style={{ fontSize: 12 }}>
                           Get 1: <select value={tradeGet} onChange={e => onSetTradeGet(e.target.value as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')} style={{ marginLeft: 4, padding: 4, borderRadius: 4, background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--muted)' }}>
-                            {RESOURCE_OPTIONS.map(t => <option key={t} value={t}>{TERRAIN_LABELS[t]}</option>)}
+                            {RESOURCE_OPTIONS.filter(t => t !== 'desert').map(t => <option key={t} value={t}>{TERRAIN_LABELS[t]}</option>)}
                           </select>
                         </label>
                         <button onClick={() => { if ((p.resources[tradeGive] || 0) < tradeRate) { onSetErrorMessage?.(`Insufficient resources. Need ${tradeRate} ${TERRAIN_LABELS[tradeGive]} to trade.`) } else { onTrade?.(tradeGive as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', tradeGet as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') } }} style={{ padding: '4px 10px', borderRadius: 6, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 12 }}>Confirm</button>

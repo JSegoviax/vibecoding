@@ -1,4 +1,4 @@
-# VibeCatan
+# Settlers of Oregon
 
 A browser-based, Catan-style hex board game. Place settlements and roads, roll for resources, and build your way to 10 victory points.
 

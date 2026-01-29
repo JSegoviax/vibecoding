@@ -69,8 +69,6 @@ export function HexBoard({
     4: '#fb8c00',
   }
 
-  const TOKEN_R = 36
-
   // Helper function to get player color
   const getPlayerColor = (playerId: number): string => {
     const player = players[playerId - 1]
@@ -292,7 +290,7 @@ export function HexBoard({
         
         const player = s ? players[s.player - 1] : null
         const isCity = s?.type === 'city'
-        const size = isCity ? 48 : 36
+        const size = isCity ? 72 : 54  // Increased by 50%: city was 48, settlement was 36
         
         if (player?.colorImage) {
           // Use house image

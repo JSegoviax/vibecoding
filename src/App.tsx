@@ -25,6 +25,7 @@ import {
   updateLongestRoad,
   getTradeRate,
 } from './game/logic'
+import type { GameState } from './game/types'
 import { TERRAIN_LABELS } from './game/terrain'
 
 const SETUP_ORDER: Record<number, number[]> = {
@@ -39,9 +40,15 @@ function getSetupPlayerIndex(state: { phase: string; setupPlacements: number; pl
   return order[Math.min(state.setupPlacements, order.length - 1)] ?? 0
 }
 
+// Helper to ensure GameState is properly typed when updating
+function updateGameState(g: GameState | null, updater: (state: GameState) => GameState): GameState | null {
+  if (!g) return g
+  return updater(g)
+}
+
 export default function App() {
   const [showColorSelection, setShowColorSelection] = useState(true)
-  const [selectedColors, setSelectedColors] = useState<string[]>([])
+  const [, setSelectedColors] = useState<string[]>([])
   const [numPlayers] = useState<2 | 3 | 4>(2)
   const [game, setGame] = useState<ReturnType<typeof createInitialState> | null>(null)
   const [setupPendingRoadVertex, setSetupPendingRoadVertex] = useState<string | null>(null)
@@ -123,13 +130,10 @@ export default function App() {
         handleSelectPlayerToRob(targetPlayerId)
       } else {
         // No valid player to rob, just move the robber
-        setGame(g => {
-          if (!g) return g
-          return {
-            ...g,
-            robberHexId: robberMode.newHexId!,
-          }
-        })
+        setGame(g => updateGameState(g, (state) => ({
+          ...state,
+          robberHexId: robberMode.newHexId!,
+        })))
         setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
       }
     }, 300)
@@ -246,7 +250,8 @@ export default function App() {
     if (game.phase === 'setup' && !isSetupRoad) {
       if (!canPlaceSettlement(game, vid, actualPlayerId)) return
       setGame(g => {
-        const next = { ...g, vertices: { ...g.vertices } }
+        if (!g) return g
+        const next: typeof g = { ...g, vertices: { ...g.vertices } }
         next.vertices[vid] = { ...next.vertices[vid], structure: { player: playerId, type: 'settlement' } }
         next.players = g.players.map((p, i) =>
           i === playerId - 1 ? { ...p, resources: { ...p.resources }, settlementsLeft: p.settlementsLeft - 1, victoryPoints: p.victoryPoints + 1 } : p
@@ -264,34 +269,39 @@ export default function App() {
         setErrorMessage('Insufficient resources. Need: ' + getMissingResources(actualCurrentPlayer, 'settlement').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
         return
       }
-      setGame(g => {
+      setGame(g => updateGameState(g, (state) => {
         const cost = { wood: 1, brick: 1, sheep: 1, wheat: 1 }
-        const next = { ...g, vertices: { ...g.vertices } }
+        const next: GameState = {
+          ...state,
+          vertices: { ...state.vertices },
+        }
         next.vertices[vid] = { ...next.vertices[vid], structure: { player: actualPlayerId, type: 'settlement' } }
-        next.players = g.players.map((p, i) => {
+        next.players = state.players.map((p, i) => {
           if (i !== actualPlayerId - 1) return p
           const res = { ...p.resources }
           for (const [t, n] of Object.entries(cost)) { res[t as keyof typeof res] = Math.max(0, (res[t as keyof typeof res] || 0) - n!) }
           return { ...p, resources: res, settlementsLeft: p.settlementsLeft - 1, victoryPoints: p.victoryPoints + 1 }
         })
         return next
-      })
+      }))
       setBuildMode(null)
       setErrorMessage(null)
     }
     if (buildMode === 'city' && canBuildCity(game, vid, playerId)) {
-      if (!canAfford(currentPlayer, 'city')) {
-        setErrorMessage('Insufficient resources. Need: ' + getMissingResources(currentPlayer, 'city').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
+      if (!currentPlayer || !canAfford(currentPlayer, 'city')) {
+        setErrorMessage('Insufficient resources. Need: ' + (currentPlayer ? getMissingResources(currentPlayer, 'city').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', ') : 'unknown'))
         return
       }
-      setGame(g => {
-        if (!g) return g
+      setGame(g => updateGameState(g, (state) => {
         const cost = { wheat: 2, ore: 3 }
-        const next = { ...g, vertices: { ...g.vertices } }
+        const next: GameState = {
+          ...state,
+          vertices: { ...state.vertices },
+        }
         const v = next.vertices[vid]
         if (v?.structure) {
           next.vertices[vid] = { ...v, structure: { player: playerId, type: 'city' } }
-          next.players = g.players.map((p, i) => {
+          next.players = state.players.map((p, i) => {
             if (i !== playerId - 1) return p
             const res = { ...p.resources }
             for (const [t, n] of Object.entries(cost)) { res[t as keyof typeof res] = Math.max(0, (res[t as keyof typeof res] || 0) - n!) }
@@ -299,7 +309,7 @@ export default function App() {
           })
         }
         return next
-      })
+      }))
       setBuildMode(null)
       setErrorMessage(null)
     }
@@ -309,12 +319,27 @@ export default function App() {
     if (game.phase === 'setup' && isSetupRoad && setupPendingRoadVertex) {
       if (!canPlaceRoadInSetup(game, eid, actualPlayerId, setupPendingRoadVertex)) return
       setGame(g => {
-        const next = { ...g, edges: { ...g.edges } }
+        if (!g) return g
+        const next: GameState = {
+          ...g,
+          edges: { ...g.edges },
+          phase: g.phase,
+          hexes: g.hexes,
+          vertices: g.vertices,
+          harbors: g.harbors,
+          players: g.players,
+          currentPlayerIndex: g.currentPlayerIndex,
+          setupPlacements: g.setupPlacements,
+          lastDice: g.lastDice,
+          lastResourceFlash: g.lastResourceFlash,
+          robberHexId: g.robberHexId,
+          longestRoadPlayerId: g.longestRoadPlayerId,
+        }
         next.edges[eid] = { ...next.edges[eid], road: actualPlayerId }
         next.players = g.players.map((p, i) =>
           i === actualPlayerId - 1 ? { ...p, roadsLeft: p.roadsLeft - 1 } : p
         )
-        next.setupPlacements++
+        next.setupPlacements = (next.setupPlacements || 0) + 1
         if (next.setupPlacements >= 2 * n) next.phase = 'playing'
         updateLongestRoad(next)
         return next
@@ -328,7 +353,8 @@ export default function App() {
         return
       }
       setGame(g => {
-        const next = { ...g, edges: { ...g.edges } }
+        if (!g) return g
+        const next: typeof g = { ...g, edges: { ...g.edges } }
         next.edges[eid] = { ...next.edges[eid], road: actualPlayerId }
         next.players = g.players.map((p, i) => {
           if (i !== actualPlayerId - 1) return p
@@ -356,22 +382,21 @@ export default function App() {
     if (!diceRolling) return
     const { dice1, dice2 } = diceRolling
     const sum = dice1 + dice2
-    setGame(g => {
-      if (!g) return g
-      const next = {
-        ...g,
+    setGame(g => updateGameState(g, (state) => {
+      const next: GameState = {
+        ...state,
         lastDice: [dice1, dice2] as [number, number],
-        players: g.players.map(p => ({ ...p, resources: { ...p.resources } })),
+        players: state.players.map(p => ({ ...p, resources: { ...p.resources } })),
         lastResourceFlash: null,
       }
       if (sum === 7) {
         // Enable robber mode
         setRobberMode({ moving: true, newHexId: null, playersToRob: new Set() })
       } else {
-        next.lastResourceFlash = distributeResources(next, sum)
+        next.lastResourceFlash = distributeResources(next, sum) || null
       }
       return next
-    })
+    }))
     // Don't set diceRolling to null - keep dice visible in corner until next roll
   }
 
@@ -391,10 +416,10 @@ export default function App() {
       setRobberMode({ moving: false, newHexId: hexId, playersToRob })
     } else {
       // No players to rob, just move the robber
-      setGame(g => ({
-        ...g,
+      setGame(g => updateGameState(g, (state) => ({
+        ...state,
         robberHexId: hexId,
-      }))
+      })))
       setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
       setErrorMessage(null)
     }
@@ -404,10 +429,10 @@ export default function App() {
     if (!robberMode.newHexId) return
 
       const stolen = stealResource(game, actualPlayerId, targetPlayerId) as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore' | null
-    setGame(g => ({
-      ...g,
+    setGame(g => updateGameState(g, (state) => ({
+      ...state,
       robberHexId: robberMode.newHexId!,
-    }))
+    })))
     setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
     if (stolen) {
       setErrorMessage(`Stole ${stolen} from ${game.players[targetPlayerId - 1]?.name || 'player'}`)
@@ -419,37 +444,39 @@ export default function App() {
   const handleEndTurn = () => {
     // Clear diceRolling when turn ends so next player can roll
     setDiceRolling(null)
-    setGame(g => ({
-      ...g,
-      currentPlayerIndex: (g.currentPlayerIndex + 1) % g.players.length,
+    setGame(g => updateGameState(g, (state) => ({
+      ...state,
+      currentPlayerIndex: (state.currentPlayerIndex + 1) % state.players.length,
       lastDice: null,
       lastResourceFlash: null,
-    }))
+    })))
     setBuildMode(null)
     setTradeFormOpen(false)
     setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
   }
 
   const handleTrade = (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => {
-    setGame(g => {
-      if (!g) return g
-      const idx = g.currentPlayerIndex
-      const p = g.players[idx]
-      if (!p) return g
+    setGame(g => updateGameState(g, (state) => {
+      const idx = state.currentPlayerIndex
+      const p = state.players[idx]
+      if (!p) return state
       
       // Get the trade rate based on harbors
-      const tradeRate = getTradeRate(g, actualPlayerId, give)
-      if ((p.resources[give] || 0) < tradeRate) return g
+      const tradeRate = getTradeRate(state, actualPlayerId, give)
+      if ((p.resources[give] || 0) < tradeRate) return state
       
-      const next = { ...g, players: g.players.map((pl, i) => {
-        if (i !== idx) return pl
-        const res = { ...pl.resources }
-        res[give] = Math.max(0, (res[give] || 0) - tradeRate)
-        res[get] = (res[get] || 0) + 1
-        return { ...pl, resources: res }
-      }) }
+      const next: GameState = {
+        ...state,
+        players: state.players.map((pl, i) => {
+          if (i !== idx) return pl
+          const res = { ...pl.resources }
+          res[give] = Math.max(0, (res[give] || 0) - tradeRate)
+          res[get] = (res[get] || 0) + 1
+          return { ...pl, resources: res }
+        })
+      }
       return next
-    })
+    }))
     setTradeFormOpen(false)
     setErrorMessage(null)
   }
@@ -468,7 +495,7 @@ export default function App() {
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
       <GameGuide />
-      <h1 style={{ textAlign: 'center', marginBottom: '0.5rem' }}>BAYC #1855 Game Time</h1>
+      <h1 style={{ textAlign: 'center', marginBottom: '0.5rem' }}>Settlers of Oregon</h1>
       <p style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 0 }}>
         {game.phase === 'setup' && !isSetupRoad && `Place a settlement`}
         {game.phase === 'setup' && isSetupRoad && `Place a road next to it`}
