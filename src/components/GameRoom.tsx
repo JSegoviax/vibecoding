@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { createInitialState } from '../game/state'
 import { MultiplayerGame } from './MultiplayerGame'
+import { trackEvent } from '../utils/analytics'
 import type { GameState } from '../game/types'
 
 const STORAGE_KEY = (gameId: string) => `supabase_game_${gameId}`
@@ -93,6 +94,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
     localStorage.setItem(STORAGE_KEY(gameId), JSON.stringify({ playerIndex }))
     setMyPlayerIndex(playerIndex)
+    trackEvent('multiplayer_player_joined', 'multiplayer', `seat_${playerIndex}`)
     await fetchPlayers()
   }
 
@@ -115,12 +117,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setError(e.message)
       return
     }
+    trackEvent('game_started', 'multiplayer', `players_${numPlayers}`)
     await fetchGame()
   }
 
   const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/game/${gameId}` : ''
 
   const copyLink = () => {
+    trackEvent('multiplayer_link_copied', 'multiplayer', 'share_link')
     navigator.clipboard.writeText(shareUrl)
   }
 

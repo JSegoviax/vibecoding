@@ -36,6 +36,7 @@ export function VictoryPointTracker({ vertices, players, activePlayerIndex, phas
       {players.map((p, i) => {
         const { settlements, cities, fromSettlements, fromCities, total } = getVPBreakdown(vertices, p.id)
         const hasLongestRoad = longestRoadPlayerId === p.id
+        const totalWithLongestRoad = total + (hasLongestRoad ? 2 : 0)
         const isActive = phase === 'setup' ? activePlayerIndex === i : activePlayerIndex === i
         return (
           <div
@@ -50,7 +51,7 @@ export function VictoryPointTracker({ vertices, players, activePlayerIndex, phas
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
               <span style={{ fontWeight: 'bold', color: p.color, fontSize: 13 }}>{p.name}</span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{total} VP</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{totalWithLongestRoad} VP</span>
             </div>
             <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
               {settlements > 0 && (

@@ -44,7 +44,7 @@ interface PlayerResourcesProps {
 function ResourceChip({ type, count, flash }: { type: Terrain; count: number; flash?: boolean }) {
   return (
     <div
-      className={flash ? 'resource-chip-flash' : undefined}
+      className={`resource-chip ${flash ? 'resource-chip-flash' : ''}`.trim()}
       style={{
         display: 'inline-flex',
         alignItems: 'center',

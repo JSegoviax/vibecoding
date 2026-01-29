@@ -28,6 +28,7 @@ import {
 } from './game/logic'
 import type { GameState } from './game/types'
 import { TERRAIN_LABELS } from './game/terrain'
+import { trackEvent } from './utils/analytics'
 
 const SETUP_ORDER: Record<number, number[]> = {
   2: [0, 1, 1, 0],
@@ -66,6 +67,7 @@ export default function App() {
   const [diceRolling, setDiceRolling] = useState<{ dice1: number; dice2: number } | null>(null)
   const aiNextRoadEdge = useRef<string | null>(null)
   const aiBuildTarget = useRef<{ type: string; vertexId?: string; edgeId?: string } | null>(null)
+  const gameWonTrackedRef = useRef(false)
 
   // Calculate number of human players (in 2-player mode, only player 1 is human)
   const numHumanPlayers = numPlayers === 2 ? 1 : numPlayers
@@ -73,6 +75,7 @@ export default function App() {
   const handleColorsSelected = (colors: string[]) => {
     setSelectedColors(colors)
     setGame(createInitialState(numPlayers, colors))
+    trackEvent('game_started', 'gameplay', 'single_player', numPlayers)
     setStartScreen('game')
   }
 
@@ -171,6 +174,13 @@ export default function App() {
   }, [game?.phase, game?.currentPlayerIndex, game?.lastDice, game?.players, buildMode, winner, robberMode.moving, robberMode.newHexId])
 
   useEffect(() => {
+    if (winner && game && !gameWonTrackedRef.current) {
+      gameWonTrackedRef.current = true
+      trackEvent('game_won', 'gameplay', winner.name, winner.victoryPoints)
+    }
+  }, [winner, game])
+
+  useEffect(() => {
     if (!buildMode || !aiBuildTarget.current || !game) return
     const target = aiBuildTarget.current
     if (target.type === 'settlement' && target.vertexId) {
@@ -215,6 +225,7 @@ export default function App() {
   if (startScreen === 'mode') {
     return (
       <div
+        className="mode-select"
         style={{
           minHeight: '100vh',
           display: 'flex',
@@ -232,7 +243,11 @@ export default function App() {
         <p style={{ color: 'var(--muted)', margin: 0 }}>Choose how to play</p>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button
-            onClick={() => setStartScreen('colors')}
+            className="mode-btn"
+            onClick={() => {
+              trackEvent('play_vs_ai_clicked', 'navigation', 'mode_select')
+              setStartScreen('colors')
+            }}
             style={{
               padding: '16px 32px',
               fontSize: 18,
@@ -248,7 +263,11 @@ export default function App() {
             Play vs AI
           </button>
           <button
-            onClick={() => setStartScreen('multiplayer')}
+            className="mode-btn"
+            onClick={() => {
+              trackEvent('multiplayer_clicked', 'navigation', 'mode_select')
+              setStartScreen('multiplayer')
+            }}
             style={{
               padding: '16px 32px',
               fontSize: 18,
@@ -269,7 +288,12 @@ export default function App() {
 
   if (startScreen === 'multiplayer') {
     return (
-      <MultiplayerLobby onBack={() => setStartScreen('mode')} />
+      <MultiplayerLobby
+        onBack={() => {
+          trackEvent('lobby_back', 'navigation', 'multiplayer')
+          setStartScreen('mode')
+        }}
+      />
     )
   }
 
@@ -346,6 +370,7 @@ export default function App() {
         setErrorMessage('Insufficient resources. Need: ' + getMissingResources(actualCurrentPlayer, 'settlement').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
         return
       }
+      trackEvent('build', 'gameplay', 'settlement', 1)
       setGame(g => updateGameState(g, (state) => {
         const cost = { wood: 1, brick: 1, sheep: 1, wheat: 1 }
         const next: GameState = {
@@ -369,6 +394,7 @@ export default function App() {
         setErrorMessage('Insufficient resources. Need: ' + (currentPlayer ? getMissingResources(currentPlayer, 'city').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', ') : 'unknown'))
         return
       }
+      trackEvent('build', 'gameplay', 'city', 1)
       setGame(g => updateGameState(g, (state) => {
         const cost = { wheat: 2, ore: 3 }
         const next: GameState = {
@@ -418,6 +444,7 @@ export default function App() {
         setErrorMessage('Insufficient resources. Need: ' + getMissingResources(actualCurrentPlayer, 'road').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
         return
       }
+      trackEvent('build', 'gameplay', 'road', 1)
       setGame(g => {
         if (!g) return g
         const next: typeof g = { ...g, edges: { ...g.edges } }
@@ -438,6 +465,7 @@ export default function App() {
   }
 
   const handleRoll = () => {
+    trackEvent('dice_roll_started', 'gameplay', 'single_player')
     const a = 1 + Math.floor(Math.random() * 6)
     const b = 1 + Math.floor(Math.random() * 6)
     // Start animation
@@ -448,6 +476,7 @@ export default function App() {
     if (!diceRolling) return
     const { dice1, dice2 } = diceRolling
     const sum = dice1 + dice2
+    trackEvent('dice_rolled', 'gameplay', `sum_${sum}`, sum)
     setGame(g => updateGameState(g, (state) => {
       const next: GameState = {
         ...state,
@@ -481,6 +510,7 @@ export default function App() {
       // Need to select which player to rob
       setRobberMode({ moving: false, newHexId: hexId, playersToRob })
     } else {
+      trackEvent('robber_moved', 'gameplay', 'single_player')
       // No players to rob, just move the robber
       setGame(g => updateGameState(g, (state) => ({
         ...state,
@@ -508,7 +538,7 @@ export default function App() {
   }
 
   const handleEndTurn = () => {
-    // Clear diceRolling when turn ends so next player can roll
+    trackEvent('end_turn', 'gameplay', 'single_player')
     setDiceRolling(null)
     setGame(g => updateGameState(g, (state) => ({
       ...state,
@@ -550,10 +580,10 @@ export default function App() {
   const isPlaying = game.phase === 'playing' && !actualWinner
 
   return (
-    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
+    <div className="game-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
       <GameGuide />
-      <h1 style={{ textAlign: 'center', marginBottom: '0.5rem' }}>Settlers of Oregon</h1>
-      <p style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 0 }}>
+      <h1 className="game-title" style={{ textAlign: 'center', marginBottom: '0.5rem' }}>Settlers of Oregon</h1>
+      <p className="game-subtitle" style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 0 }}>
         {game.phase === 'setup' && !isSetupRoad && `Place a settlement`}
         {game.phase === 'setup' && isSetupRoad && `Place a road next to it`}
         {isPlaying && robberMode.moving && `Rolled 7! Click a hex to move the robber`}
@@ -585,8 +615,9 @@ export default function App() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+      <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
         <div
+          className="game-board"
           style={{
             flex: '1 1 auto',
             minWidth: 600,
@@ -624,7 +655,7 @@ export default function App() {
           )}
         </div>
 
-        <aside style={{ flex: '0 0 280px', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <aside className="game-sidebar" style={{ flex: '0 0 280px', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <VictoryPointTracker
             vertices={game.vertices}
             players={game.players}
@@ -707,7 +738,12 @@ export default function App() {
 
           {actualWinner && (
             <button
-              onClick={() => { setGame(createInitialState(2)); setBuildMode(null); }}
+              onClick={() => {
+                trackEvent('new_game', 'gameplay', 'single_player')
+                gameWonTrackedRef.current = false
+                setGame(createInitialState(2))
+                setBuildMode(null)
+              }}
               style={{ padding: '10px 20px', background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 'bold', cursor: 'pointer', marginTop: 8 }}
             >New game</button>
           )}

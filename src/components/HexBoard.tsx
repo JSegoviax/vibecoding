@@ -76,7 +76,13 @@ export function HexBoard({
   }
 
   return (
-    <svg viewBox={`${bounds.minX - padding} ${bounds.minY - padding} ${w} ${h}`} width="100%" height="100%" style={{ maxHeight: '90vh', minHeight: 500, width: '100%', position: 'relative', zIndex: 1 }}>
+    <svg
+      viewBox={`${bounds.minX - padding} ${bounds.minY - padding} ${w} ${h}`}
+      width="100%"
+      height="100%"
+      preserveAspectRatio="xMidYMid meet"
+      style={{ maxHeight: '90vh', minHeight: 500, width: '100%', position: 'relative', zIndex: 1 }}
+    >
       {/* Define clip paths for hexes */}
       <defs>
         {hexes.map(h => {

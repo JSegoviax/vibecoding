@@ -19,17 +19,195 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 #root {
   min-height: 100vh;
   padding: 1rem;
+}
+
+/* Mobile-friendly layout and touch targets */
+@media (max-width: 768px) {
+  #root {
+    padding: 8px;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  .game-page {
+    padding: 0 8px !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    overflow-x: hidden;
+  }
+
+  .game-layout {
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    gap: 16px !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden;
+  }
+
+  /* Board: fit within phone width, no horizontal overflow */
+  .game-board {
+    order: 1;
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 280px;
+    max-height: 58vh;
+    overflow: hidden;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .game-board svg {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 260px !important;
+    max-height: 56vh !important;
+  }
+
+  /* Modules (VP, Resources, etc.) below the board */
+  .game-sidebar {
+    order: 2;
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Touch-friendly tap targets (min 44px) */
+  .game-sidebar button,
+  .game-page .dismiss-error {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 12px 16px !important;
+    font-size: 15px !important;
+  }
+
+  .game-sidebar .resource-chip {
+    min-height: 36px;
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+  }
+
+  .game-title {
+    font-size: 1.35rem !important;
+  }
+
+  .game-subtitle {
+    font-size: 0.9rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-board {
+    min-height: 240px;
+    max-height: 52vh;
+  }
+
+  .game-board svg {
+    min-height: 220px !important;
+    max-height: 50vh !important;
+  }
+}
+
+/* Prevent iOS zoom on input focus */
+@media (max-width: 768px) {
+  input,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Safe area for notched devices (with viewport-fit=cover) */
+@supports (padding: env(safe-area-inset-bottom)) {
+  #root {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  @media (max-width: 768px) {
+    #root {
+      padding-left: max(8px, env(safe-area-inset-left));
+      padding-right: max(8px, env(safe-area-inset-right));
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .game-guide-btn {
+      top: max(8px, env(safe-area-inset-top)) !important;
+      right: max(8px, env(safe-area-inset-right)) !important;
+    }
+  }
+}
+
+/* Game Guide: larger button and modal on touch devices */
+@media (max-width: 768px) {
+  .game-guide-btn {
+    padding: 12px 20px !important;
+    font-size: 16px !important;
+    min-height: 44px !important;
+    top: 8px !important;
+    right: 8px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .game-guide-modal-content {
+    max-width: 100% !important;
+    padding: 16px !important;
+    max-height: 85vh !important;
+  }
+
+  .game-guide-modal-content h2 {
+    font-size: 1.25rem !important;
+  }
+
+  .game-guide-modal-content h3 {
+    font-size: 1rem !important;
+  }
+
+  .game-guide-close {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    padding: 12px !important;
+  }
+}
+
+/* Mode select: comfortable on small screens */
+@media (max-width: 768px) {
+  .mode-select {
+    padding: 16px !important;
+    gap: 20px !important;
+  }
+
+  .mode-select h1 {
+    font-size: 1.5rem !important;
+  }
+
+  .mode-select .mode-btn {
+    padding: 18px 28px !important;
+    font-size: 17px !important;
+    min-height: 48px !important;
+  }
 }
 
 @keyframes resource-flash {

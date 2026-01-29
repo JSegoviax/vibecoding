@@ -1,12 +1,24 @@
 import { useState } from 'react'
+import { trackEvent } from '../utils/analytics'
 
 export function GameGuide() {
   const [isOpen, setIsOpen] = useState(false)
 
+  const handleOpen = () => {
+    trackEvent('guide_opened', 'navigation', 'game_guide')
+    setIsOpen(true)
+  }
+
+  const handleClose = () => {
+    trackEvent('guide_closed', 'navigation', 'game_guide')
+    setIsOpen(false)
+  }
+
   return (
     <>
       <button
-        onClick={() => setIsOpen(true)}
+        className="game-guide-btn"
+        onClick={handleOpen}
         style={{
           position: 'fixed',
           top: 16,
@@ -41,9 +53,10 @@ export function GameGuide() {
             justifyContent: 'center',
             padding: 20,
           }}
-          onClick={() => setIsOpen(false)}
+          onClick={handleClose}
         >
           <div
+            className="game-guide-modal-content"
             style={{
               background: 'var(--surface)',
               borderRadius: 12,
@@ -58,7 +71,9 @@ export function GameGuide() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ margin: 0, fontSize: 24, fontWeight: 'bold' }}>Game Rules</h2>
               <button
-                onClick={() => setIsOpen(false)}
+                type="button"
+                className="game-guide-close"
+                onClick={handleClose}
                 style={{
                   background: 'transparent',
                   border: 'none',
@@ -68,6 +83,7 @@ export function GameGuide() {
                   padding: '0 8px',
                   lineHeight: 1,
                 }}
+                aria-label="Close"
               >
                 ×
               </button>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { trackEvent } from '../utils/analytics'
 
 const STORAGE_KEY = (gameId: string) => `supabase_game_${gameId}`
 
@@ -36,6 +37,7 @@ export function MultiplayerLobby({ onBack }: { onBack: () => void }) {
         .insert({ game_id: id, player_index: 0, nickname: 'Player 1' })
       if (insertPlayerError) throw insertPlayerError
       localStorage.setItem(STORAGE_KEY(id), JSON.stringify({ playerIndex: 0 }))
+      trackEvent('multiplayer_game_created', 'multiplayer', `players_${numPlayers}`)
       window.location.href = `/game/${id}`
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create game')
@@ -50,6 +52,7 @@ export function MultiplayerLobby({ onBack }: { onBack: () => void }) {
       return
     }
     setError(null)
+    trackEvent('multiplayer_join_clicked', 'multiplayer', 'join_by_link')
     window.location.href = `/game/${id}`
   }
 

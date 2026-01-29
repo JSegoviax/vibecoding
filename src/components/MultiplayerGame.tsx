@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { trackEvent } from '../utils/analytics'
 import { HexBoard } from './HexBoard'
 import { PlayerResources } from './PlayerResources'
 import { VictoryPointTracker } from './VictoryPointTracker'
@@ -53,6 +54,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
   const [tradeGet, setTradeGet] = useState<'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'>('brick')
   const [robberMode, setRobberMode] = useState<{ moving: boolean; newHexId: string | null; playersToRob: Set<number> }>({ moving: false, newHexId: null, playersToRob: new Set() })
   const [diceRolling, setDiceRolling] = useState<{ dice1: number; dice2: number } | null>(null)
+  const gameWonTrackedRef = useRef(false)
 
   useEffect(() => {
     const channel = supabase
@@ -141,6 +143,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
         setErrorMessage('Insufficient resources. Need: ' + getMissingResources(currentPlayer!, 'settlement').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
         return
       }
+      trackEvent('build', 'gameplay', 'settlement', 1)
       const cost = { wood: 1, brick: 1, sheep: 1, wheat: 1 }
       const next: GameState = { ...game, vertices: { ...game.vertices } }
       next.vertices[vid] = { ...next.vertices[vid], structure: { player: playerId, type: 'settlement' } }
@@ -195,6 +198,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
         setErrorMessage('Insufficient resources.')
         return
       }
+      trackEvent('build', 'gameplay', 'road', 1)
       const next: GameState = { ...game, edges: { ...game.edges } }
       next.edges[eid] = { ...next.edges[eid], road: playerId }
       next.players = game.players.map((p, i) => {
@@ -215,6 +219,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     if (!isMyTurn) return
     const a = 1 + Math.floor(Math.random() * 6)
     const b = 1 + Math.floor(Math.random() * 6)
+    trackEvent('dice_roll_started', 'gameplay', 'multiplayer')
     setDiceRolling({ dice1: a, dice2: b })
   }
 
@@ -222,6 +227,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     if (!diceRolling) return
     const { dice1, dice2 } = diceRolling
     const sum = dice1 + dice2
+    trackEvent('dice_rolled', 'gameplay', `sum_${sum}`, sum)
     setDiceRolling(null)
     const next: GameState = {
       ...game,
@@ -248,6 +254,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     if (playersToRob.size > 0) {
       setRobberMode({ moving: false, newHexId: hexId, playersToRob })
     } else {
+      trackEvent('robber_moved', 'gameplay', 'multiplayer')
       const next: GameState = { ...game, robberHexId: hexId }
       sendStateUpdate(next)
       setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
@@ -257,6 +264,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
 
   const handleSelectPlayerToRob = (targetPlayerId: number) => {
     if (!robberMode.newHexId) return
+    trackEvent('robber_moved', 'gameplay', 'multiplayer')
     const next: GameState = {
       ...game,
       robberHexId: robberMode.newHexId,
@@ -270,6 +278,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
 
   const handleEndTurn = () => {
     if (!isMyTurn) return
+    trackEvent('end_turn', 'gameplay', 'multiplayer')
     const next: GameState = {
       ...game,
       currentPlayerIndex: (game.currentPlayerIndex + 1) % game.players.length,
@@ -305,11 +314,18 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
 
   const isPlaying = game.phase === 'playing' && !winner
 
+  useEffect(() => {
+    if (winner && !gameWonTrackedRef.current) {
+      gameWonTrackedRef.current = true
+      trackEvent('game_won', 'gameplay', winner.name, winner.victoryPoints)
+    }
+  }, [winner])
+
   return (
-    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
+    <div className="game-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
       <GameGuide />
-      <h1 style={{ textAlign: 'center', marginBottom: '0.5rem' }}>Settlers of Oregon (Multiplayer)</h1>
-      <p style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 0 }}>
+      <h1 className="game-title" style={{ textAlign: 'center', marginBottom: '0.5rem' }}>Settlers of Oregon (Multiplayer)</h1>
+      <p className="game-subtitle" style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 0 }}>
         {game.phase === 'setup' && !isSetupRoad && `Place a settlement`}
         {game.phase === 'setup' && isSetupRoad && `Place a road next to it`}
         {isPlaying && robberMode.moving && `Rolled 7! Click a hex to move the robber`}
@@ -325,8 +341,8 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-        <div style={{ flex: '1 1 auto', minWidth: 600, borderRadius: 12, overflow: 'visible', backgroundColor: '#e0d5c4', border: '3px solid #c4b59a', boxShadow: 'inset 0 0 60px rgba(139,115,85,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+      <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+        <div className="game-board" style={{ flex: '1 1 auto', minWidth: 600, borderRadius: 12, overflow: 'visible', backgroundColor: '#e0d5c4', border: '3px solid #c4b59a', boxShadow: 'inset 0 0 60px rgba(139,115,85,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
           <HexBoard
             hexes={game.hexes}
             vertexStates={vertexStates}
@@ -344,7 +360,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
           {diceRolling && <DiceRollAnimation dice1={diceRolling.dice1} dice2={diceRolling.dice2} onComplete={handleDiceRollComplete} />}
         </div>
 
-        <aside style={{ flex: '0 0 280px', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <aside className="game-sidebar" style={{ flex: '0 0 280px', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <VictoryPointTracker vertices={game.vertices} players={game.players} activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex} phase={game.phase} longestRoadPlayerId={game.longestRoadPlayerId} />
           <PlayerResources
             players={game.players}
