@@ -162,6 +162,16 @@ export function GameGuide() {
                   The first player to reach <strong>10 victory points</strong> wins the game!
                 </p>
               </section>
+
+              <section style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--muted)' }}>
+                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 16, fontWeight: 'bold', color: 'var(--accent)' }}>
+                  Credits
+                </h3>
+                <div style={{ margin: 0, lineHeight: 1.8, color: 'var(--text)' }}>
+                  <div>Designer - Charmingtoad</div>
+                  <div>VPM - Cloud</div>
+                </div>
+              </section>
             </div>
           </div>
         </div>
