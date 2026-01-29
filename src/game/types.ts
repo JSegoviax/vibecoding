@@ -2,6 +2,15 @@ export type Terrain = 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore' | 'desert'
 
 export type PlayerId = 1 | 2 | 3 | 4
 
+export type HarborType = Terrain | 'generic' // 'generic' means 3:1, specific resource means 2:1
+
+export interface Harbor {
+  id: string
+  edgeId: EdgeId // The edge this harbor is on (coastal edge)
+  vertexIds: [VertexId, VertexId] // The two vertices this harbor connects to
+  type: HarborType // 'generic' for 3:1, or specific resource for 2:1
+}
+
 export interface Hex {
   id: string
   q: number
@@ -47,6 +56,7 @@ export interface GameState {
   hexes: Hex[]
   vertices: Record<VertexId, Vertex>
   edges: Record<EdgeId, Edge>
+  harbors: Harbor[]
   players: Player[]
   currentPlayerIndex: number
   setupPlacements: number  // 0–1 for first placement round, 2–3 for second

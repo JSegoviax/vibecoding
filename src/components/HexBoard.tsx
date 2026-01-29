@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { hexToPixel, hexCorner, HEX_R, getWaterHexPositions } from '../game/board'
 import { buildTopology } from '../game/topology'
 import { TERRAIN_COLORS } from '../game/terrain'
-import type { Hex } from '../game/types'
+import type { Hex, Harbor, Terrain } from '../game/types'
 
 interface HexBoardProps {
   hexes: Hex[]
@@ -15,6 +15,7 @@ interface HexBoardProps {
   robberHexId?: string | null
   selectableRobberHexes?: Set<string>
   selectHex?: (hexId: string) => void
+  harbors?: Harbor[]
 }
 
 export function HexBoard({
@@ -28,6 +29,7 @@ export function HexBoard({
   robberHexId,
   selectableRobberHexes,
   selectHex,
+  harbors = [],
 }: HexBoardProps) {
   const { vertices, edges } = useMemo(() => buildTopology(hexes), [hexes])
   const vById = useMemo(() => Object.fromEntries(vertices.map(v => [v.id, v])), [vertices])
@@ -306,6 +308,112 @@ export function HexBoard({
             onClick={() => selectVertex?.(v.id)}
             style={{ cursor: selectVertex ? 'pointer' : 'default' }}
           />
+        )
+      })}
+
+      {/* Harbors - render after other elements to ensure visibility */}
+      {harbors.length > 0 && console.log('Rendering harbors:', harbors.length)}
+      {harbors.map((harbor: Harbor) => {
+        const edge = eById[harbor.edgeId]
+        if (!edge) {
+          console.warn('Harbor edge not found:', harbor.edgeId)
+          return null
+        }
+        const v1 = vById[edge.v1]
+        const v2 = vById[edge.v2]
+        if (!v1 || !v2) {
+          console.warn('Harbor vertices not found:', edge.v1, edge.v2)
+          return null
+        }
+        
+        // Position harbor icon at the midpoint of the edge, offset outward toward water
+        const midX = (v1.x + v2.x) / 2
+        const midY = (v1.y + v2.y) / 2
+        
+        // Calculate perpendicular vector to the edge (two possible directions)
+        const dx = v2.x - v1.x
+        const dy = v2.y - v1.y
+        const perpX1 = -dy
+        const perpY1 = dx
+        const perpX2 = dy
+        const perpY2 = -dx
+        
+        // Determine which direction points outward (away from board center, toward water)
+        // Calculate vector from board center to midpoint
+        const centerToMidX = midX - cx
+        const centerToMidY = midY - cy
+        
+        // Dot product to determine which perpendicular points outward
+        const dot1 = perpX1 * centerToMidX + perpY1 * centerToMidY
+        const dot2 = perpX2 * centerToMidX + perpY2 * centerToMidY
+        
+        // Use the perpendicular that points outward (positive dot product)
+        const perpX = dot1 > dot2 ? perpX1 : perpX2
+        const perpY = dot1 > dot2 ? perpY1 : perpY2
+        
+        // Normalize and scale the offset (offset further out onto the water hex)
+        const len = Math.sqrt(perpX * perpX + perpY * perpY)
+        const offsetDistance = HEX_R * 0.6 // Offset further out onto water hex
+        const offsetX = len > 0 ? (perpX / len) * offsetDistance : 0
+        const offsetY = len > 0 ? (perpY / len) * offsetDistance : 0
+        
+        const harborX = midX + offsetX
+        const harborY = midY + offsetY
+        
+        return (
+          <g key={harbor.id} style={{ zIndex: 100 }}>
+            {/* Harbor background circle - larger and more visible */}
+            <circle
+              cx={harborX}
+              cy={harborY}
+              r={24}
+              fill="#fff8dc"
+              stroke="#8b4513"
+              strokeWidth={3}
+              style={{ pointerEvents: 'none' }}
+              opacity={0.95}
+            />
+            {/* Harbor type indicator */}
+            {harbor.type === 'generic' ? (
+              <text
+                x={harborX}
+                y={harborY}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill="#8b4513"
+                fontWeight="bold"
+                fontSize={18}
+                style={{ pointerEvents: 'none' }}
+              >
+                ?
+              </text>
+            ) : (
+              <>
+                <text
+                  x={harborX}
+                  y={harborY - 4}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill="#8b4513"
+                  fontWeight="bold"
+                  fontSize={14}
+                  style={{ pointerEvents: 'none' }}
+                >
+                  2:1
+                </text>
+                {/* Small resource icon for 2:1 harbors */}
+                <circle
+                  cx={harborX}
+                  cy={harborY + 10}
+                  r={8}
+                  fill={TERRAIN_COLORS[harbor.type as Terrain]}
+                  stroke="#fff"
+                  strokeWidth={1}
+                  style={{ pointerEvents: 'none' }}
+                />
+              </>
+            )}
+          </g>
         )
       })}
     </svg>

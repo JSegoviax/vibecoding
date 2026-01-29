@@ -7,6 +7,7 @@ import {
   canBuildCity,
   getMissingResources,
   getPlayersOnHex,
+  getTradeRate,
 } from './logic'
 
 const RESOURCE_TYPES: Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore']
@@ -95,8 +96,21 @@ export function runAITrade(state: GameState): { give: Terrain; get: Terrain } | 
     if (canAfford(player, struct)) continue
     const missing = getMissingResources(player, struct)
     for (const m of missing) {
-      const giveOptions = RESOURCE_TYPES.filter(t => t !== m.terrain && (player.resources[t] || 0) >= 4)
-      if (giveOptions.length > 0) return { give: giveOptions[0], get: m.terrain }
+      // Check all resource types, using harbor rates if available
+      const giveOptions = RESOURCE_TYPES.filter(t => {
+        if (t === m.terrain) return false
+        const tradeRate = getTradeRate(state, AI_PLAYER_ID, t)
+        return (player.resources[t] || 0) >= tradeRate
+      })
+      if (giveOptions.length > 0) {
+        // Prefer resources with better trade rates (2:1 or 3:1 over 4:1)
+        const bestOption = giveOptions.sort((a, b) => {
+          const rateA = getTradeRate(state, AI_PLAYER_ID, a)
+          const rateB = getTradeRate(state, AI_PLAYER_ID, b)
+          return rateA - rateB // Lower is better (2 < 3 < 4)
+        })[0]
+        return { give: bestOption, get: m.terrain }
+      }
     }
   }
   return null

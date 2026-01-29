@@ -22,6 +22,7 @@ import {
   getPlayersOnHex,
   stealResource,
   updateLongestRoad,
+  getTradeRate,
 } from './game/logic'
 import { TERRAIN_LABELS } from './game/terrain'
 
@@ -180,7 +181,6 @@ export default function App() {
         return
       }
       setGame(g => {
-        const cost = { wood: 1, brick: 1 }
         const next = { ...g, edges: { ...g.edges } }
         next.edges[eid] = { ...next.edges[eid], road: playerId }
         next.players = g.players.map((p, i) => {
@@ -212,7 +212,7 @@ export default function App() {
     setGame(g => {
       const next = {
         ...g,
-        lastDice: [dice1, dice2],
+        lastDice: [dice1, dice2] as [number, number],
         players: g.players.map(p => ({ ...p, resources: { ...p.resources } })),
         lastResourceFlash: null,
       }
@@ -255,7 +255,7 @@ export default function App() {
   const handleSelectPlayerToRob = (targetPlayerId: number) => {
     if (!robberMode.newHexId) return
 
-    const stolen = stealResource(game, playerId, targetPlayerId)
+      const stolen = stealResource(game, playerId, targetPlayerId) as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore' | null
     setGame(g => ({
       ...g,
       robberHexId: robberMode.newHexId!,
@@ -286,11 +286,16 @@ export default function App() {
     setGame(g => {
       const idx = g.currentPlayerIndex
       const p = g.players[idx]
-      if (!p || (p.resources[give] || 0) < 4) return g
+      if (!p) return g
+      
+      // Get the trade rate based on harbors
+      const tradeRate = getTradeRate(g, playerId, give)
+      if ((p.resources[give] || 0) < tradeRate) return g
+      
       const next = { ...g, players: g.players.map((pl, i) => {
         if (i !== idx) return pl
         const res = { ...pl.resources }
-        res[give] = Math.max(0, (res[give] || 0) - 4)
+        res[give] = Math.max(0, (res[give] || 0) - tradeRate)
         res[get] = (res[get] || 0) + 1
         return { ...pl, resources: res }
       }) }
@@ -368,7 +373,7 @@ export default function App() {
     const t = setTimeout(() => {
       const trade = runAITrade(game)
       if (trade) {
-        handleTrade(trade.give, trade.get)
+        handleTrade(trade.give as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', trade.get as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')
         return
       }
       const decision = runAITurn(game)
@@ -474,6 +479,7 @@ export default function App() {
             robberHexId={game.robberHexId}
             selectableRobberHexes={selectableRobberHexes}
             selectHex={robberMode.moving ? handleSelectRobberHex : undefined}
+            harbors={game.harbors}
           />
           {diceRolling && (
             <DiceRollAnimation
@@ -514,6 +520,7 @@ export default function App() {
             onSetErrorMessage={setErrorMessage}
             canAfford={canAfford}
             getMissingResources={getMissingResources}
+            getTradeRate={isPlaying && !isAITurn ? (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => getTradeRate(game, playerId, give) : undefined}
           />
 
           <BuildCostsLegend />

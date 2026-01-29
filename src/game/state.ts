@@ -1,5 +1,6 @@
 import { createBoard } from './board'
 import { buildTopology } from './topology'
+import { createHarbors } from './harbors'
 import type { GameState, Player, Vertex, Edge, PlayerId } from './types'
 
 const PLAYER_COLORS: Record<PlayerId, string> = {
@@ -35,6 +36,9 @@ export function createInitialState(numPlayers: 2 | 3 | 4): GameState {
     edgs[e.id] = { id: e.id, v1: e.v1, v2: e.v2 }
   }
 
+  const harbors = createHarbors(hexes)
+  console.log('Created harbors:', harbors.length, harbors)
+
   const players: Player[] = []
   for (let i = 1; i <= numPlayers; i++) {
     const p = createPlayer(i as PlayerId)
@@ -50,6 +54,7 @@ export function createInitialState(numPlayers: 2 | 3 | 4): GameState {
     hexes,
     vertices: verts,
     edges: edgs,
+    harbors,
     players,
     currentPlayerIndex: 0,
     setupPlacements: 0,

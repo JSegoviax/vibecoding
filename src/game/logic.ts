@@ -1,4 +1,4 @@
-import type { GameState, Terrain, PlayerId } from './types'
+import type { GameState, Terrain, PlayerId, HarborType } from './types'
 
 function getEdgesForVertex(edges: Record<string, { v1: string; v2: string }>, vid: string): string[] {
   return Object.entries(edges)
@@ -331,6 +331,47 @@ function findLongestPathFromEdge(
 }
 
 /** Update longest road and adjust victory points accordingly */
+/**
+ * Checks if a player has a settlement or city on a harbor vertex.
+ * Returns the harbor type if found, or null.
+ */
+export function getPlayerHarborType(state: GameState, playerId: PlayerId, giveResource: Terrain): HarborType | null {
+  for (const harbor of state.harbors) {
+    // Check if player has a structure on either vertex of this harbor
+    const hasStructure = harbor.vertexIds.some(vertexId => {
+      const vertex = state.vertices[vertexId]
+      return vertex?.structure?.player === playerId
+    })
+    
+    if (hasStructure) {
+      // If it's a specific resource harbor and matches what we're giving, return 2:1 rate
+      if (harbor.type === giveResource) {
+        return harbor.type // 2:1 for this specific resource
+      }
+      // If it's a generic harbor, return generic (3:1)
+      if (harbor.type === 'generic') {
+        return 'generic'
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Gets the best trade rate for a player trading a specific resource.
+ * Returns the number of resources needed to give (2, 3, or 4).
+ */
+export function getTradeRate(state: GameState, playerId: PlayerId, giveResource: Terrain): number {
+  const harborType = getPlayerHarborType(state, playerId, giveResource)
+  if (harborType === giveResource) {
+    return 2 // 2:1 specific resource harbor
+  }
+  if (harborType === 'generic') {
+    return 3 // 3:1 generic harbor
+  }
+  return 4 // 4:1 default bank rate
+}
+
 export function updateLongestRoad(state: GameState): void {
   const MIN_LONGEST_ROAD = 6
   let maxLength = 0
