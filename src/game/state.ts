@@ -20,7 +20,11 @@ function createPlayer(id: PlayerId, colorId: string, isAI: boolean = false): Pla
   }
 }
 
-export function createInitialState(numPlayers: 2 | 3 | 4, selectedColors?: string[]): GameState {
+export function createInitialState(
+  numPlayers: 2 | 3 | 4,
+  selectedColors?: string[],
+  options?: { multiplayer?: boolean }
+): GameState {
   const hexes = createBoard()
   const { vertices, edges } = buildTopology(hexes)
 
@@ -37,22 +41,23 @@ export function createInitialState(numPlayers: 2 | 3 | 4, selectedColors?: strin
   console.log('Created harbors:', harbors.length, harbors)
 
   const players: Player[] = []
-  
+  const isMultiplayer = options?.multiplayer === true
+
   if (selectedColors && selectedColors.length > 0) {
     // Use selected colors for human players
     for (let i = 0; i < selectedColors.length; i++) {
-      const isAI = numPlayers === 2 && i === 1 // Only player 2 is AI in 2-player mode
+      const isAI = !isMultiplayer && numPlayers === 2 && i === 1 // Only player 2 is AI in 2-player single-player mode
       players.push(createPlayer((i + 1) as PlayerId, selectedColors[i], isAI))
     }
     
-    // Assign random colors to remaining AI players
+    // Assign random colors to remaining AI players (only when not multiplayer)
     const usedColorIds = new Set(selectedColors)
     const availableForAI = AVAILABLE_COLORS.filter(c => !usedColorIds.has(c.id))
     
     for (let i = selectedColors.length; i < numPlayers; i++) {
       const randomColor = availableForAI[Math.floor(Math.random() * availableForAI.length)]
       if (randomColor) {
-        players.push(createPlayer((i + 1) as PlayerId, randomColor.id, true))
+        players.push(createPlayer((i + 1) as PlayerId, randomColor.id, !isMultiplayer))
         usedColorIds.add(randomColor.id)
       }
     }
@@ -60,7 +65,7 @@ export function createInitialState(numPlayers: 2 | 3 | 4, selectedColors?: strin
     // Fallback: use default colors if no selection provided
     const defaultColors = ['teal', 'green', 'pink', 'purple']
     for (let i = 1; i <= numPlayers; i++) {
-      const isAI = numPlayers === 2 && i === 2
+      const isAI = !isMultiplayer && numPlayers === 2 && i === 2
       players.push(createPlayer(i as PlayerId, defaultColors[i - 1] || 'white', isAI))
     }
   }
@@ -77,6 +82,7 @@ export function createInitialState(numPlayers: 2 | 3 | 4, selectedColors?: strin
     players,
     currentPlayerIndex: 0,
     setupPlacements: 0,
+    setupPendingVertexId: null,
     lastDice: null,
     lastResourceFlash: null,
     robberHexId: desertHex?.id ?? null,

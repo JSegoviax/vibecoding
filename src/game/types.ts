@@ -62,6 +62,8 @@ export interface GameState {
   players: Player[]
   currentPlayerIndex: number
   setupPlacements: number  // 0–1 for first placement round, 2–3 for second
+  /** When set, current player must place a road next to this vertex (setup phase) */
+  setupPendingVertexId: VertexId | null
   lastDice: [number, number] | null
   /** Per player index: terrain types that gained from last dice roll (for flash) */
   lastResourceFlash: Record<number, Terrain[]> | null

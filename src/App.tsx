@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, Suspense, lazy } from 'react'
 import { HexBoard } from './components/HexBoard'
 import { PlayerResources } from './components/PlayerResources'
 import { VictoryPointTracker } from './components/VictoryPointTracker'
@@ -6,6 +6,7 @@ import { BuildCostsLegend } from './components/BuildCostsLegend'
 import { GameGuide } from './components/GameGuide'
 import { DiceRollAnimation } from './components/DiceRollAnimation'
 import { ColorSelection } from './components/ColorSelection'
+import { MultiplayerLobby } from './components/MultiplayerLobby'
 import { createInitialState } from './game/state'
 import { runAISetup, runAITurn, runAITrade, runAIRobberMove, runAISelectPlayerToRob } from './game/ai'
 import {
@@ -46,6 +47,8 @@ function updateGameState(g: GameState | null, updater: (state: GameState) => Gam
   return updater(g)
 }
 
+const GameRoom = lazy(() => import('./components/GameRoom').then(m => ({ default: m.GameRoom })))
+
 type StartScreen = 'mode' | 'colors' | 'multiplayer' | 'game'
 
 export default function App() {
@@ -54,7 +57,6 @@ export default function App() {
   const [numPlayers] = useState<2 | 3 | 4>(2)
   const showColorSelection = startScreen === 'colors'
   const [game, setGame] = useState<ReturnType<typeof createInitialState> | null>(null)
-  const [setupPendingRoadVertex, setSetupPendingRoadVertex] = useState<string | null>(null)
   const [buildMode, setBuildMode] = useState<'road' | 'settlement' | 'city' | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [tradeFormOpen, setTradeFormOpen] = useState(false)
@@ -82,9 +84,11 @@ export default function App() {
   const playerId = currentPlayer?.id ?? 1
   const winner = game?.players.find(p => p.victoryPoints >= 10)
 
+  const setupPendingVertexId = game?.setupPendingVertexId ?? null
+
   // AI: setup — place settlement then road
   useEffect(() => {
-    if (!game || game.phase !== 'setup' || setupPlayerIndex !== 1 || setupPendingRoadVertex) return
+    if (!game || game.phase !== 'setup' || setupPlayerIndex !== 1 || setupPendingVertexId) return
     const t = setTimeout(() => {
       try {
         const { vertexId, edgeId } = runAISetup(game)
@@ -95,17 +99,17 @@ export default function App() {
       }
     }, 300)
     return () => clearTimeout(t)
-  }, [game?.phase, game?.setupPlacements, setupPendingRoadVertex])
+  }, [game?.phase, game?.setupPlacements, setupPendingVertexId])
 
   useEffect(() => {
-    if (!setupPendingRoadVertex || !aiNextRoadEdge.current) return
+    if (!setupPendingVertexId || !aiNextRoadEdge.current) return
     const t = setTimeout(() => {
       const eid = aiNextRoadEdge.current
       aiNextRoadEdge.current = null
       if (eid && game) handleSelectEdge(eid)
     }, 200)
     return () => clearTimeout(t)
-  }, [setupPendingRoadVertex])
+  }, [setupPendingVertexId])
 
   // AI: playing — roll, then build or end
   useEffect(() => {
@@ -197,6 +201,16 @@ export default function App() {
     updateLongestRoad(game)
   }, [game?.edges, game?.vertices])
 
+  // Pathname-based route: /game/:id shows the multiplayer game room (lobby or started)
+  const pathMatch = typeof window !== 'undefined' && window.location.pathname.match(/^\/game\/([a-f0-9-]+)$/i)
+  if (pathMatch) {
+    return (
+      <Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(180deg, rgb(26, 31, 46) 0%, rgb(45, 55, 72) 100%)', color: 'var(--text)' }}>Loading…</div>}>
+        <GameRoom gameId={pathMatch[1]} />
+      </Suspense>
+    )
+  }
+
   // Now we can do early returns after all hooks are called
   if (startScreen === 'mode') {
     return (
@@ -255,39 +269,7 @@ export default function App() {
 
   if (startScreen === 'multiplayer') {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 24,
-          padding: 24,
-          background: 'linear-gradient(180deg, rgb(26, 31, 46) 0%, rgb(45, 55, 72) 100%)',
-          color: 'var(--text)',
-        }}
-      >
-        <h1 style={{ margin: 0, fontSize: 24 }}>Multiplayer</h1>
-        <p style={{ color: 'var(--muted)', margin: 0, maxWidth: 400, textAlign: 'center' }}>
-          Remote multiplayer is coming soon. You’ll be able to create a game, share a link, and play with friends online.
-        </p>
-        <button
-          onClick={() => setStartScreen('mode')}
-          style={{
-            padding: '12px 24px',
-            fontSize: 16,
-            fontWeight: 'bold',
-            background: 'var(--surface)',
-            color: 'var(--text)',
-            border: '2px solid var(--muted)',
-            borderRadius: 8,
-            cursor: 'pointer',
-          }}
-        >
-          Back
-        </button>
-      </div>
+      <MultiplayerLobby onBack={() => setStartScreen('mode')} />
     )
   }
 
@@ -314,7 +296,7 @@ export default function App() {
     if (e.road) edgeStates[id] = e.road
   }
 
-  const isSetupRoad = game.phase === 'setup' && setupPendingRoadVertex != null
+  const isSetupRoad = game.phase === 'setup' && setupPendingVertexId != null
   const isAITurn = n === 2 && (game.phase === 'setup' ? actualSetupPlayerIndex === 1 : game.currentPlayerIndex === 1)
   const placeableVertices = new Set(
     isAITurn ? [] : game.phase === 'setup' && !isSetupRoad
@@ -324,8 +306,8 @@ export default function App() {
         : []
   )
   const placeableEdges = new Set(
-    isAITurn ? [] : isSetupRoad && setupPendingRoadVertex
-      ? getPlaceableRoadsForVertex(game, setupPendingRoadVertex, playerId)
+    isAITurn ? [] : isSetupRoad && setupPendingVertexId
+      ? getPlaceableRoadsForVertex(game, setupPendingVertexId, playerId)
       : buildMode === 'road'
         ? getPlaceableRoads(game, playerId)
         : []
@@ -347,7 +329,7 @@ export default function App() {
       if (!canPlaceSettlement(game, vid, actualPlayerId)) return
       setGame(g => {
         if (!g) return g
-        const next: typeof g = { ...g, vertices: { ...g.vertices } }
+        const next: GameState = { ...g, vertices: { ...g.vertices }, setupPendingVertexId: vid }
         next.vertices[vid] = { ...next.vertices[vid], structure: { player: playerId, type: 'settlement' } }
         next.players = g.players.map((p, i) =>
           i === playerId - 1 ? { ...p, resources: { ...p.resources }, settlementsLeft: p.settlementsLeft - 1, victoryPoints: p.victoryPoints + 1 } : p
@@ -355,7 +337,6 @@ export default function App() {
         if (g.setupPlacements >= n) giveInitialResources(next, vid)
         return next
       })
-      setSetupPendingRoadVertex(vid)
       return
     }
     if (game.phase === 'setup' && isSetupRoad) return
@@ -412,24 +393,14 @@ export default function App() {
   }
 
   const handleSelectEdge = (eid: string) => {
-    if (game.phase === 'setup' && isSetupRoad && setupPendingRoadVertex) {
-      if (!canPlaceRoadInSetup(game, eid, actualPlayerId, setupPendingRoadVertex)) return
+    if (game.phase === 'setup' && isSetupRoad && setupPendingVertexId) {
+      if (!canPlaceRoadInSetup(game, eid, actualPlayerId, setupPendingVertexId)) return
       setGame(g => {
         if (!g) return g
         const next: GameState = {
           ...g,
           edges: { ...g.edges },
-          phase: g.phase,
-          hexes: g.hexes,
-          vertices: g.vertices,
-          harbors: g.harbors,
-          players: g.players,
-          currentPlayerIndex: g.currentPlayerIndex,
-          setupPlacements: g.setupPlacements,
-          lastDice: g.lastDice,
-          lastResourceFlash: g.lastResourceFlash,
-          robberHexId: g.robberHexId,
-          longestRoadPlayerId: g.longestRoadPlayerId,
+          setupPendingVertexId: null,
         }
         next.edges[eid] = { ...next.edges[eid], road: actualPlayerId }
         next.players = g.players.map((p, i) =>
@@ -440,7 +411,6 @@ export default function App() {
         updateLongestRoad(next)
         return next
       })
-      setSetupPendingRoadVertex(null)
       return
     }
     if (buildMode === 'road' && canPlaceRoad(game, eid, actualPlayerId)) {
@@ -737,7 +707,7 @@ export default function App() {
 
           {actualWinner && (
             <button
-              onClick={() => { setGame(createInitialState(2)); setSetupPendingRoadVertex(null); setBuildMode(null); }}
+              onClick={() => { setGame(createInitialState(2)); setBuildMode(null); }}
               style={{ padding: '10px 20px', background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 'bold', cursor: 'pointer', marginTop: 8 }}
             >New game</button>
           )}
