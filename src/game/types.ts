@@ -43,7 +43,9 @@ export type GamePhase = 'setup' | 'playing' | 'ended'
 export interface Player {
   id: PlayerId
   name: string
-  color: string
+  color: string // Hex color for UI
+  colorId: string // Color identifier (teal, green, pink, etc.)
+  colorImage: string // Path to house image
   resources: Record<Terrain, number>
   victoryPoints: number
   settlementsLeft: number

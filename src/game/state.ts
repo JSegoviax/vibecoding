@@ -2,19 +2,16 @@ import { createBoard } from './board'
 import { buildTopology } from './topology'
 import { createHarbors } from './harbors'
 import type { GameState, Player, Vertex, Edge, PlayerId } from './types'
+import { AVAILABLE_COLORS } from '../components/ColorSelection'
 
-const PLAYER_COLORS: Record<PlayerId, string> = {
-  1: '#e53935',
-  2: '#1e88e5',
-  3: '#43a047',
-  4: '#fb8c00',
-}
-
-function createPlayer(id: PlayerId): Player {
+function createPlayer(id: PlayerId, colorId: string, isAI: boolean = false): Player {
+  const color = AVAILABLE_COLORS.find(c => c.id === colorId) || AVAILABLE_COLORS[0]
   return {
     id,
-    name: `Player ${id}`,
-    color: PLAYER_COLORS[id],
+    name: isAI ? `Player ${id} (AI)` : `Player ${id}`,
+    color: color.hexColor,
+    colorId: color.id,
+    colorImage: color.image,
     resources: { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0, desert: 0 },
     victoryPoints: 0,
     settlementsLeft: 5,
@@ -23,7 +20,7 @@ function createPlayer(id: PlayerId): Player {
   }
 }
 
-export function createInitialState(numPlayers: 2 | 3 | 4): GameState {
+export function createInitialState(numPlayers: 2 | 3 | 4, selectedColors?: string[]): GameState {
   const hexes = createBoard()
   const { vertices, edges } = buildTopology(hexes)
 
@@ -40,10 +37,32 @@ export function createInitialState(numPlayers: 2 | 3 | 4): GameState {
   console.log('Created harbors:', harbors.length, harbors)
 
   const players: Player[] = []
-  for (let i = 1; i <= numPlayers; i++) {
-    const p = createPlayer(i as PlayerId)
-    if (numPlayers === 2 && i === 2) p.name = 'Player 2 (AI)'
-    players.push(p)
+  
+  if (selectedColors && selectedColors.length > 0) {
+    // Use selected colors for human players
+    for (let i = 0; i < selectedColors.length; i++) {
+      const isAI = numPlayers === 2 && i === 1 // Only player 2 is AI in 2-player mode
+      players.push(createPlayer((i + 1) as PlayerId, selectedColors[i], isAI))
+    }
+    
+    // Assign random colors to remaining AI players
+    const usedColorIds = new Set(selectedColors)
+    const availableForAI = AVAILABLE_COLORS.filter(c => !usedColorIds.has(c.id))
+    
+    for (let i = selectedColors.length; i < numPlayers; i++) {
+      const randomColor = availableForAI[Math.floor(Math.random() * availableForAI.length)]
+      if (randomColor) {
+        players.push(createPlayer((i + 1) as PlayerId, randomColor.id, true))
+        usedColorIds.add(randomColor.id)
+      }
+    }
+  } else {
+    // Fallback: use default colors if no selection provided
+    const defaultColors = ['teal', 'green', 'pink', 'purple']
+    for (let i = 1; i <= numPlayers; i++) {
+      const isAI = numPlayers === 2 && i === 2
+      players.push(createPlayer(i as PlayerId, defaultColors[i - 1] || 'white', isAI))
+    }
   }
 
   // Find the desert hex for the robber

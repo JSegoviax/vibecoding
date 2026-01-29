@@ -5,6 +5,7 @@ import { VictoryPointTracker } from './components/VictoryPointTracker'
 import { BuildCostsLegend } from './components/BuildCostsLegend'
 import { GameGuide } from './components/GameGuide'
 import { DiceRollAnimation } from './components/DiceRollAnimation'
+import { ColorSelection } from './components/ColorSelection'
 import { createInitialState } from './game/state'
 import { runAISetup, runAITurn, runAITrade, runAIRobberMove, runAISelectPlayerToRob } from './game/ai'
 import {
@@ -39,7 +40,10 @@ function getSetupPlayerIndex(state: { phase: string; setupPlacements: number; pl
 }
 
 export default function App() {
-  const [game, setGame] = useState(() => createInitialState(2))
+  const [showColorSelection, setShowColorSelection] = useState(true)
+  const [selectedColors, setSelectedColors] = useState<string[]>([])
+  const [numPlayers] = useState<2 | 3 | 4>(2)
+  const [game, setGame] = useState<ReturnType<typeof createInitialState> | null>(null)
   const [setupPendingRoadVertex, setSetupPendingRoadVertex] = useState<string | null>(null)
   const [buildMode, setBuildMode] = useState<'road' | 'settlement' | 'city' | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -51,13 +55,155 @@ export default function App() {
   const aiNextRoadEdge = useRef<string | null>(null)
   const aiBuildTarget = useRef<{ type: string; vertexId?: string; edgeId?: string } | null>(null)
 
-  const RESOURCE_OPTIONS: ('wood' | 'brick' | 'sheep' | 'wheat' | 'ore')[] = ['wood', 'brick', 'sheep', 'wheat', 'ore']
+  // Calculate number of human players (in 2-player mode, only player 1 is human)
+  const numHumanPlayers = numPlayers === 2 ? 1 : numPlayers
 
-  const n = game.players.length
-  const setupOrder = SETUP_ORDER[n as 2 | 3 | 4] ?? SETUP_ORDER[2]
-  const setupPlayerIndex = getSetupPlayerIndex(game)
-  const currentPlayer = game.players[game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex]
+  const handleColorsSelected = (colors: string[]) => {
+    setSelectedColors(colors)
+    setGame(createInitialState(numPlayers, colors))
+    setShowColorSelection(false)
+  }
+
+  // All hooks must be called before any early returns to avoid React hooks violations
+  // Calculate derived values safely (will be recalculated when game is set)
+  const n = game?.players.length ?? 0
+  const setupPlayerIndex = game ? getSetupPlayerIndex(game) : 0
+  const currentPlayer = game?.players[game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex]
   const playerId = currentPlayer?.id ?? 1
+  const winner = game?.players.find(p => p.victoryPoints >= 10)
+
+  // AI: setup — place settlement then road
+  useEffect(() => {
+    if (!game || game.phase !== 'setup' || setupPlayerIndex !== 1 || setupPendingRoadVertex) return
+    const t = setTimeout(() => {
+      try {
+        const { vertexId, edgeId } = runAISetup(game)
+        aiNextRoadEdge.current = edgeId
+        handleSelectVertex(vertexId)
+      } catch {
+        aiNextRoadEdge.current = null
+      }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [game?.phase, game?.setupPlacements, setupPendingRoadVertex])
+
+  useEffect(() => {
+    if (!setupPendingRoadVertex || !aiNextRoadEdge.current) return
+    const t = setTimeout(() => {
+      const eid = aiNextRoadEdge.current
+      aiNextRoadEdge.current = null
+      if (eid && game) handleSelectEdge(eid)
+    }, 200)
+    return () => clearTimeout(t)
+  }, [setupPendingRoadVertex])
+
+  // AI: playing — roll, then build or end
+  useEffect(() => {
+    if (!game || game.phase !== 'playing' || game.currentPlayerIndex !== 1 || game.lastDice || winner || diceRolling) return
+    const t = setTimeout(() => handleRoll(), 300)
+    return () => clearTimeout(t)
+  }, [game?.phase, game?.currentPlayerIndex, game?.lastDice, winner, diceRolling])
+
+  // AI: handle robber move when 7 is rolled
+  useEffect(() => {
+    if (!game || game.phase !== 'playing' || game.currentPlayerIndex !== 1 || !game.lastDice || game.lastDice[0] + game.lastDice[1] !== 7 || !robberMode.moving || winner) return
+    const t = setTimeout(() => {
+      const hexId = runAIRobberMove(game)
+      handleSelectRobberHex(hexId)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [game?.phase, game?.currentPlayerIndex, game?.lastDice, robberMode.moving, winner])
+
+  // AI: select player to rob
+  useEffect(() => {
+    if (!game || game.phase !== 'playing' || game.currentPlayerIndex !== 1 || !robberMode.newHexId || robberMode.playersToRob.size === 0 || winner) return
+    const t = setTimeout(() => {
+      const targetPlayerId = runAISelectPlayerToRob(game, robberMode.newHexId!)
+      if (targetPlayerId) {
+        handleSelectPlayerToRob(targetPlayerId)
+      } else {
+        // No valid player to rob, just move the robber
+        setGame(g => {
+          if (!g) return g
+          return {
+            ...g,
+            robberHexId: robberMode.newHexId!,
+          }
+        })
+        setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
+      }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [robberMode.newHexId, robberMode.playersToRob, game?.phase, game?.currentPlayerIndex, winner])
+
+  useEffect(() => {
+    if (!game || game.phase !== 'playing' || game.currentPlayerIndex !== 1 || !game.lastDice || winner || buildMode || robberMode.moving || robberMode.newHexId) return
+    const t = setTimeout(() => {
+      const trade = runAITrade(game)
+      if (trade) {
+        handleTrade(trade.give as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', trade.get as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')
+        return
+      }
+      const decision = runAITurn(game)
+      if (decision.action === 'end') {
+        handleEndTurn()
+      } else {
+        setBuildMode(decision.action as 'road' | 'settlement' | 'city')
+        aiBuildTarget.current = {
+          type: decision.action,
+          vertexId: 'vertexId' in decision ? decision.vertexId : undefined,
+          edgeId: 'edgeId' in decision ? decision.edgeId : undefined,
+        }
+      }
+    }, 400)
+    return () => clearTimeout(t)
+  }, [game?.phase, game?.currentPlayerIndex, game?.lastDice, game?.players, buildMode, winner, robberMode.moving, robberMode.newHexId])
+
+  useEffect(() => {
+    if (!buildMode || !aiBuildTarget.current || !game) return
+    const target = aiBuildTarget.current
+    if (target.type === 'settlement' && target.vertexId) {
+      const t = setTimeout(() => {
+        handleSelectVertex(target.vertexId!)
+        aiBuildTarget.current = null
+      }, 200)
+      return () => clearTimeout(t)
+    }
+    if (target.type === 'road' && target.edgeId) {
+      const t = setTimeout(() => {
+        handleSelectEdge(target.edgeId!)
+        aiBuildTarget.current = null
+      }, 200)
+      return () => clearTimeout(t)
+    }
+    if (target.type === 'city' && target.vertexId) {
+      const t = setTimeout(() => {
+        handleSelectVertex(target.vertexId!)
+        aiBuildTarget.current = null
+      }, 200)
+      return () => clearTimeout(t)
+    }
+  }, [buildMode])
+
+  useEffect(() => {
+    if (!game) return
+    updateLongestRoad(game)
+  }, [game?.edges, game?.vertices])
+
+  // Now we can do early returns after all hooks are called
+  if (showColorSelection) {
+    return <ColorSelection numPlayers={numHumanPlayers} onColorsSelected={handleColorsSelected} />
+  }
+
+  if (!game) {
+    return <div>Loading...</div>
+  }
+
+  // Calculate these values now that we know game exists
+  const actualSetupPlayerIndex = getSetupPlayerIndex(game)
+  const actualCurrentPlayer = game.players[game.phase === 'setup' ? actualSetupPlayerIndex : game.currentPlayerIndex]
+  const actualPlayerId = actualCurrentPlayer?.id ?? 1
+  const actualWinner = game.players.find(p => p.victoryPoints >= 10)
 
   const vertexStates: Record<string, { player: number; type: 'settlement' | 'city' }> = {}
   const edgeStates: Record<string, number> = {}
@@ -69,7 +215,7 @@ export default function App() {
   }
 
   const isSetupRoad = game.phase === 'setup' && setupPendingRoadVertex != null
-  const isAITurn = n === 2 && (game.phase === 'setup' ? setupPlayerIndex === 1 : game.currentPlayerIndex === 1)
+  const isAITurn = n === 2 && (game.phase === 'setup' ? actualSetupPlayerIndex === 1 : game.currentPlayerIndex === 1)
   const placeableVertices = new Set(
     isAITurn ? [] : game.phase === 'setup' && !isSetupRoad
       ? getPlaceableVertices(game, playerId)
@@ -98,7 +244,7 @@ export default function App() {
 
   const handleSelectVertex = (vid: string) => {
     if (game.phase === 'setup' && !isSetupRoad) {
-      if (!canPlaceSettlement(game, vid, playerId)) return
+      if (!canPlaceSettlement(game, vid, actualPlayerId)) return
       setGame(g => {
         const next = { ...g, vertices: { ...g.vertices } }
         next.vertices[vid] = { ...next.vertices[vid], structure: { player: playerId, type: 'settlement' } }
@@ -113,17 +259,17 @@ export default function App() {
     }
     if (game.phase === 'setup' && isSetupRoad) return
 
-    if (buildMode === 'settlement' && canPlaceSettlement(game, vid, playerId)) {
-      if (!canAfford(currentPlayer, 'settlement')) {
-        setErrorMessage('Insufficient resources. Need: ' + getMissingResources(currentPlayer, 'settlement').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
+    if (buildMode === 'settlement' && canPlaceSettlement(game, vid, actualPlayerId)) {
+      if (!canAfford(actualCurrentPlayer, 'settlement')) {
+        setErrorMessage('Insufficient resources. Need: ' + getMissingResources(actualCurrentPlayer, 'settlement').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
         return
       }
       setGame(g => {
         const cost = { wood: 1, brick: 1, sheep: 1, wheat: 1 }
         const next = { ...g, vertices: { ...g.vertices } }
-        next.vertices[vid] = { ...next.vertices[vid], structure: { player: playerId, type: 'settlement' } }
+        next.vertices[vid] = { ...next.vertices[vid], structure: { player: actualPlayerId, type: 'settlement' } }
         next.players = g.players.map((p, i) => {
-          if (i !== playerId - 1) return p
+          if (i !== actualPlayerId - 1) return p
           const res = { ...p.resources }
           for (const [t, n] of Object.entries(cost)) { res[t as keyof typeof res] = Math.max(0, (res[t as keyof typeof res] || 0) - n!) }
           return { ...p, resources: res, settlementsLeft: p.settlementsLeft - 1, victoryPoints: p.victoryPoints + 1 }
@@ -139,6 +285,7 @@ export default function App() {
         return
       }
       setGame(g => {
+        if (!g) return g
         const cost = { wheat: 2, ore: 3 }
         const next = { ...g, vertices: { ...g.vertices } }
         const v = next.vertices[vid]
@@ -160,12 +307,12 @@ export default function App() {
 
   const handleSelectEdge = (eid: string) => {
     if (game.phase === 'setup' && isSetupRoad && setupPendingRoadVertex) {
-      if (!canPlaceRoadInSetup(game, eid, playerId, setupPendingRoadVertex)) return
+      if (!canPlaceRoadInSetup(game, eid, actualPlayerId, setupPendingRoadVertex)) return
       setGame(g => {
         const next = { ...g, edges: { ...g.edges } }
-        next.edges[eid] = { ...next.edges[eid], road: playerId }
+        next.edges[eid] = { ...next.edges[eid], road: actualPlayerId }
         next.players = g.players.map((p, i) =>
-          i === playerId - 1 ? { ...p, roadsLeft: p.roadsLeft - 1 } : p
+          i === actualPlayerId - 1 ? { ...p, roadsLeft: p.roadsLeft - 1 } : p
         )
         next.setupPlacements++
         if (next.setupPlacements >= 2 * n) next.phase = 'playing'
@@ -175,16 +322,16 @@ export default function App() {
       setSetupPendingRoadVertex(null)
       return
     }
-    if (buildMode === 'road' && canPlaceRoad(game, eid, playerId)) {
-      if (!canAfford(currentPlayer, 'road')) {
-        setErrorMessage('Insufficient resources. Need: ' + getMissingResources(currentPlayer, 'road').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
+    if (buildMode === 'road' && canPlaceRoad(game, eid, actualPlayerId)) {
+      if (!canAfford(actualCurrentPlayer, 'road')) {
+        setErrorMessage('Insufficient resources. Need: ' + getMissingResources(actualCurrentPlayer, 'road').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
         return
       }
       setGame(g => {
         const next = { ...g, edges: { ...g.edges } }
-        next.edges[eid] = { ...next.edges[eid], road: playerId }
+        next.edges[eid] = { ...next.edges[eid], road: actualPlayerId }
         next.players = g.players.map((p, i) => {
-          if (i !== playerId - 1) return p
+          if (i !== actualPlayerId - 1) return p
           const res = { ...p.resources }
           res.wood = Math.max(0, (res.wood || 0) - 1)
           res.brick = Math.max(0, (res.brick || 0) - 1)
@@ -210,6 +357,7 @@ export default function App() {
     const { dice1, dice2 } = diceRolling
     const sum = dice1 + dice2
     setGame(g => {
+      if (!g) return g
       const next = {
         ...g,
         lastDice: [dice1, dice2] as [number, number],
@@ -255,7 +403,7 @@ export default function App() {
   const handleSelectPlayerToRob = (targetPlayerId: number) => {
     if (!robberMode.newHexId) return
 
-      const stolen = stealResource(game, playerId, targetPlayerId) as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore' | null
+      const stolen = stealResource(game, actualPlayerId, targetPlayerId) as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore' | null
     setGame(g => ({
       ...g,
       robberHexId: robberMode.newHexId!,
@@ -284,12 +432,13 @@ export default function App() {
 
   const handleTrade = (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => {
     setGame(g => {
+      if (!g) return g
       const idx = g.currentPlayerIndex
       const p = g.players[idx]
       if (!p) return g
       
       // Get the trade rate based on harbors
-      const tradeRate = getTradeRate(g, playerId, give)
+      const tradeRate = getTradeRate(g, actualPlayerId, give)
       if ((p.resources[give] || 0) < tradeRate) return g
       
       const next = { ...g, players: g.players.map((pl, i) => {
@@ -305,116 +454,16 @@ export default function App() {
     setErrorMessage(null)
   }
 
-  const winner = game.players.find(p => p.victoryPoints >= 10)
+  // Now we can do early returns after all hooks are called
+  if (showColorSelection) {
+    return <ColorSelection numPlayers={numHumanPlayers} onColorsSelected={handleColorsSelected} />
+  }
 
-  // AI: setup — place settlement then road
-  useEffect(() => {
-    if (game.phase !== 'setup' || setupPlayerIndex !== 1 || setupPendingRoadVertex) return
-    const t = setTimeout(() => {
-      try {
-        const { vertexId, edgeId } = runAISetup(game)
-        aiNextRoadEdge.current = edgeId
-        handleSelectVertex(vertexId)
-      } catch {
-        aiNextRoadEdge.current = null
-      }
-    }, 300)
-    return () => clearTimeout(t)
-  }, [game.phase, game.setupPlacements, setupPendingRoadVertex])
+  if (!game) {
+    return <div>Loading...</div>
+  }
 
-  useEffect(() => {
-    if (!setupPendingRoadVertex || !aiNextRoadEdge.current) return
-    const t = setTimeout(() => {
-      const eid = aiNextRoadEdge.current
-      aiNextRoadEdge.current = null
-      if (eid) handleSelectEdge(eid)
-    }, 200)
-    return () => clearTimeout(t)
-  }, [setupPendingRoadVertex])
-
-  // AI: playing — roll, then build or end
-  useEffect(() => {
-    if (game.phase !== 'playing' || game.currentPlayerIndex !== 1 || game.lastDice || winner || diceRolling) return
-    const t = setTimeout(() => handleRoll(), 300)
-    return () => clearTimeout(t)
-  }, [game.phase, game.currentPlayerIndex, game.lastDice, winner, diceRolling])
-
-  // AI: handle robber move when 7 is rolled
-  useEffect(() => {
-    if (game.phase !== 'playing' || game.currentPlayerIndex !== 1 || !game.lastDice || game.lastDice[0] + game.lastDice[1] !== 7 || !robberMode.moving || winner) return
-    const t = setTimeout(() => {
-      const hexId = runAIRobberMove(game)
-      handleSelectRobberHex(hexId)
-    }, 300)
-    return () => clearTimeout(t)
-  }, [game.phase, game.currentPlayerIndex, game.lastDice, robberMode.moving, winner])
-
-  // AI: select player to rob
-  useEffect(() => {
-    if (game.phase !== 'playing' || game.currentPlayerIndex !== 1 || !robberMode.newHexId || robberMode.playersToRob.size === 0 || winner) return
-    const t = setTimeout(() => {
-      const targetPlayerId = runAISelectPlayerToRob(game, robberMode.newHexId!)
-      if (targetPlayerId) {
-        handleSelectPlayerToRob(targetPlayerId)
-      } else {
-        // No valid player to rob, just move the robber
-        setGame(g => ({
-          ...g,
-          robberHexId: robberMode.newHexId!,
-        }))
-        setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
-      }
-    }, 300)
-    return () => clearTimeout(t)
-  }, [robberMode.newHexId, robberMode.playersToRob, game.phase, game.currentPlayerIndex, winner])
-
-  useEffect(() => {
-    if (game.phase !== 'playing' || game.currentPlayerIndex !== 1 || !game.lastDice || winner || buildMode || robberMode.moving || robberMode.newHexId) return
-    const t = setTimeout(() => {
-      const trade = runAITrade(game)
-      if (trade) {
-        handleTrade(trade.give as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', trade.get as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')
-        return
-      }
-      const decision = runAITurn(game)
-      if (decision.action === 'end') {
-        handleEndTurn()
-      } else {
-        setBuildMode(decision.action as 'road' | 'settlement' | 'city')
-        aiBuildTarget.current = {
-          type: decision.action,
-          vertexId: 'vertexId' in decision ? decision.vertexId : undefined,
-          edgeId: 'edgeId' in decision ? decision.edgeId : undefined,
-        }
-      }
-    }, 400)
-    return () => clearTimeout(t)
-  }, [game.phase, game.currentPlayerIndex, game.lastDice, game.players, buildMode, winner, robberMode.moving, robberMode.newHexId])
-
-  useEffect(() => {
-    if (!buildMode || !aiBuildTarget.current || aiBuildTarget.current.type !== buildMode) return
-    const target = aiBuildTarget.current
-    const t = setTimeout(() => {
-      if (target.vertexId) handleSelectVertex(target.vertexId)
-      else if (target.edgeId) handleSelectEdge(target.edgeId)
-      aiBuildTarget.current = null
-    }, 50)
-    return () => clearTimeout(t)
-  }, [buildMode])
-
-  useEffect(() => {
-    if (!errorMessage) return
-    const t = setTimeout(() => setErrorMessage(null), 4000)
-    return () => clearTimeout(t)
-  }, [errorMessage])
-
-  useEffect(() => {
-    if (!game.lastResourceFlash || Object.keys(game.lastResourceFlash).length === 0) return
-    const t = setTimeout(() => setGame(g => ({ ...g, lastResourceFlash: null })), 800)
-    return () => clearTimeout(t)
-  }, [game.lastResourceFlash])
-
-  const isPlaying = game.phase === 'playing' && !winner
+  const isPlaying = game.phase === 'playing' && !actualWinner
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
@@ -480,6 +529,7 @@ export default function App() {
             selectableRobberHexes={selectableRobberHexes}
             selectHex={robberMode.moving ? handleSelectRobberHex : undefined}
             harbors={game.harbors}
+            players={game.players.map(p => ({ colorImage: p.colorImage, color: p.color }))}
           />
           {diceRolling && (
             <DiceRollAnimation
@@ -520,7 +570,7 @@ export default function App() {
             onSetErrorMessage={setErrorMessage}
             canAfford={canAfford}
             getMissingResources={getMissingResources}
-            getTradeRate={isPlaying && !isAITurn ? (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => getTradeRate(game, playerId, give) : undefined}
+            getTradeRate={isPlaying && !isAITurn ? (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => getTradeRate(game, actualPlayerId, give) : undefined}
           />
 
           <BuildCostsLegend />
@@ -571,7 +621,7 @@ export default function App() {
           )}
 
 
-          {winner && (
+          {actualWinner && (
             <button
               onClick={() => { setGame(createInitialState(2)); setSetupPendingRoadVertex(null); setBuildMode(null); }}
               style={{ padding: '10px 20px', background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 'bold', cursor: 'pointer', marginTop: 8 }}

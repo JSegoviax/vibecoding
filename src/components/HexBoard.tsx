@@ -16,6 +16,7 @@ interface HexBoardProps {
   selectableRobberHexes?: Set<string>
   selectHex?: (hexId: string) => void
   harbors?: Harbor[]
+  players?: Array<{ colorImage: string; color: string }>
 }
 
 export function HexBoard({
@@ -30,6 +31,7 @@ export function HexBoard({
   selectableRobberHexes,
   selectHex,
   harbors = [],
+  players = [],
 }: HexBoardProps) {
   const { vertices, edges } = useMemo(() => buildTopology(hexes), [hexes])
   const vById = useMemo(() => Object.fromEntries(vertices.map(v => [v.id, v])), [vertices])
@@ -68,6 +70,12 @@ export function HexBoard({
   }
 
   const TOKEN_R = 36
+
+  // Helper function to get player color
+  const getPlayerColor = (playerId: number): string => {
+    const player = players[playerId - 1]
+    return player?.color || PLAYER_COLORS[playerId] || '#888'
+  }
 
   return (
     <svg viewBox={`${bounds.minX - padding} ${bounds.minY - padding} ${w} ${h}`} width="100%" height="100%" style={{ maxHeight: '90vh', minHeight: 500, width: '100%', position: 'relative', zIndex: 1 }}>
@@ -266,7 +274,7 @@ export function HexBoard({
             y1={v1.y}
             x2={v2.x}
             y2={v2.y}
-            stroke={pid ? PLAYER_COLORS[pid] ?? '#888' : hl ? '#64b5f6' : 'transparent'}
+            stroke={pid ? getPlayerColor(pid) : hl ? '#64b5f6' : 'transparent'}
             strokeWidth={pid || hl ? 24 : 0}
             strokeLinecap="round"
             onClick={() => selectEdge?.(e.id)}
@@ -275,44 +283,80 @@ export function HexBoard({
         )
       })}
 
-      {/* Vertices (settlements = circles, cities = squares) */}
+      {/* Vertices (settlements = house images, cities = larger house images) */}
       {vertices.map(v => {
         const s = vertexStates[v.id]
         const hl = highlightedVertices?.has(v.id)
         // Only render vertices that have a structure or are highlighted
         if (!s && !hl) return null
-        const col = s ? (PLAYER_COLORS[s.player] ?? '#888') : '#64b5f6'
+        
+        const player = s ? players[s.player - 1] : null
         const isCity = s?.type === 'city'
-        return isCity ? (
-          <rect
-            key={v.id}
-            x={v.x - 30}
-            y={v.y - 30}
-            width={60}
-            height={60}
-            fill={col}
-            stroke={s ? '#1a1f2e' : '#64b5f6'}
-            strokeWidth={6}
-            onClick={() => selectVertex?.(v.id)}
-            style={{ cursor: selectVertex ? 'pointer' : 'default' }}
-          />
-        ) : (
-          <circle
-            key={v.id}
-            cx={v.x}
-            cy={v.y}
-            r={24}
-            fill={col}
-            stroke={s ? '#1a1f2e' : '#64b5f6'}
-            strokeWidth={6}
-            onClick={() => selectVertex?.(v.id)}
-            style={{ cursor: selectVertex ? 'pointer' : 'default' }}
-          />
-        )
+        const size = isCity ? 48 : 36
+        
+        if (player?.colorImage) {
+          // Use house image
+          return (
+            <g key={v.id}>
+              <image
+                href={player.colorImage}
+                x={v.x - size / 2}
+                y={v.y - size / 2}
+                width={size}
+                height={size}
+                onClick={() => selectVertex?.(v.id)}
+                style={{ 
+                  cursor: selectVertex ? 'pointer' : 'default',
+                  imageRendering: 'pixelated',
+                  pointerEvents: 'auto',
+                }}
+              />
+              {hl && !s && (
+                <circle
+                  cx={v.x}
+                  cy={v.y}
+                  r={size / 2 + 4}
+                  fill="none"
+                  stroke="#64b5f6"
+                  strokeWidth={4}
+                  style={{ pointerEvents: 'none' }}
+                />
+              )}
+            </g>
+          )
+        } else {
+          // Fallback to colored shapes
+          const col = s ? (PLAYER_COLORS[s.player] ?? '#888') : '#64b5f6'
+          return isCity ? (
+            <rect
+              key={v.id}
+              x={v.x - 30}
+              y={v.y - 30}
+              width={60}
+              height={60}
+              fill={col}
+              stroke={s ? '#1a1f2e' : '#64b5f6'}
+              strokeWidth={6}
+              onClick={() => selectVertex?.(v.id)}
+              style={{ cursor: selectVertex ? 'pointer' : 'default' }}
+            />
+          ) : (
+            <circle
+              key={v.id}
+              cx={v.x}
+              cy={v.y}
+              r={24}
+              fill={col}
+              stroke={s ? '#1a1f2e' : '#64b5f6'}
+              strokeWidth={6}
+              onClick={() => selectVertex?.(v.id)}
+              style={{ cursor: selectVertex ? 'pointer' : 'default' }}
+            />
+          )
+        }
       })}
 
       {/* Harbors - render after other elements to ensure visibility */}
-      {harbors.length > 0 && console.log('Rendering harbors:', harbors.length)}
       {harbors.map((harbor: Harbor) => {
         const edge = eById[harbor.edgeId]
         if (!edge) {
