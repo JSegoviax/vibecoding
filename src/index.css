@@ -19,6 +19,15 @@
   box-sizing: border-box;
 }
 
+/* Resource highlight pulse (hexes that produced on last roll) */
+@keyframes resource-highlight-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.resource-highlight-pulse {
+  animation: resource-highlight-pulse 1.5s ease-in-out infinite;
+}
+
 html {
   overflow-x: hidden;
 }

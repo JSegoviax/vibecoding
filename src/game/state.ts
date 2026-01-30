@@ -85,7 +85,9 @@ export function createInitialState(
     setupPendingVertexId: null,
     lastDice: null,
     lastResourceFlash: null,
+    lastResourceHexIds: null,
     robberHexId: desertHex?.id ?? null,
+    lastRobbery: null,
     longestRoadPlayerId: null,
   }
 }

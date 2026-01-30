@@ -1,5 +1,6 @@
 import { TERRAIN_COLORS, TERRAIN_LABELS } from '../game/terrain'
 import { AnimatedResourceIcon } from './AnimatedResourceIcon'
+import { BuildCostsInline } from './BuildCostsLegend'
 import type { Terrain } from '../game/types'
 
 const RESOURCE_OPTIONS: Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore']
@@ -39,6 +40,12 @@ interface PlayerResourcesProps {
   canAfford?: (player: PlayerForResources, structure: 'road' | 'settlement' | 'city') => boolean
   getMissingResources?: (player: PlayerForResources, structure: 'road' | 'settlement' | 'city') => Array<{ terrain: Terrain; need: number }>
   getTradeRate?: (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => number
+  /** When false, Road button is greyed out and disabled (e.g. can't afford or no valid spots) */
+  canBuildRoad?: boolean
+  /** When false, Settlement button is greyed out and disabled */
+  canBuildSettlement?: boolean
+  /** When false, City button is greyed out and disabled */
+  canBuildCity?: boolean
 }
 
 function ResourceChip({ type, count, flash }: { type: Terrain; count: number; flash?: boolean }) {
@@ -135,6 +142,7 @@ export function PlayerResources({
   onRollDice, 
   onEndTurn, 
   robberMode,
+  onSelectPlayerToRob,
   buildMode,
   onSetBuildMode,
   tradeFormOpen,
@@ -148,6 +156,9 @@ export function PlayerResources({
   canAfford,
   getMissingResources,
   getTradeRate,
+  canBuildRoad,
+  canBuildSettlement,
+  canBuildCity,
 }: PlayerResourcesProps) {
   return (
     <div>
@@ -186,71 +197,134 @@ export function PlayerResources({
             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>
               {p.settlementsLeft} S · {p.citiesLeft} C · {p.roadsLeft} R
             </div>
-            {showControls && (
+            {showControls && lastDice == null && (
               <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                {lastDice == null ? (
-                  <button 
-                    onClick={onRollDice} 
-                    style={{ padding: '6px 12px', background: 'var(--accent)', border: 'none', borderRadius: 6, color: '#fff', fontWeight: 'bold', cursor: 'pointer', fontSize: 12 }}
-                  >
-                    Roll dice
-                  </button>
-                ) : (
-                  <>
-                    {!robberMode?.moving && !robberMode?.newHexId && (
-                      <button 
-                        onClick={onEndTurn} 
-                        style={{ padding: '6px 12px', background: 'var(--surface)', border: '1px solid var(--muted)', borderRadius: 6, color: 'var(--text)', cursor: 'pointer', fontSize: 12 }}
+                <button 
+                  onClick={onRollDice} 
+                  style={{ padding: '6px 12px', background: 'var(--accent)', border: 'none', borderRadius: 6, color: '#fff', fontWeight: 'bold', cursor: 'pointer', fontSize: 12 }}
+                >
+                  Roll dice
+                </button>
+              </div>
+            )}
+            {isActive && robberMode?.newHexId && (robberMode.playersToRob?.size ?? 0) > 0 && onSelectPlayerToRob && (
+              <div style={{ marginTop: 10, padding: 10, borderRadius: 8, background: 'rgba(100,181,246,0.1)', border: '1px solid rgba(100,181,246,0.3)' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>Select player to rob:</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {Array.from(robberMode.playersToRob).map(pid => {
+                    const target = players[pid - 1]
+                    if (!target) return null
+                    const totalResources = (target.resources.wood || 0) + (target.resources.brick || 0) + (target.resources.sheep || 0) + (target.resources.wheat || 0) + (target.resources.ore || 0)
+                    return (
+                      <button
+                        key={pid}
+                        onClick={() => onSelectPlayerToRob(pid)}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: 6,
+                          border: '1px solid var(--muted)',
+                          background: 'var(--surface)',
+                          color: target.color,
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: 13,
+                          opacity: totalResources === 0 ? 0.8 : 1,
+                        }}
                       >
-                        End turn
+                        {target.name} ({totalResources} resources){totalResources === 0 ? ' — rob anyway' : ''}
                       </button>
-                    )}
-                  </>
-                )}
+                    )
+                  })}
+                </div>
               </div>
             )}
             {showBuildControls && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <button
-                    onClick={() => {
-                      if (p.roadsLeft <= 0) return
-                      if (!canAfford(p, 'road')) {
-                        onSetErrorMessage?.('Insufficient resources. Need: ' + getMissingResources(p, 'road').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
-                        return
-                      }
-                      onSetBuildMode(buildMode === 'road' ? null : 'road')
-                      onSetErrorMessage?.(null)
-                    }}
-                    disabled={p.roadsLeft <= 0}
-                    style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: buildMode === 'road' ? 'rgba(100,181,246,0.3)' : 'transparent', color: 'var(--text)', cursor: p.roadsLeft <= 0 ? 'not-allowed' : 'pointer', fontSize: 12, opacity: p.roadsLeft <= 0 ? 0.5 : 1 }}
-                  >Road</button>
-                  <button
-                    onClick={() => {
-                      if (p.settlementsLeft <= 0) return
-                      if (!canAfford(p, 'settlement')) {
-                        onSetErrorMessage?.('Insufficient resources. Need: ' + getMissingResources(p, 'settlement').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
-                        return
-                      }
-                      onSetBuildMode(buildMode === 'settlement' ? null : 'settlement')
-                      onSetErrorMessage?.(null)
-                    }}
-                    disabled={p.settlementsLeft <= 0}
-                    style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: buildMode === 'settlement' ? 'rgba(100,181,246,0.3)' : 'transparent', color: 'var(--text)', cursor: p.settlementsLeft <= 0 ? 'not-allowed' : 'pointer', fontSize: 12, opacity: p.settlementsLeft <= 0 ? 0.5 : 1 }}
-                  >Settlement</button>
-                  <button
-                    onClick={() => {
-                      if (p.citiesLeft <= 0) return
-                      if (!canAfford(p, 'city')) {
-                        onSetErrorMessage?.('Insufficient resources. Need: ' + getMissingResources(p, 'city').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
-                        return
-                      }
-                      onSetBuildMode(buildMode === 'city' ? null : 'city')
-                      onSetErrorMessage?.(null)
-                    }}
-                    disabled={p.citiesLeft <= 0}
-                    style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: buildMode === 'city' ? 'rgba(100,181,246,0.3)' : 'transparent', color: 'var(--text)', cursor: p.citiesLeft <= 0 ? 'not-allowed' : 'pointer', fontSize: 12, opacity: p.citiesLeft <= 0 ? 0.5 : 1 }}
-                  >City</button>
+                  {lastDice != null && onEndTurn && !robberMode?.moving && !robberMode?.newHexId && (
+                    <button
+                      onClick={onEndTurn}
+                      style={{ padding: '6px 12px', background: 'var(--surface)', border: '1px solid var(--muted)', borderRadius: 6, color: 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                    >
+                      End turn
+                    </button>
+                  )}
+                  {(() => {
+                    const roadDisabled = p.roadsLeft <= 0 || canBuildRoad === false
+                    const settlementDisabled = p.settlementsLeft <= 0 || canBuildSettlement === false
+                    const cityDisabled = p.citiesLeft <= 0 || canBuildCity === false
+                    const greyStyle = { opacity: 0.5, cursor: 'not-allowed' as const }
+                    return (
+                      <>
+                        <button
+                          onClick={() => {
+                            if (roadDisabled) return
+                            if (!canAfford(p, 'road')) {
+                              onSetErrorMessage?.('Insufficient resources. Need: ' + getMissingResources(p, 'road').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
+                              return
+                            }
+                            onSetBuildMode(buildMode === 'road' ? null : 'road')
+                            onSetErrorMessage?.(null)
+                          }}
+                          disabled={roadDisabled}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: 6,
+                            border: '1px solid var(--muted)',
+                            background: buildMode === 'road' ? 'rgba(100,181,246,0.3)' : 'transparent',
+                            color: roadDisabled ? 'var(--muted)' : 'var(--text)',
+                            cursor: roadDisabled ? 'not-allowed' : 'pointer',
+                            fontSize: 12,
+                            ...(roadDisabled ? greyStyle : {}),
+                          }}
+                        >Road</button>
+                        <button
+                          onClick={() => {
+                            if (settlementDisabled) return
+                            if (!canAfford(p, 'settlement')) {
+                              onSetErrorMessage?.('Insufficient resources. Need: ' + getMissingResources(p, 'settlement').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
+                              return
+                            }
+                            onSetBuildMode(buildMode === 'settlement' ? null : 'settlement')
+                            onSetErrorMessage?.(null)
+                          }}
+                          disabled={settlementDisabled}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: 6,
+                            border: '1px solid var(--muted)',
+                            background: buildMode === 'settlement' ? 'rgba(100,181,246,0.3)' : 'transparent',
+                            color: settlementDisabled ? 'var(--muted)' : 'var(--text)',
+                            cursor: settlementDisabled ? 'not-allowed' : 'pointer',
+                            fontSize: 12,
+                            ...(settlementDisabled ? greyStyle : {}),
+                          }}
+                        >Settlement</button>
+                        <button
+                          onClick={() => {
+                            if (cityDisabled) return
+                            if (!canAfford(p, 'city')) {
+                              onSetErrorMessage?.('Insufficient resources. Need: ' + getMissingResources(p, 'city').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
+                              return
+                            }
+                            onSetBuildMode(buildMode === 'city' ? null : 'city')
+                            onSetErrorMessage?.(null)
+                          }}
+                          disabled={cityDisabled}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: 6,
+                            border: '1px solid var(--muted)',
+                            background: buildMode === 'city' ? 'rgba(100,181,246,0.3)' : 'transparent',
+                            color: cityDisabled ? 'var(--muted)' : 'var(--text)',
+                            cursor: cityDisabled ? 'not-allowed' : 'pointer',
+                            fontSize: 12,
+                            ...(cityDisabled ? greyStyle : {}),
+                          }}
+                        >City</button>
+                      </>
+                    )
+                  })()}
                   <button
                     onClick={() => { onSetTradeFormOpen?.(!tradeFormOpen); onSetErrorMessage?.(null) }}
                     style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: tradeFormOpen ? 'rgba(100,181,246,0.3)' : 'transparent', color: 'var(--text)', cursor: 'pointer', fontSize: 12 }}
@@ -287,6 +361,8 @@ export function PlayerResources({
                 })()}
               </div>
             )}
+            {/* Build costs inside player card: have/cost and red when insufficient */}
+            {phase === 'playing' && <BuildCostsInline playerResources={p.resources} />}
           </div>
         )
       })}

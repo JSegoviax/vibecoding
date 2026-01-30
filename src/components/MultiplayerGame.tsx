@@ -4,7 +4,6 @@ import { trackEvent } from '../utils/analytics'
 import { HexBoard } from './HexBoard'
 import { PlayerResources } from './PlayerResources'
 import { VictoryPointTracker } from './VictoryPointTracker'
-import { BuildCostsLegend } from './BuildCostsLegend'
 import { GameGuide } from './GameGuide'
 import { DiceRollAnimation } from './DiceRollAnimation'
 import {
@@ -18,6 +17,8 @@ import {
   canBuildCity,
   getMissingResources,
   distributeResources,
+  getHexIdsThatProducedResources,
+  getHexIdsBlockedByRobber,
   giveInitialResources,
   getPlayersOnHex,
   stealResource,
@@ -40,7 +41,7 @@ function getSetupPlayerIndex(state: GameState): number {
 }
 
 function normalizeState(s: GameState): GameState {
-  return { ...s, setupPendingVertexId: s.setupPendingVertexId ?? null }
+  return { ...s, setupPendingVertexId: s.setupPendingVertexId ?? null, lastRobbery: s.lastRobbery ?? null }
 }
 
 type Props = { gameId: string; myPlayerIndex: number; initialState: GameState }
@@ -123,6 +124,12 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
   const selectableRobberHexes = robberMode.moving
     ? new Set(game.hexes.filter(h => h.id !== game.robberHexId).map(h => h.id))
     : new Set<string>()
+
+  // Grey out build buttons when player can't afford or has no valid spots
+  const isPlaying = game.phase === 'playing' && !winner
+  const canBuildRoad = isPlaying && currentPlayer && canAfford(currentPlayer, 'road') && currentPlayer.roadsLeft > 0 && getPlaceableRoads(game, playerId).length > 0
+  const canBuildSettlement = isPlaying && currentPlayer && canAfford(currentPlayer, 'settlement') && currentPlayer.settlementsLeft > 0 && getPlaceableVertices(game, playerId).length > 0
+  const hasPlaceableCity = isPlaying && currentPlayer && canAfford(currentPlayer, 'city') && currentPlayer.citiesLeft > 0 && Object.keys(game.vertices).some(id => canBuildCity(game, id, playerId))
 
   const handleSelectVertex = (vid: string) => {
     if (!isMyTurn) return
@@ -237,8 +244,10 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     }
     if (sum === 7) {
       setRobberMode({ moving: true, newHexId: null, playersToRob: new Set() })
+      next.lastResourceHexIds = []
     } else {
       next.lastResourceFlash = distributeResources(next, sum) || null
+      next.lastResourceHexIds = getHexIdsThatProducedResources(next, sum)
     }
     sendStateUpdate(next)
   }
@@ -269,11 +278,13 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
       ...game,
       robberHexId: robberMode.newHexId,
       players: game.players.map(p => ({ ...p, resources: { ...p.resources } })),
+      lastRobbery: null,
     }
     const stolen = stealResource(next, playerId, targetPlayerId) as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore' | null
+    next.lastRobbery = stolen ? { robbingPlayerId: playerId as PlayerId, targetPlayerId: targetPlayerId as PlayerId, resource: stolen } : null
     sendStateUpdate(next)
     setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
-    setErrorMessage(stolen ? `Stole ${stolen}` : null)
+    setErrorMessage(stolen ? null : 'Target player has no resources to steal')
   }
 
   const handleEndTurn = () => {
@@ -312,8 +323,6 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     setErrorMessage(null)
   }
 
-  const isPlaying = game.phase === 'playing' && !winner
-
   useEffect(() => {
     if (winner && !gameWonTrackedRef.current) {
       gameWonTrackedRef.current = true
@@ -334,10 +343,46 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
         {winner && `${winner.name} wins with ${winner.victoryPoints} VP!`}
       </p>
 
-      {errorMessage && (
-        <div role="alert" style={{ margin: '0 auto 16px', maxWidth: 500, padding: '10px 14px', borderRadius: 8, background: 'rgba(185, 28, 28, 0.2)', border: '1px solid rgba(185, 28, 28, 0.5)', color: '#fca5a5', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <span>{errorMessage}</span>
-          <button onClick={() => setErrorMessage(null)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18 }} aria-label="Dismiss">×</button>
+      {(game.lastRobbery || errorMessage) && (
+        <div
+          role="alert"
+          style={{
+            margin: '0 auto 16px',
+            maxWidth: 500,
+            padding: '10px 14px',
+            borderRadius: 8,
+            ...(game.lastRobbery
+              ? (() => {
+                  const r = game.lastRobbery!
+                  const viewerId = (game.players[myPlayerIndex]?.id ?? (myPlayerIndex + 1)) as PlayerId
+                  const isRobber = r.robbingPlayerId === viewerId
+                  const isVictim = r.targetPlayerId === viewerId
+                  const resourceLabel = r.resource ? TERRAIN_LABELS[r.resource] : ''
+                  if (isRobber) return { background: 'rgba(22, 163, 74, 0.2)', border: '1px solid rgba(22, 163, 74, 0.5)', color: '#86efac' }
+                  if (isVictim) return { background: 'rgba(185, 28, 28, 0.2)', border: '1px solid rgba(185, 28, 28, 0.5)', color: '#fca5a5' }
+                  return { background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.12)', color: 'var(--text)' }
+                })()
+              : { background: 'rgba(185, 28, 28, 0.2)', border: '1px solid rgba(185, 28, 28, 0.5)', color: '#fca5a5' }),
+            fontSize: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <span>
+            {game.lastRobbery
+              ? (() => {
+                  const r = game.lastRobbery!
+                  const viewerId = (game.players[myPlayerIndex]?.id ?? (myPlayerIndex + 1)) as PlayerId
+                  const isRobber = r.robbingPlayerId === viewerId
+                  const isVictim = r.targetPlayerId === viewerId
+                  const resourceLabel = r.resource ? TERRAIN_LABELS[r.resource] : ''
+                  return isRobber ? `You stole ${resourceLabel}` : isVictim ? `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole your ${resourceLabel}` : `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole ${resourceLabel} from ${game.players[r.targetPlayerId - 1]?.name || `Player ${r.targetPlayerId}`}`
+                })()
+              : errorMessage}
+          </span>
+          <button onClick={() => { setErrorMessage(null); setGame(g => g ? { ...g, lastRobbery: null } : g) }} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18 }} aria-label="Dismiss">×</button>
         </div>
       )}
 
@@ -357,6 +402,8 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
             harbors={game.harbors}
             players={game.players.map(p => ({ colorImage: p.colorImage, color: p.color }))}
             activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
+            resourceHighlightHexIds={game.lastResourceHexIds ? new Set(game.lastResourceHexIds) : undefined}
+            robberBlockedHexIds={game.lastDice ? new Set(getHexIdsBlockedByRobber(game, game.lastDice[0] + game.lastDice[1])) : undefined}
           />
           {diceRolling && <DiceRollAnimation dice1={diceRolling.dice1} dice2={diceRolling.dice2} onComplete={handleDiceRollComplete} />}
         </div>
@@ -372,6 +419,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
             onRollDice={isPlaying && isMyTurn ? handleRoll : undefined}
             onEndTurn={isPlaying && isMyTurn ? handleEndTurn : undefined}
             robberMode={robberMode}
+            onSelectPlayerToRob={handleSelectPlayerToRob}
             buildMode={buildMode}
             onSetBuildMode={setBuildMode}
             tradeFormOpen={tradeFormOpen}
@@ -385,31 +433,12 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
             canAfford={canAfford}
             getMissingResources={getMissingResources}
             getTradeRate={isPlaying && isMyTurn ? (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => getTradeRate(game, playerId, give) : undefined}
+            canBuildRoad={game.phase === 'playing' ? canBuildRoad : undefined}
+            canBuildSettlement={game.phase === 'playing' ? canBuildSettlement : undefined}
+            canBuildCity={game.phase === 'playing' ? hasPlaceableCity : undefined}
           />
-          <BuildCostsLegend />
           {game.phase === 'setup' && <p style={{ fontSize: 14, color: 'var(--muted)' }}>{isMyTurn ? (!isSetupRoad ? 'Click an empty spot to place a settlement.' : 'Click an edge connected to your settlement to place a road.') : `Waiting for Player ${setupPlayerIndex + 1}…`}</p>}
           {isPlaying && !isMyTurn && <p style={{ fontSize: 14, color: 'var(--muted)' }}>Waiting for Player {game.currentPlayerIndex + 1}…</p>}
-          {robberMode.newHexId && robberMode.playersToRob.size > 0 && (
-            <div style={{ padding: 12, borderRadius: 8, background: 'rgba(100,181,246,0.1)', border: '1px solid rgba(100,181,246,0.3)', marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>Select player to rob:</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {Array.from(robberMode.playersToRob).map(pid => {
-                  const p = game.players[pid - 1]
-                  if (!p) return null
-                  const totalResources = (p.resources.wood || 0) + (p.resources.brick || 0) + (p.resources.sheep || 0) + (p.resources.wheat || 0) + (p.resources.ore || 0)
-                  return (
-                    <button
-                      key={pid}
-                      onClick={() => handleSelectPlayerToRob(pid)}
-                      style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: 'var(--surface)', color: p.color, cursor: 'pointer', fontWeight: 'bold', fontSize: 13, opacity: totalResources === 0 ? 0.8 : 1 }}
-                    >
-                      {p.name} ({totalResources} resources){totalResources === 0 ? ' — rob anyway' : ''}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
           {winner && <a href="/" style={{ padding: '10px 20px', background: 'var(--accent)', color: '#fff', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer', marginTop: 8, textAlign: 'center', textDecoration: 'none' }}>Back to home</a>}
         </aside>
       </div>

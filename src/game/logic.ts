@@ -126,11 +126,26 @@ export function payResources(hexId: string, terrain: Terrain, vertexIds: string[
   return gains
 }
 
-/** Distributes resources for dice roll; returns per–player-index list of terrains that gained (for UI flash). */
+/** Returns hex IDs that produced resources for a given dice roll (for UI highlight). Excludes the robber hex. */
+export function getHexIdsThatProducedResources(state: GameState, dice: number): string[] {
+  return state.hexes
+    .filter(h => h.terrain !== 'desert' && h.number === dice && h.id !== state.robberHexId)
+    .map(h => h.id)
+}
+
+/** Returns hex IDs that would have produced but were blocked by the robber (for red “blocked” highlight). */
+export function getHexIdsBlockedByRobber(state: GameState, dice: number): string[] {
+  if (!state.robberHexId) return []
+  const hex = state.hexes.find(h => h.id === state.robberHexId)
+  if (!hex || hex.terrain === 'desert' || hex.number !== dice) return []
+  return [hex.id]
+}
+
+/** Distributes resources for dice roll; returns per–player-index list of terrains that gained (for UI flash). Skips the robber hex. */
 export function distributeResources(state: GameState, dice: number): Record<number, Terrain[]> {
   const all: { playerId: number; terrain: Terrain }[] = []
   for (const h of state.hexes) {
-    if (h.terrain === 'desert' || h.number !== dice) continue
+    if (h.terrain === 'desert' || h.number !== dice || h.id === state.robberHexId) continue
     const verts = (Object.values(state.vertices) as { id: string; hexIds?: string[] }[]).filter(v => v.hexIds?.includes(h.id)).map(v => v.id)
     all.push(...payResources(h.id, h.terrain, verts, state))
   }

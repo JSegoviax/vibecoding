@@ -29,6 +29,10 @@ interface HexBoardProps {
   harbors?: Harbor[]
   players?: Array<{ colorImage: string; color: string }>
   activePlayerIndex?: number
+  /** Hex IDs that produced resources on the last roll (highlight until next roll) */
+  resourceHighlightHexIds?: Set<string>
+  /** Hex IDs that would have produced but were blocked by the robber (red highlight) */
+  robberBlockedHexIds?: Set<string>
 }
 
 export function HexBoard({
@@ -45,6 +49,8 @@ export function HexBoard({
   harbors = [],
   players = [],
   activePlayerIndex = 0,
+  resourceHighlightHexIds,
+  robberBlockedHexIds,
 }: HexBoardProps) {
   const { vertices, edges } = useMemo(() => buildTopology(hexes), [hexes])
   const vById = useMemo(() => Object.fromEntries(vertices.map(v => [v.id, v])), [vertices])
@@ -276,6 +282,47 @@ export function HexBoard({
           </g>
         )
       })}
+
+      {/* Resource highlight — drawn on top of all hexes so the full border is visible */}
+      {resourceHighlightHexIds &&
+        hexes
+          .filter(h => resourceHighlightHexIds.has(h.id))
+          .map(h => {
+            const center = hexToPixel(h.q, h.r)
+            const pts = [0, 1, 2, 3, 4, 5].map(i => hexCorner(center, i))
+            const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z'
+            return (
+              <path
+                key={`resource-highlight-${h.id}`}
+                className="resource-highlight-pulse"
+                d={d}
+                fill="none"
+                stroke="#fbbf24"
+                strokeWidth={6}
+                style={{ pointerEvents: 'none' }}
+              />
+            )
+          })}
+      {/* Robber-blocked highlight — hex would have produced but didn’t because of the robber */}
+      {robberBlockedHexIds &&
+        hexes
+          .filter(h => robberBlockedHexIds.has(h.id))
+          .map(h => {
+            const center = hexToPixel(h.q, h.r)
+            const pts = [0, 1, 2, 3, 4, 5].map(i => hexCorner(center, i))
+            const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z'
+            return (
+              <path
+                key={`robber-blocked-${h.id}`}
+                className="resource-highlight-pulse"
+                d={d}
+                fill="none"
+                stroke="#dc2626"
+                strokeWidth={6}
+                style={{ pointerEvents: 'none' }}
+              />
+            )
+          })}
 
       {/* Edges (roads) */}
       {edges.map(e => {

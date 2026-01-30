@@ -67,8 +67,12 @@ export interface GameState {
   lastDice: [number, number] | null
   /** Per player index: terrain types that gained from last dice roll (for flash) */
   lastResourceFlash: Record<number, Terrain[]> | null
+  /** Hex IDs that produced resources on the last roll (highlight until next roll) */
+  lastResourceHexIds: string[] | null
   /** Hex ID where the robber is currently located */
   robberHexId: string | null
+  /** Last robbery: who robbed whom and what resource (for per-viewer message/color) */
+  lastRobbery: { robbingPlayerId: PlayerId; targetPlayerId: PlayerId; resource: Terrain | null } | null
   /** Player ID who currently has the longest road (minimum 5 roads) */
   longestRoadPlayerId: PlayerId | null
 }
