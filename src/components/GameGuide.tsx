@@ -135,7 +135,7 @@ export function GameGuide() {
                 </p>
                 <ul style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8, color: 'var(--text)' }}>
                   <li><strong>Road:</strong> Costs 1 Wood + 1 Brick. Must connect to your existing road or settlement.</li>
-                  <li><strong>Settlement:</strong> Costs 1 Wood + 1 Brick + 1 Sheep + 1 Wheat. Must be at least 2 edges from other settlements and connected by your road.</li>
+                  <li><strong>Settlement:</strong> Costs 1 Wood + 1 Brick + 1 Sheep + 1 Wheat. Must be at least two road segments away from any other settlement or city (no building on adjacent intersections) and connected by your road.</li>
                   <li><strong>City:</strong> Costs 2 Wheat + 3 Ore. Upgrades an existing settlement. Provides 2 resources instead of 1.</li>
                 </ul>
               </section>

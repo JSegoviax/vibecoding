@@ -12,14 +12,14 @@ function getNeighborVertices(edges: Record<string, { v1: string; v2: string }>, 
     .map(e => (e.v1 === vid ? e.v2 : e.v1))
 }
 
-function isWithinTwoEdges(
+/** Returns true if `to` is reachable from `from` in at most `maxSteps` edges (path length). */
+function isWithinEdges(
   edges: Record<string, { v1: string; v2: string }>,
   from: string,
   to: string,
-  maxSteps: number = 2
+  maxSteps: number
 ): boolean {
   const seen = new Set<string>()
-  let depth = 0
   const queue: [string, number][] = [[from, 0]]
   while (queue.length) {
     const [v, d] = queue.shift()!
@@ -37,11 +37,11 @@ export function canPlaceSettlement(state: GameState, vertexId: string, playerId?
   const v = state.vertices[vertexId]
   if (!v || v.structure) return false
 
-  // No other settlement within 2 edges
+  // Distance rule: at least two road segments away from any other settlement or city (can't build on adjacent intersections)
+  const edgesRecord = state.edges as Record<string, { v1: string; v2: string }>
   for (const o of Object.values(state.vertices)) {
     if (!o.structure) continue
-    if (isWithinTwoEdges(state.edges as Record<string, { v1: string; v2: string }>, vertexId, o.id, 2))
-      return false
+    if (isWithinEdges(edgesRecord, vertexId, o.id, 1)) return false
   }
 
   // In playing phase: must have a road of this player attached to the vertex
