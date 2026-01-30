@@ -97,18 +97,19 @@ CREATE POLICY "Allow public insert game_players" ON game_players FOR INSERT WITH
 
 ---
 
-## 5. Enable Realtime for `games`
+## 5. Enable Realtime for `games` and `game_players`
 
 - In Supabase: **Database** → **Publications** (or **Replication**).
-- The **supabase_realtime** publication should include the **games** table so clients can subscribe to changes.
+- The **supabase_realtime** publication should include **games** and **game_players** so the lobby updates when someone joins and when the game starts.
 
-**If the publication shows "0 tables":** add the table via SQL. In **SQL Editor** → **New query**, run:
+**If the publication shows "0 tables" or is missing a table:** add them via SQL. In **SQL Editor** → **New query**, run:
 
 ```sql
 ALTER PUBLICATION supabase_realtime ADD TABLE games;
+ALTER PUBLICATION supabase_realtime ADD TABLE game_players;
 ```
 
-- Click **Run**. You should see “Success. No rows returned.” The publication will then list the `games` table.
+- Click **Run**. The publication will then list both tables. (If you already added `games` only, run the second line to add `game_players` so the host sees “Players (2/2)” as soon as the other player joins.)
 
 ---
 
@@ -118,6 +119,6 @@ After this you have:
 
 - A Supabase project with URL + anon key in `.env.local`
 - `games` and `game_players` tables
-- Realtime enabled for `games`
+- Realtime enabled for `games` and `game_players` (lobby updates when the other player joins)
 
 Next step is **Phase 2** in `docs/REMOTE_MULTIPLAYER_PLAN.md`: install the Supabase client, add the lobby UI (Create game / Join game), and wire up `/game/:id`.

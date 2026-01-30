@@ -80,6 +80,50 @@ export function GameRoom({ gameId }: { gameId: string }) {
     return () => { cancelled = true }
   }, [gameId])
 
+  // Realtime: when another player joins (or game starts), refresh so host sees updates
+  useEffect(() => {
+    const channel = supabase
+      .channel(`lobby:${gameId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'game_players',
+          filter: `game_id=eq.${gameId}`,
+        },
+        () => {
+          fetchPlayers()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'games',
+          filter: `id=eq.${gameId}`,
+        },
+        () => {
+          fetchGame()
+        }
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [gameId])
+
+  // Polling fallback: refresh player list every 3s while in lobby (in case Realtime isn't enabled)
+  useEffect(() => {
+    if (!game || game.phase !== 'lobby') return
+    const interval = setInterval(() => {
+      fetchPlayers()
+      fetchGame()
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [gameId, game?.phase])
+
   const joinSeat = async (playerIndex: number) => {
     setJoining(true)
     const { error: e } = await supabase.from('game_players').insert({
