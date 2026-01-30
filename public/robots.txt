@@ -1,0 +1,6 @@
+# Settlers of Oregon – allow search engines
+User-agent: *
+Allow: /
+
+# Sitemap (update base URL if your domain differs)
+Sitemap: https://hexhobbyist.com/sitemap.xml

@@ -72,6 +72,17 @@ export default function App() {
   // Calculate number of human players (in 2-player mode, only player 1 is human)
   const numHumanPlayers = numPlayers === 2 ? 1 : numPlayers
 
+  // SEO: update document title per screen for better discoverability and tabs
+  useEffect(() => {
+    const titles: Record<StartScreen, string> = {
+      mode: 'Settlers of Oregon – Catan-Style Board Game Online',
+      colors: 'Settlers of Oregon – Choose Your Color',
+      multiplayer: 'Settlers of Oregon – Multiplayer',
+      game: 'Settlers of Oregon – Game',
+    }
+    document.title = titles[startScreen] ?? titles.mode
+  }, [startScreen])
+
   const handleColorsSelected = (colors: string[]) => {
     setSelectedColors(colors)
     setGame(createInitialState(numPlayers, colors))

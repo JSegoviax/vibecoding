@@ -51,6 +51,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [joining, setJoining] = useState(false)
   const [starting, setStarting] = useState(false)
 
+  // SEO: set document title for multiplayer /game/:id route
+  useEffect(() => {
+    const prev = document.title
+    document.title = game?.phase === 'lobby' ? 'Settlers of Oregon – Game Lobby' : 'Settlers of Oregon – Game'
+    return () => { document.title = prev }
+  }, [game?.phase])
+
   const fetchGame = async () => {
     const { data, error: e } = await supabase
       .from('games')
@@ -100,14 +107,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
     window.history.replaceState(null, '', clean)
   }, [gameId])
 
-  // In lobby: if we think we're Player 1 but this tab isn't the host (no sessionStorage) and only one player exists, we're a second tab — clear so we show "Join as: Player 2"
-  const onlyPlayer0 = players.length === 1 && players[0]?.player_index === 0
+  // In lobby: if we have 2+ players and we think we're Player 1 but this tab has no host sessionStorage, we're likely a second tab that stole localStorage — clear so we show "Join as: Player 2". Never clear when only 1 player (that single player is the host, even in a new tab).
+  const twoPlayersAndWeClaimZero = players.length >= 2 && myPlayerIndex === 0
   useEffect(() => {
-    if (!game || game.phase !== 'lobby' || myPlayerIndex !== 0 || !onlyPlayer0) return
+    if (!game || game.phase !== 'lobby' || !twoPlayersAndWeClaimZero) return
     if (typeof window !== 'undefined' && sessionStorage.getItem(HOST_KEY(gameId))) return
     setMyPlayerIndex(null)
     localStorage.removeItem(STORAGE_KEY(gameId))
-  }, [game?.phase, gameId, myPlayerIndex, onlyPlayer0])
+  }, [game?.phase, gameId, twoPlayersAndWeClaimZero])
 
   // Realtime: when another player joins (or game starts), refresh so host sees updates
   useEffect(() => {
