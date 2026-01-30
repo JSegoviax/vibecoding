@@ -38,7 +38,7 @@ export function MultiplayerLobby({ onBack }: { onBack: () => void }) {
       if (insertPlayerError) throw insertPlayerError
       localStorage.setItem(STORAGE_KEY(id), JSON.stringify({ playerIndex: 0 }))
       trackEvent('multiplayer_game_created', 'multiplayer', `players_${numPlayers}`)
-      window.location.href = `/game/${id}`
+      window.location.href = `/game/${id}?host=1`
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create game')
       setCreating(false)

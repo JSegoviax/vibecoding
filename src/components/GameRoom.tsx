@@ -31,16 +31,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [players, setPlayers] = useState<GamePlayerRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [myPlayerIndex, setMyPlayerIndex] = useState<number | null>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY(gameId))
-      if (!raw) return null
-      const data = JSON.parse(raw) as { playerIndex: number }
-      return typeof data.playerIndex === 'number' ? data.playerIndex : null
-    } catch {
-      return null
-    }
-  })
+  const [myPlayerIndex, setMyPlayerIndex] = useState<number | null>(() => getInitialPlayerIndex(gameId))
   const [joining, setJoining] = useState(false)
   const [starting, setStarting] = useState(false)
 
@@ -79,6 +70,28 @@ export function GameRoom({ gameId }: { gameId: string }) {
     })()
     return () => { cancelled = true }
   }, [gameId])
+
+  // When URL has ?host=1, mark this tab as host (sessionStorage) and clean URL so share link stays clean
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('host') !== '1') return
+    sessionStorage.setItem(HOST_KEY(gameId), '1')
+    localStorage.setItem(STORAGE_KEY(gameId), JSON.stringify({ playerIndex: 0 }))
+    const url = new URL(window.location.href)
+    url.searchParams.delete('host')
+    const clean = url.pathname + (url.search || '') + url.hash
+    window.history.replaceState(null, '', clean)
+  }, [gameId])
+
+  // In lobby: if we think we're Player 1 but this tab isn't the host (no sessionStorage) and only one player exists, we're a second tab — clear so we show "Join as: Player 2"
+  const onlyPlayer0 = players.length === 1 && players[0]?.player_index === 0
+  useEffect(() => {
+    if (!game || game.phase !== 'lobby' || myPlayerIndex !== 0 || !onlyPlayer0) return
+    if (typeof window !== 'undefined' && sessionStorage.getItem(HOST_KEY(gameId))) return
+    setMyPlayerIndex(null)
+    localStorage.removeItem(STORAGE_KEY(gameId))
+  }, [game?.phase, gameId, myPlayerIndex, onlyPlayer0])
 
   // Realtime: when another player joins (or game starts), refresh so host sees updates
   useEffect(() => {
