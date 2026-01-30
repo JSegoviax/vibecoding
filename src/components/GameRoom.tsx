@@ -6,6 +6,22 @@ import { trackEvent } from '../utils/analytics'
 import type { GameState } from '../game/types'
 
 const STORAGE_KEY = (gameId: string) => `supabase_game_${gameId}`
+const HOST_KEY = (gameId: string) => `supabase_host_${gameId}`
+
+function getInitialPlayerIndex(gameId: string): number | null {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('host') === '1') return 0
+  if (sessionStorage.getItem(HOST_KEY(gameId))) return 0
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY(gameId))
+    if (!raw) return null
+    const data = JSON.parse(raw) as { playerIndex: number }
+    return typeof data.playerIndex === 'number' ? data.playerIndex : null
+  } catch {
+    return null
+  }
+}
 
 type GameRow = {
   id: string
