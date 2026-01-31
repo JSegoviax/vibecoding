@@ -25,7 +25,7 @@ import {
   updateLongestRoad,
   getTradeRate,
 } from '../game/logic'
-import type { GameState } from '../game/types'
+import type { GameState, PlayerId } from '../game/types'
 import { TERRAIN_LABELS } from '../game/terrain'
 
 const SETUP_ORDER: Record<number, number[]> = {

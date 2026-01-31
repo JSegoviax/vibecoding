@@ -27,6 +27,7 @@ interface PlayerResourcesProps {
   onRollDice?: () => void
   onEndTurn?: () => void
   robberMode?: { moving: boolean; newHexId: string | null; playersToRob: Set<number> }
+  onSelectPlayerToRob?: (playerId: number) => void
   buildMode?: 'road' | 'settlement' | 'city' | null
   onSetBuildMode?: (mode: 'road' | 'settlement' | 'city' | null) => void
   tradeFormOpen?: boolean
