@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface DiceRollAnimationProps {
   dice1: number
@@ -12,40 +12,81 @@ export function DiceRollAnimation({ dice1, dice2, onComplete }: DiceRollAnimatio
   const [displayDice1, setDisplayDice1] = useState(1)
   const [displayDice2, setDisplayDice2] = useState(1)
 
+  const timersRef = useRef<{ interval: ReturnType<typeof setInterval> | null; t1: ReturnType<typeof setTimeout> | null; t2: ReturnType<typeof setTimeout> | null }>({ interval: null, t1: null, t2: null })
+
   const dotSize = 8
+
+  const stopAndShowResult = (moveDelayMs: number) => {
+    const t = timersRef.current
+    if (t.interval) {
+      clearInterval(t.interval)
+      t.interval = null
+    }
+    if (t.t1) {
+      clearTimeout(t.t1)
+      t.t1 = null
+    }
+    if (t.t2) {
+      clearTimeout(t.t2)
+      t.t2 = null
+    }
+    setDisplayDice1(dice1)
+    setDisplayDice2(dice2)
+    setRolling(false)
+    t.t1 = setTimeout(() => {
+      t.t1 = null
+      setMovedToCorner(true)
+      const t2 = setTimeout(() => {
+        t.t2 = null
+        onComplete()
+      }, 500)
+      t.t2 = t2
+    }, moveDelayMs)
+  }
+
+  const handleTapToStop = () => {
+    if (!rolling) return
+    stopAndShowResult(400) // Short delay after tap so they see the number, then move to corner
+  }
 
   useEffect(() => {
     // Reset states when new dice values come in (new roll starting)
     setRolling(true)
     setMovedToCorner(false)
-    
-    // Animate dice rolling for 2 seconds (slower animation)
+
     const rollDuration = 2000
     const startTime = Date.now()
-    
+
     const interval = setInterval(() => {
-      // Randomly change dice faces during animation
       setDisplayDice1(1 + Math.floor(Math.random() * 6))
       setDisplayDice2(1 + Math.floor(Math.random() * 6))
-      
+
       if (Date.now() - startTime >= rollDuration) {
+        timersRef.current.interval = null
         clearInterval(interval)
-        // Show final values
         setDisplayDice1(dice1)
         setDisplayDice2(dice2)
         setRolling(false)
-        // Move to corner after showing final result for 1.5 seconds
-        setTimeout(() => {
+        const t1 = setTimeout(() => {
+          timersRef.current.t1 = null
           setMovedToCorner(true)
-          // Call onComplete after moving to corner
-          setTimeout(() => {
+          const t2 = setTimeout(() => {
+            timersRef.current.t2 = null
             onComplete()
-          }, 500) // Small delay for the move animation
+          }, 500)
+          timersRef.current.t2 = t2
         }, 1500)
+        timersRef.current.t1 = t1
       }
-    }, 150) // Update every 150ms for slower, smoother animation
+    }, 150)
 
-    return () => clearInterval(interval)
+    timersRef.current.interval = interval
+
+    return () => {
+      if (timersRef.current.interval) clearInterval(timersRef.current.interval)
+      if (timersRef.current.t1) clearTimeout(timersRef.current.t1)
+      if (timersRef.current.t2) clearTimeout(timersRef.current.t2)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dice1, dice2])
 
@@ -64,6 +105,9 @@ export function DiceRollAnimation({ dice1, dice2, onComplete }: DiceRollAnimatio
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={rolling ? 'Tap to stop dice' : 'Dice result'}
       className={movedToCorner ? 'dice-in-corner' : 'dice-in-center'}
       style={{
         position: 'absolute',
@@ -71,9 +115,12 @@ export function DiceRollAnimation({ dice1, dice2, onComplete }: DiceRollAnimatio
         display: 'flex',
         gap: 20,
         alignItems: 'center',
-        pointerEvents: 'none',
+        pointerEvents: 'auto',
         isolation: 'isolate',
+        cursor: rolling ? 'pointer' : 'default',
       }}
+      onClick={handleTapToStop}
+      onKeyDown={(e) => { if (rolling && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); handleTapToStop() } }}
     >
       <div
         className={rolling ? 'dice-rolling-1' : 'dice-stopped'}
