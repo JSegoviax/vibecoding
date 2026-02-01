@@ -128,15 +128,32 @@ export function GameGuide() {
 
               <section>
                 <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--accent)' }}>
+                  The Robber
+                </h3>
+                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--text)', marginBottom: 8 }}>
+                  When you roll a <strong>7</strong>, the robber is activated. No resources are distributed that turn. You must:
+                </p>
+                <ol style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8, color: 'var(--text)' }}>
+                  <li><strong>Move the robber:</strong> Click any hex on the board (except the hex where the robber currently sits). The robber must move to a different hex.</li>
+                  <li><strong>Block production:</strong> The hex where the robber is placed does not produce resources for anyone until the robber moves again. If that hex’s number is rolled, no one with a settlement or city on it receives resources from that hex.</li>
+                  <li><strong>Steal (if possible):</strong> If the new hex has settlements or cities belonging to other players, you must choose one of those players. You steal one random resource from their hand (you receive it, they lose it). If the chosen player has no resources, nothing is stolen. If only your own structures are on the hex—or no one’s—you just move the robber; you cannot rob yourself.</li>
+                </ol>
+                <p style={{ margin: '12px 0 0', lineHeight: 1.6, color: 'var(--text)' }}>
+                  You must complete the robber move (and robbery, if applicable) before building or trading. The robber stays on the new hex until someone else rolls a 7 and moves it again.
+                </p>
+              </section>
+
+              <section>
+                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--accent)' }}>
                   Building
                 </h3>
                 <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--text)', marginBottom: 8 }}>
-                  After rolling dice, you can build structures (optional):
+                  After rolling dice, you can build structures (optional). Each player has a limited supply per game:
                 </p>
                 <ul style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8, color: 'var(--text)' }}>
-                  <li><strong>Road:</strong> Costs 1 Wood + 1 Brick. Must connect to your existing road or settlement.</li>
-                  <li><strong>Settlement:</strong> Costs 1 Wood + 1 Brick + 1 Sheep + 1 Wheat. Must be at least two road segments away from any other settlement or city (no building on adjacent intersections) and connected by your road.</li>
-                  <li><strong>City:</strong> Costs 2 Wheat + 3 Ore. Upgrades an existing settlement. Provides 2 resources instead of 1.</li>
+                  <li><strong>Roads:</strong> 15 per player. Costs 1 Wood + 1 Brick. Must connect to your existing road or settlement.</li>
+                  <li><strong>Settlements:</strong> 5 per player. Costs 1 Wood + 1 Brick + 1 Sheep + 1 Wheat. Must be at least two road segments away from any other settlement or city (no building on adjacent intersections) and connected by your road.</li>
+                  <li><strong>Cities:</strong> 4 per player. Costs 2 Wheat + 3 Ore. Upgrades an existing settlement (you get the settlement piece back). Provides 2 resources instead of 1.</li>
                 </ul>
               </section>
 

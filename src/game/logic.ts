@@ -101,7 +101,12 @@ export function getPlaceableRoadsForVertex(state: GameState, vertexId: string, p
   })
 }
 
-export function getPlaceableRoads(state: GameState, playerId: number): string[] {
+export function getPlaceableRoads(state: GameState, playerId: number, ignoreAdjacency?: boolean): string[] {
+  if (ignoreAdjacency) {
+    return Object.entries(state.edges)
+      .filter(([, e]) => !e.road)
+      .map(([id]) => id)
+  }
   return Object.keys(state.edges).filter(id => canPlaceRoad(state, id, playerId))
 }
 
@@ -169,8 +174,16 @@ export function getBuildCost(structure: 'road' | 'settlement' | 'city'): Partial
 
 export function canAfford(player: { resources: Record<Terrain, number> }, structure: 'road' | 'settlement' | 'city'): boolean {
   const cost = getBuildCost(structure)
+  return canAffordWithCost(player, cost)
+}
+
+/** Check if player can afford a given cost (e.g. from getEffectiveBuildCost when Omens enabled). */
+export function canAffordWithCost(
+  player: { resources: Record<Terrain, number> },
+  cost: Partial<Record<Terrain, number>>
+): boolean {
   for (const [t, n] of Object.entries(cost)) {
-    if ((player.resources[t as Terrain] || 0) < n!) return false
+    if (n != null && n > 0 && (player.resources[t as Terrain] || 0) < n) return false
   }
   return true
 }
@@ -180,10 +193,20 @@ export function getMissingResources(
   structure: 'road' | 'settlement' | 'city'
 ): { terrain: Terrain; need: number }[] {
   const cost = getBuildCost(structure)
+  return getMissingResourcesWithCost(player, cost)
+}
+
+/** Missing resources for a given cost (e.g. effective cost when Omens enabled). */
+export function getMissingResourcesWithCost(
+  player: { resources: Record<Terrain, number> },
+  cost: Partial<Record<Terrain, number>>
+): { terrain: Terrain; need: number }[] {
   const out: { terrain: Terrain; need: number }[] = []
   for (const [t, n] of Object.entries(cost)) {
-    const need = n! - (player.resources[t as Terrain] || 0)
-    if (need > 0) out.push({ terrain: t as Terrain, need })
+    if (n != null && n > 0) {
+      const need = n - (player.resources[t as Terrain] || 0)
+      if (need > 0) out.push({ terrain: t as Terrain, need })
+    }
   }
   return out
 }

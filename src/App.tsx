@@ -7,7 +7,7 @@ import { DiceRollAnimation } from './components/DiceRollAnimation'
 import { ColorSelection } from './components/ColorSelection'
 import { MultiplayerLobby } from './components/MultiplayerLobby'
 import { createInitialState } from './game/state'
-import { runAISetup, runAITurn, runAITrade, runAIRobberMove, runAISelectPlayerToRob } from './game/ai'
+import { runAISetup, runAITurn, runAITrade, runAIRobberMove, runAISelectPlayerToRob, runAIDrawOmen, runAIPlayOmen } from './game/ai'
 import {
   canPlaceSettlement,
   canPlaceRoad,
@@ -16,8 +16,11 @@ import {
   getPlaceableRoadsForVertex,
   getPlaceableRoads,
   canAfford,
+  canAffordWithCost,
   canBuildCity,
   getMissingResources,
+  getMissingResourcesWithCost,
+  getBuildCost,
   distributeResources,
   getHexIdsThatProducedResources,
   getHexIdsBlockedByRobber,
@@ -27,6 +30,26 @@ import {
   updateLongestRoad,
   getTradeRate,
 } from './game/logic'
+import {
+  canDrawOmenCard,
+  drawOmenCard,
+  resetPlayerOmensFlagsForNewTurn,
+  isOmensEnabled,
+  canPlayOmenCard,
+  playOmenCard,
+  getOmenCardName,
+  getOmenCardEffectText,
+  getEffectiveBuildCost,
+  consumeCostEffectAfterBuild,
+  consumeFreeBuildEffect,
+  canBuildThisTurn,
+  roadIgnoresAdjacencyThisTurn,
+  applyProductionModifiersAfterRoll,
+  getEffectiveTradeRate,
+  consumePathfinderEffect,
+  getActiveEffectsForPlayer,
+  getActiveEffectDescription,
+} from './game/omens'
 import type { GameState, PlayerId } from './game/types'
 import { TERRAIN_LABELS } from './game/terrain'
 import { trackEvent } from './utils/analytics'
@@ -65,6 +88,7 @@ export default function App() {
   const [tradeGive, setTradeGive] = useState<'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'>('wood')
   const [tradeGet, setTradeGet] = useState<'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'>('brick')
   const [robberMode, setRobberMode] = useState<{ moving: boolean; newHexId: string | null; playersToRob: Set<number> }>({ moving: false, newHexId: null, playersToRob: new Set() })
+  const [omenRobberMode, setOmenRobberMode] = useState<{ cardId: string; step: 'hex' | 'player'; hexId?: string; playersOnHex?: Set<number> } | null>(null)
   const [diceRolling, setDiceRolling] = useState<{ dice1: number; dice2: number } | null>(null)
   const aiNextRoadEdge = useRef<string | null>(null)
   const aiBuildTarget = useRef<{ type: string; vertexId?: string; edgeId?: string } | null>(null)
@@ -84,9 +108,9 @@ export default function App() {
     document.title = titles[startScreen] ?? titles.mode
   }, [startScreen])
 
-  const handleColorsSelected = (colors: string[]) => {
+  const handleColorsSelected = (colors: string[], options?: { oregonsOmens?: boolean }) => {
     setSelectedColors(colors)
-    setGame(createInitialState(numPlayers, colors))
+    setGame(createInitialState(numPlayers, colors, { oregonsOmens: options?.oregonsOmens }))
     trackEvent('game_started', 'gameplay', 'single_player', numPlayers)
     setStartScreen('game')
   }
@@ -163,8 +187,13 @@ export default function App() {
   }, [robberMode.newHexId, robberMode.playersToRob, game?.phase, game?.currentPlayerIndex, winner])
 
   useEffect(() => {
-    if (!game || game.phase !== 'playing' || game.currentPlayerIndex !== 1 || !game.lastDice || winner || buildMode || robberMode.moving || robberMode.newHexId) return
+    if (!game || game.phase !== 'playing' || game.currentPlayerIndex !== 1 || !game.lastDice || winner || buildMode || robberMode.moving || robberMode.newHexId || omenRobberMode) return
     const t = setTimeout(() => {
+      const playOmen = runAIPlayOmen(game)
+      if (playOmen) {
+        setGame(playOmenCard(game, 2, playOmen.cardId, playOmen.targets))
+        return
+      }
       const trade = runAITrade(game)
       if (trade) {
         handleTrade(trade.give as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', trade.get as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')
@@ -183,7 +212,7 @@ export default function App() {
       }
     }, 400)
     return () => clearTimeout(t)
-  }, [game?.phase, game?.currentPlayerIndex, game?.lastDice, game?.players, buildMode, winner, robberMode.moving, robberMode.newHexId])
+  }, [game?.phase, game?.currentPlayerIndex, game?.lastDice, game?.players, buildMode, winner, robberMode.moving, robberMode.newHexId, omenRobberMode])
 
   useEffect(() => {
     if (winner && game && !gameWonTrackedRef.current) {
@@ -345,7 +374,7 @@ export default function App() {
     isAITurn ? [] : isSetupRoad && setupPendingVertexId
       ? getPlaceableRoadsForVertex(game, setupPendingVertexId, playerId)
       : buildMode === 'road'
-        ? getPlaceableRoads(game, playerId)
+        ? getPlaceableRoads(game, playerId, isOmensEnabled(game) && roadIgnoresAdjacencyThisTurn(game, actualPlayerId as PlayerId))
         : []
   )
   const placeableCityVertices = new Set(
@@ -360,11 +389,15 @@ export default function App() {
     ? new Set(game.hexes.filter(h => h.id !== game.robberHexId).map(h => h.id))
     : new Set<string>()
 
-  // Grey out build buttons when player can't afford or has no valid spots
+  // Grey out build buttons when player can't afford or has no valid spots (Omens: effective cost + canBuildThisTurn)
   const playingAndMyTurn = game.phase === 'playing' && !actualWinner && !isAITurn
-  const canBuildRoad = playingAndMyTurn && actualCurrentPlayer && canAfford(actualCurrentPlayer, 'road') && actualCurrentPlayer.roadsLeft > 0 && getPlaceableRoads(game, actualPlayerId).length > 0
-  const canBuildSettlement = playingAndMyTurn && actualCurrentPlayer && canAfford(actualCurrentPlayer, 'settlement') && actualCurrentPlayer.settlementsLeft > 0 && getPlaceableVertices(game, actualPlayerId).length > 0
-  const hasPlaceableCity = playingAndMyTurn && actualCurrentPlayer && canAfford(actualCurrentPlayer, 'city') && actualCurrentPlayer.citiesLeft > 0 && Object.keys(game.vertices).some(id => canBuildCity(game, id, actualPlayerId))
+  const roadCost = isOmensEnabled(game) ? getEffectiveBuildCost(game, actualPlayerId as PlayerId, 'road') : getBuildCost('road')
+  const settlementCost = isOmensEnabled(game) ? getEffectiveBuildCost(game, actualPlayerId as PlayerId, 'settlement') : getBuildCost('settlement')
+  const cityCost = isOmensEnabled(game) ? getEffectiveBuildCost(game, actualPlayerId as PlayerId, 'city') : getBuildCost('city')
+  const buildAllowed = !isOmensEnabled(game) || canBuildThisTurn(game, actualPlayerId as PlayerId)
+  const canBuildRoad = playingAndMyTurn && buildAllowed && actualCurrentPlayer && canAffordWithCost(actualCurrentPlayer, roadCost) && actualCurrentPlayer.roadsLeft > 0 && getPlaceableRoads(game, actualPlayerId, isOmensEnabled(game) && roadIgnoresAdjacencyThisTurn(game, actualPlayerId as PlayerId)).length > 0
+  const canBuildSettlement = playingAndMyTurn && buildAllowed && actualCurrentPlayer && canAffordWithCost(actualCurrentPlayer, settlementCost) && actualCurrentPlayer.settlementsLeft > 0 && getPlaceableVertices(game, actualPlayerId).length > 0
+  const hasPlaceableCity = playingAndMyTurn && buildAllowed && actualCurrentPlayer && canAffordWithCost(actualCurrentPlayer, cityCost) && actualCurrentPlayer.citiesLeft > 0 && Object.keys(game.vertices).some(id => canBuildCity(game, id, actualPlayerId))
 
   const handleSelectVertex = (vid: string) => {
     if (game.phase === 'setup' && !isSetupRoad) {
@@ -384,13 +417,13 @@ export default function App() {
     if (game.phase === 'setup' && isSetupRoad) return
 
     if (buildMode === 'settlement' && canPlaceSettlement(game, vid, actualPlayerId)) {
-      if (!canAfford(actualCurrentPlayer, 'settlement')) {
-        setErrorMessage('Insufficient resources. Need: ' + getMissingResources(actualCurrentPlayer, 'settlement').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
+      const cost = isOmensEnabled(game) ? getEffectiveBuildCost(game, actualPlayerId as PlayerId, 'settlement') : getBuildCost('settlement')
+      if (!canAffordWithCost(actualCurrentPlayer, cost)) {
+        setErrorMessage('Insufficient resources. Need: ' + getMissingResourcesWithCost(actualCurrentPlayer, cost).map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
         return
       }
       trackEvent('build', 'gameplay', 'settlement', 1)
       setGame(g => updateGameState(g, (state) => {
-        const cost = { wood: 1, brick: 1, sheep: 1, wheat: 1 }
         const next: GameState = {
           ...state,
           vertices: { ...state.vertices },
@@ -399,10 +432,15 @@ export default function App() {
         next.players = state.players.map((p, i) => {
           if (i !== actualPlayerId - 1) return p
           const res = { ...p.resources }
-          for (const [t, n] of Object.entries(cost)) { res[t as keyof typeof res] = Math.max(0, (res[t as keyof typeof res] || 0) - n!) }
+          for (const [t, n] of Object.entries(cost)) { if (n != null && n > 0) res[t as keyof typeof res] = Math.max(0, (res[t as keyof typeof res] || 0) - n) }
           return { ...p, resources: res, settlementsLeft: p.settlementsLeft - 1, victoryPoints: p.victoryPoints + 1 }
         })
-        return next
+        let result = next as GameState
+        if (isOmensEnabled(result)) {
+          result = consumeCostEffectAfterBuild(result, actualPlayerId as PlayerId, 'settlement')
+          result = consumeFreeBuildEffect(result, actualPlayerId as PlayerId, 'settlement')
+        }
+        return result
       }))
       setBuildMode(null)
       setErrorMessage(null)
@@ -458,8 +496,9 @@ export default function App() {
       return
     }
     if (buildMode === 'road' && canPlaceRoad(game, eid, actualPlayerId)) {
-      if (!canAfford(actualCurrentPlayer, 'road')) {
-        setErrorMessage('Insufficient resources. Need: ' + getMissingResources(actualCurrentPlayer, 'road').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
+      const roadCost = isOmensEnabled(game) ? getEffectiveBuildCost(game, actualPlayerId as PlayerId, 'road') : getBuildCost('road')
+      if (!canAffordWithCost(actualCurrentPlayer, roadCost)) {
+        setErrorMessage('Insufficient resources. Need: ' + getMissingResourcesWithCost(actualCurrentPlayer, roadCost).map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', '))
         return
       }
       trackEvent('build', 'gameplay', 'road', 1)
@@ -470,12 +509,17 @@ export default function App() {
         next.players = g.players.map((p, i) => {
           if (i !== actualPlayerId - 1) return p
           const res = { ...p.resources }
-          res.wood = Math.max(0, (res.wood || 0) - 1)
-          res.brick = Math.max(0, (res.brick || 0) - 1)
+          for (const [t, n] of Object.entries(roadCost)) { if (n != null && n > 0) res[t as keyof typeof res] = Math.max(0, (res[t as keyof typeof res] || 0) - n) }
           return { ...p, resources: res, roadsLeft: p.roadsLeft - 1 }
         })
         updateLongestRoad(next)
-        return next
+        let result = next
+        if (isOmensEnabled(result)) {
+          result = consumeCostEffectAfterBuild(result, actualPlayerId as PlayerId, 'road')
+          result = consumeFreeBuildEffect(result, actualPlayerId as PlayerId, 'road')
+          if (roadIgnoresAdjacencyThisTurn(game, actualPlayerId as PlayerId)) result = consumePathfinderEffect(result, actualPlayerId as PlayerId)
+        }
+        return result
       })
       setBuildMode(null)
       setErrorMessage(null)
@@ -514,7 +558,14 @@ export default function App() {
     // Don't set diceRolling to null - keep dice visible in corner until next roll
   }
 
+  const handleSelectOmenRobberHex = (hexId: string) => {
+    if (!omenRobberMode || omenRobberMode.step !== 'hex') return
+    const playersOnHex = getPlayersOnHex(game, hexId)
+    setOmenRobberMode({ cardId: 'robbers_regret', step: 'player', hexId, playersOnHex })
+  }
+
   const handleSelectRobberHex = (hexId: string) => {
+    if (omenRobberMode) return
     if (!robberMode.moving) return
     if (hexId === game.robberHexId) {
       setErrorMessage('Robber must move to a different hex')
@@ -562,16 +613,29 @@ export default function App() {
   const handleEndTurn = () => {
     trackEvent('end_turn', 'gameplay', 'single_player')
     setDiceRolling(null)
-    setGame(g => updateGameState(g, (state) => ({
-      ...state,
-      currentPlayerIndex: (state.currentPlayerIndex + 1) % state.players.length,
-      lastDice: null,
-      lastResourceFlash: null,
-      lastResourceHexIds: null,
-    })))
+    setGame(g =>
+      updateGameState(g, (state) => {
+        const nextIndex = (state.currentPlayerIndex + 1) % state.players.length
+        let next: GameState = {
+          ...state,
+          currentPlayerIndex: nextIndex,
+          lastDice: null,
+          lastResourceFlash: null,
+          lastResourceHexIds: null,
+        }
+        next = resetPlayerOmensFlagsForNewTurn(next, nextIndex)
+        return next
+      })
+    )
     setBuildMode(null)
     setTradeFormOpen(false)
     setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
+    setOmenRobberMode(null)
+  }
+
+  const handleDrawOmenCard = () => {
+    if (!game || !canDrawOmenCard(game, actualPlayerId as PlayerId)) return
+    setGame(drawOmenCard(game, actualPlayerId as PlayerId))
   }
 
   const handleTrade = (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => {
@@ -579,12 +643,12 @@ export default function App() {
       const idx = state.currentPlayerIndex
       const p = state.players[idx]
       if (!p) return state
-      
-      // Get the trade rate based on harbors
-      const tradeRate = getTradeRate(state, actualPlayerId, give)
+      const baseRate = getTradeRate(state, actualPlayerId, give)
+      const { rate: tradeRate, stateAfterTrade } = isOmensEnabled(state)
+        ? getEffectiveTradeRate(state, actualPlayerId as PlayerId, give, baseRate)
+        : { rate: baseRate, stateAfterTrade: undefined }
       if ((p.resources[give] || 0) < tradeRate) return state
-      
-      const next: GameState = {
+      let next: GameState = {
         ...state,
         players: state.players.map((pl, i) => {
           if (i !== idx) return pl
@@ -594,6 +658,7 @@ export default function App() {
           return { ...pl, resources: res }
         })
       }
+      if (stateAfterTrade) next = { ...stateAfterTrade, players: next.players }
       return next
     }))
     setTradeFormOpen(false)
@@ -609,11 +674,67 @@ export default function App() {
       <p className="game-subtitle" style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 0 }}>
         {game.phase === 'setup' && !isSetupRoad && `Place a settlement`}
         {game.phase === 'setup' && isSetupRoad && `Place a road next to it`}
-        {isPlaying && robberMode.moving && `Rolled 7! Click a hex to move the robber`}
+        {isPlaying && robberMode.moving && !omenRobberMode && `Rolled 7! Click a hex to move the robber`}
         {isPlaying && robberMode.newHexId && robberMode.playersToRob.size > 0 && `Select a player to rob`}
-        {isPlaying && !robberMode.moving && !robberMode.newHexId && `Roll dice, then build or end turn`}
+        {isPlaying && omenRobberMode?.step === 'hex' && `Robber's Regret: click a hex to move the robber`}
+        {isPlaying && omenRobberMode?.step === 'player' && `Robber's Regret: select a player to rob (or skip)`}
+        {isPlaying && !robberMode.moving && !robberMode.newHexId && !omenRobberMode && `Roll dice, then build or end turn`}
         {winner && `${winner.name} wins with ${winner.victoryPoints} VP!`}
       </p>
+
+      {/* Robber's Regret: select player to rob (or skip) */}
+      {isPlaying && omenRobberMode?.step === 'player' && omenRobberMode.hexId && (
+        <div style={{ margin: '0 auto 16px', maxWidth: 400, padding: 12, borderRadius: 8, background: 'rgba(139,69,19,0.15)', border: '1px solid rgba(139,69,19,0.4)', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 13, color: 'var(--text)', width: '100%' }}>Steal from:</span>
+          {Array.from(omenRobberMode.playersOnHex ?? []).map(pid => (
+            <button
+              key={pid}
+              onClick={() => {
+                setGame(playOmenCard(game, actualPlayerId as PlayerId, 'robbers_regret', { hexId: omenRobberMode.hexId, targetPlayerId: pid as PlayerId }))
+                setOmenRobberMode(null)
+              }}
+              style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontSize: 12 }}
+            >
+              {game.players[pid - 1]?.name ?? `Player ${pid}`}
+            </button>
+          ))}
+          <button
+            onClick={() => {
+              setGame(playOmenCard(game, actualPlayerId as PlayerId, 'robbers_regret', { hexId: omenRobberMode.hexId }))
+              setOmenRobberMode(null)
+            }}
+            style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12 }}
+          >
+            Skip (move robber only)
+          </button>
+        </div>
+      )}
+
+      {/* Oregon's Omens: debuff feedback (red banner when you drew a debuff) */}
+      {game.lastOmenDebuffDrawn && game.lastOmenDebuffDrawn.playerId === 1 && (
+        <div
+          role="alert"
+          style={{
+            margin: '0 auto 16px',
+            maxWidth: 500,
+            padding: '10px 14px',
+            borderRadius: 8,
+            background: 'rgba(185, 28, 28, 0.2)',
+            border: '1px solid rgba(185, 28, 28, 0.5)',
+            color: '#fca5a5',
+            fontSize: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <span>
+            You drew a debuff: <strong>{getOmenCardName(game.lastOmenDebuffDrawn.cardId)}</strong> — {getOmenCardEffectText(game.lastOmenDebuffDrawn.cardId)}
+          </span>
+          <button onClick={() => setGame(g => g ? { ...g, lastOmenDebuffDrawn: null } : g)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+        </div>
+      )}
 
       {(game.lastRobbery || errorMessage) && (
         <div
@@ -730,12 +851,47 @@ export default function App() {
             onSetTradeGet={setTradeGet}
             onTrade={handleTrade}
             onSetErrorMessage={setErrorMessage}
-            canAfford={canAfford}
-            getMissingResources={getMissingResources}
-            getTradeRate={isPlaying && !isAITurn ? (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => getTradeRate(game, actualPlayerId, give) : undefined}
+            canAfford={
+              isOmensEnabled(game)
+                ? (p, s) => canAffordWithCost(p, getEffectiveBuildCost(game, actualPlayerId as PlayerId, s))
+                : canAfford
+            }
+            getMissingResources={
+              isOmensEnabled(game)
+                ? (p, s) => getMissingResourcesWithCost(p, getEffectiveBuildCost(game, actualPlayerId as PlayerId, s))
+                : getMissingResources
+            }
+            getTradeRate={
+              isPlaying && !isAITurn
+                ? (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => {
+                    const base = getTradeRate(game, actualPlayerId, give)
+                    return isOmensEnabled(game)
+                      ? getEffectiveTradeRate(game, actualPlayerId as PlayerId, give, base).rate
+                      : base
+                  }
+                : undefined
+            }
             canBuildRoad={game.phase === 'playing' ? canBuildRoad : undefined}
             canBuildSettlement={game.phase === 'playing' ? canBuildSettlement : undefined}
             canBuildCity={game.phase === 'playing' ? hasPlaceableCity : undefined}
+            oregonsOmensEnabled={isOmensEnabled(game)}
+            canDrawOmenCard={isPlaying && !isAITurn ? canDrawOmenCard(game, actualPlayerId as PlayerId) : false}
+            onDrawOmenCard={handleDrawOmenCard}
+            omensHandCount={actualCurrentPlayer?.omensHand?.length ?? 0}
+            omensHand={actualCurrentPlayer?.omensHand ?? []}
+            canPlayOmenCard={isPlaying && !isAITurn ? (cardId: string) => canPlayOmenCard(game, actualPlayerId as PlayerId, cardId) : undefined}
+            onPlayOmenCard={
+              isPlaying && !isAITurn
+                ? (cardId: string) => {
+                    if (cardId === 'robbers_regret') setOmenRobberMode({ cardId: 'robbers_regret', step: 'hex' })
+                    else setGame(playOmenCard(game, actualPlayerId as PlayerId, cardId))
+                  }
+                : undefined
+            }
+            getOmenCardName={getOmenCardName}
+            getOmenCardEffectText={getOmenCardEffectText}
+            activeOmensEffects={isOmensEnabled(game) ? getActiveEffectsForPlayer(game, actualPlayerId as PlayerId) : []}
+            getActiveEffectDescription={getActiveEffectDescription}
           />
 
           {game.phase === 'setup' && (

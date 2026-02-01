@@ -28,6 +28,7 @@ type GameRow = {
   num_players: number
   phase: 'lobby' | 'setup' | 'playing' | 'ended'
   state: GameState | null
+  oregons_omens?: boolean
   created_at: string
   updated_at: string
 }
@@ -183,7 +184,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setStarting(true)
     const numPlayers = game.num_players as 2 | 3 | 4
     const colors = defaultColors.slice(0, numPlayers)
-    const state = createInitialState(numPlayers, [...colors], { multiplayer: true })
+    const state = createInitialState(numPlayers, [...colors], { multiplayer: true, oregonsOmens: game.oregons_omens ?? false })
     const { error: e } = await supabase
       .from('games')
       .update({
@@ -284,6 +285,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       </div>
 
       <div style={{ background: 'var(--surface)', borderRadius: 12, padding: 20, minWidth: 280 }}>
+        {game.oregons_omens && <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Oregon&apos;s Omens: Yes</div>}
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>Players ({players.length}/{game.num_players})</div>
         <ul style={{ margin: 0, paddingLeft: 20 }}>
           {players.map(p => (

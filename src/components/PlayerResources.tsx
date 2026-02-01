@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { TERRAIN_COLORS, TERRAIN_LABELS } from '../game/terrain'
 import { AnimatedResourceIcon } from './AnimatedResourceIcon'
 import { BuildCostsInline } from './BuildCostsLegend'
@@ -47,6 +48,28 @@ interface PlayerResourcesProps {
   canBuildSettlement?: boolean
   /** When false, City button is greyed out and disabled */
   canBuildCity?: boolean
+  /** Oregon's Omens: whether the variant is enabled this game */
+  oregonsOmensEnabled?: boolean
+  /** Oregon's Omens: whether the active player can draw a card (cost 1W+1S+1O, hand limit, etc.) */
+  canDrawOmenCard?: boolean
+  /** Oregon's Omens: callback to draw one card */
+  onDrawOmenCard?: () => void
+  /** Oregon's Omens: number of cards in the active player's hand (for display) */
+  omensHandCount?: number
+  /** Oregon's Omens: card IDs in the active player's hand (for list + play) */
+  omensHand?: string[]
+  /** Oregon's Omens: whether the active player can play this card (phase, turn, preconditions) */
+  canPlayOmenCard?: (cardId: string) => boolean
+  /** Oregon's Omens: play a buff card from hand */
+  onPlayOmenCard?: (cardId: string) => void
+  /** Oregon's Omens: get display name for a card ID */
+  getOmenCardName?: (cardId: string) => string
+  /** Oregon's Omens: get short effect text for a card ID */
+  getOmenCardEffectText?: (cardId: string) => string
+  /** Oregon's Omens: active effects for the current player (for display) */
+  activeOmensEffects?: Array<{ cardId: string; turnsRemaining?: number; rollsRemaining?: number; appliedEffect: Record<string, unknown> }>
+  /** Oregon's Omens: get short description for an active effect */
+  getActiveEffectDescription?: (effect: { cardId: string; turnsRemaining?: number; rollsRemaining?: number; appliedEffect: Record<string, unknown> }) => string
 }
 
 function ResourceChip({ type, count, flash }: { type: Terrain; count: number; flash?: boolean }) {
@@ -160,7 +183,19 @@ export function PlayerResources({
   canBuildRoad,
   canBuildSettlement,
   canBuildCity,
+  oregonsOmensEnabled,
+  canDrawOmenCard,
+  onDrawOmenCard,
+  omensHandCount = 0,
+  omensHand = [],
+  canPlayOmenCard,
+  onPlayOmenCard,
+  getOmenCardName = (id: string) => id.replace(/_/g, ' '),
+  getOmenCardEffectText = () => '',
+  activeOmensEffects = [],
+  getActiveEffectDescription,
 }: PlayerResourcesProps) {
+  const [omensCardDetailId, setOmensCardDetailId] = useState<string | null>(null)
   return (
     <div>
       <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -177,8 +212,8 @@ export function PlayerResources({
               marginBottom: 6,
               padding: 8,
               borderRadius: 8,
-              background: isActive ? 'rgba(100,181,246,0.15)' : 'rgba(255,255,255,0.03)',
-              border: `1px solid ${isActive ? 'rgba(100,181,246,0.4)' : 'transparent'}`,
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid transparent',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -194,9 +229,6 @@ export function PlayerResources({
                   flash={lastResourceFlash?.[i]?.includes(t)}
                 />
               ))}
-            </div>
-            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>
-              {p.settlementsLeft} S · {p.citiesLeft} C · {p.roadsLeft} R
             </div>
             {showControls && lastDice == null && (
               <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
@@ -240,7 +272,7 @@ export function PlayerResources({
               </div>
             )}
             {showBuildControls && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8, padding: 10, borderRadius: 8, background: 'rgba(100,181,246,0.08)', border: '1px solid rgba(100,181,246,0.3)' }}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {lastDice != null && onEndTurn && !robberMode?.moving && !robberMode?.newHexId && (
                     <button
@@ -323,6 +355,25 @@ export function PlayerResources({
                             ...(cityDisabled ? greyStyle : {}),
                           }}
                         >City</button>
+                        {oregonsOmensEnabled && (
+                          <button
+                            onClick={() => { if (canDrawOmenCard) onDrawOmenCard?.() }}
+                            disabled={!canDrawOmenCard}
+                            title="Cost: 1 Wheat, 1 Sheep, 1 Ore. Draw one Omen card (max 5 in hand)."
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: 6,
+                              border: '1px solid var(--muted)',
+                              background: canDrawOmenCard ? 'transparent' : 'transparent',
+                              color: canDrawOmenCard ? 'var(--text)' : 'var(--muted)',
+                              cursor: canDrawOmenCard ? 'pointer' : 'not-allowed',
+                              fontSize: 12,
+                              ...(!canDrawOmenCard ? { opacity: 0.5 } : {}),
+                            }}
+                          >
+                            Draw Omen ({omensHandCount}/5)
+                          </button>
+                        )}
                       </>
                     )
                   })()}
@@ -362,11 +413,123 @@ export function PlayerResources({
                 })()}
               </div>
             )}
+            {/* Oregon's Omens: active effects (current player) */}
+            {oregonsOmensEnabled && isActive && phase === 'playing' && activeOmensEffects.length > 0 && getActiveEffectDescription && (
+              <div style={{ marginTop: 8, padding: 6, borderRadius: 6, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', fontSize: 11 }}>
+                <div style={{ fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>Active effects</div>
+                <ul style={{ margin: 0, paddingLeft: 16, listStyle: 'disc' }}>
+                  {activeOmensEffects.map((eff, idx) => (
+                    <li key={`${eff.cardId}-${idx}`} style={{ marginBottom: 2 }}>{getActiveEffectDescription(eff)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {/* Oregon's Omens: hand list (active player only) */}
+            {oregonsOmensEnabled && isActive && phase === 'playing' && omensHand.length > 0 && (
+              <div style={{ marginTop: 8, padding: 8, borderRadius: 8, background: 'rgba(139,69,19,0.15)', border: '1px solid rgba(139,69,19,0.4)' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>Omen cards</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {omensHand.map((cardId: string) => (
+                    <button
+                      key={cardId}
+                      onClick={() => setOmensCardDetailId(cardId)}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: 6,
+                        border: '1px solid var(--muted)',
+                        background: 'var(--surface)',
+                        color: 'var(--text)',
+                        cursor: 'pointer',
+                        fontSize: 11,
+                        textAlign: 'left',
+                        maxWidth: 140,
+                      }}
+                      title={getOmenCardEffectText(cardId)}
+                    >
+                      {getOmenCardName(cardId)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* Build costs inside player card: have/cost and red when insufficient */}
             {phase === 'playing' && <BuildCostsInline playerResources={p.resources} />}
           </div>
         )
       })}
+      {/* Card detail modal (Oregon's Omens) */}
+      {oregonsOmensEnabled && omensCardDetailId && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+          }}
+          onClick={() => setOmensCardDetailId(null)}
+        >
+          <div
+            style={{
+              background: 'var(--surface)',
+              borderRadius: 12,
+              padding: 20,
+              maxWidth: 320,
+              width: '90%',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+              border: '1px solid var(--muted)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 16, fontWeight: 'bold', color: 'var(--text)', marginBottom: 8 }}>
+              {getOmenCardName(omensCardDetailId)}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
+              {getOmenCardEffectText(omensCardDetailId)}
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  if (canPlayOmenCard?.(omensCardDetailId)) {
+                    onPlayOmenCard?.(omensCardDetailId)
+                    setOmensCardDetailId(null)
+                  }
+                }}
+                disabled={!canPlayOmenCard?.(omensCardDetailId)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  background: canPlayOmenCard?.(omensCardDetailId) ? 'var(--accent)' : 'var(--muted)',
+                  border: 'none',
+                  color: '#fff',
+                  cursor: canPlayOmenCard?.(omensCardDetailId) ? 'pointer' : 'not-allowed',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  opacity: canPlayOmenCard?.(omensCardDetailId) ? 1 : 0.6,
+                }}
+              >
+                Play card
+              </button>
+              <button
+                onClick={() => setOmensCardDetailId(null)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: '1px solid var(--muted)',
+                  background: 'transparent',
+                  color: 'var(--text)',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

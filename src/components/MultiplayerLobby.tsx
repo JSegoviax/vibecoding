@@ -16,6 +16,7 @@ function parseGameId(input: string): string | null {
 
 export function MultiplayerLobby({ onBack }: { onBack: () => void }) {
   const [numPlayers, setNumPlayers] = useState<2 | 3 | 4>(2)
+  const [oregonsOmens, setOregonsOmens] = useState(false)
   const [joinGameId, setJoinGameId] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -27,7 +28,7 @@ export function MultiplayerLobby({ onBack }: { onBack: () => void }) {
       const { supabase } = await import('../lib/supabase')
       const { data: game, error: insertGameError } = await supabase
         .from('games')
-        .insert({ num_players: numPlayers, phase: 'lobby' })
+        .insert({ num_players: numPlayers, phase: 'lobby', oregons_omens: oregonsOmens })
         .select('id')
         .single()
       if (insertGameError) throw insertGameError
@@ -99,6 +100,15 @@ export function MultiplayerLobby({ onBack }: { onBack: () => void }) {
               </button>
             ))}
           </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, cursor: 'pointer', fontSize: 14 }}>
+            <input
+              type="checkbox"
+              checked={oregonsOmens}
+              onChange={e => setOregonsOmens(e.target.checked)}
+              style={{ width: 18, height: 18 }}
+            />
+            <span>Oregon&apos;s Omens (card variant)</span>
+          </label>
           <button
             type="button"
             disabled={creating}

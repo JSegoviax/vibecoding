@@ -40,6 +40,17 @@ export interface Edge {
 
 export type GamePhase = 'setup' | 'playing' | 'ended'
 
+/** Active Oregon's Omens effect (ongoing cost/production/trade modifier, etc.) */
+export interface ActiveOmenEffect {
+  cardId: string
+  playerId: PlayerId
+  turnsRemaining?: number
+  rollsRemaining?: number
+  endsTurn?: number
+  appliedEffect: Record<string, unknown>
+  triggerCondition?: string
+}
+
 export interface Player {
   id: PlayerId
   name: string
@@ -51,6 +62,12 @@ export interface Player {
   settlementsLeft: number
   citiesLeft: number
   roadsLeft: number
+  /** Oregon's Omens: card IDs in hand (only when Omens enabled) */
+  omensHand?: string[]
+  /** Oregon's Omens: reset at start of turn */
+  hasDrawnOmenThisTurn?: boolean
+  /** Oregon's Omens: reset at start of turn */
+  hasPlayedOmenThisTurn?: boolean
 }
 
 export interface GameState {
@@ -75,4 +92,12 @@ export interface GameState {
   lastRobbery: { robbingPlayerId: PlayerId; targetPlayerId: PlayerId; resource: Terrain | null } | null
   /** Player ID who currently has the longest road (minimum 5 roads) */
   longestRoadPlayerId: PlayerId | null
+  /** Oregon's Omens: draw pile (only when Omens enabled) */
+  omensDeck?: string[]
+  /** Oregon's Omens: played/discarded cards (only when Omens enabled) */
+  omensDiscardPile?: string[]
+  /** Oregon's Omens: ongoing effects (only when Omens enabled) */
+  activeOmensEffects?: ActiveOmenEffect[]
+  /** Oregon's Omens: last debuff drawn (for UI feedback banner); cleared on dismiss */
+  lastOmenDebuffDrawn?: { cardId: string; playerId: PlayerId } | null
 }

@@ -16,14 +16,19 @@ export const AVAILABLE_COLORS: PlayerColor[] = [
   { id: 'white', name: 'White', image: '/player-white.png', hexColor: '#ffffff' },
 ]
 
+export interface GameStartOptions {
+  oregonsOmens?: boolean
+}
+
 interface ColorSelectionProps {
   numPlayers: 1 | 2 | 3 | 4
-  onColorsSelected: (selectedColors: string[]) => void
+  onColorsSelected: (selectedColors: string[], options?: GameStartOptions) => void
 }
 
 export function ColorSelection({ numPlayers, onColorsSelected }: ColorSelectionProps) {
   const [selectedColors, setSelectedColors] = useState<string[]>([])
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0)
+  const [oregonsOmens, setOregonsOmens] = useState(false)
 
   const handleColorSelect = (colorId: string) => {
     if (selectedColors.includes(colorId)) return // Color already selected
@@ -36,7 +41,7 @@ export function ColorSelection({ numPlayers, onColorsSelected }: ColorSelectionP
       setCurrentPlayerIndex(currentPlayerIndex + 1)
     } else {
       // All players have selected, start the game
-      onColorsSelected(newSelected)
+      onColorsSelected(newSelected, { oregonsOmens })
     }
   }
 
@@ -82,6 +87,24 @@ export function ColorSelection({ numPlayers, onColorsSelected }: ColorSelectionP
         }}>
           Player {currentPlayerIndex + 1} of {numPlayers}
         </p>
+
+        <label style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          marginBottom: 20,
+          cursor: 'pointer',
+          fontSize: 14,
+          color: 'var(--text)',
+        }}>
+          <input
+            type="checkbox"
+            checked={oregonsOmens}
+            onChange={(e) => setOregonsOmens(e.target.checked)}
+            style={{ width: 18, height: 18 }}
+          />
+          Play with Oregon&apos;s Omens
+        </label>
 
         <div style={{
           display: 'grid',

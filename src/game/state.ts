@@ -1,6 +1,7 @@
 import { createBoard } from './board'
 import { buildTopology } from './topology'
 import { createHarbors } from './harbors'
+import { createOmensDeck } from './omens'
 import type { GameState, Player, Vertex, Edge, PlayerId } from './types'
 import { AVAILABLE_COLORS } from '../components/ColorSelection'
 
@@ -23,7 +24,7 @@ function createPlayer(id: PlayerId, colorId: string, isAI: boolean = false): Pla
 export function createInitialState(
   numPlayers: 2 | 3 | 4,
   selectedColors?: string[],
-  options?: { multiplayer?: boolean }
+  options?: { multiplayer?: boolean; oregonsOmens?: boolean }
 ): GameState {
   const hexes = createBoard()
   const { vertices, edges } = buildTopology(hexes)
@@ -73,13 +74,23 @@ export function createInitialState(
   // Find the desert hex for the robber
   const desertHex = hexes.find(h => h.terrain === 'desert')
 
-  return {
+  const oregonsOmens = options?.oregonsOmens === true
+  const playersWithOmens: Player[] = oregonsOmens
+    ? players.map(p => ({
+        ...p,
+        omensHand: [],
+        hasDrawnOmenThisTurn: false,
+        hasPlayedOmenThisTurn: false,
+      }))
+    : players
+
+  const baseState: GameState = {
     phase: 'setup',
     hexes,
     vertices: verts,
     edges: edgs,
     harbors,
-    players,
+    players: playersWithOmens,
     currentPlayerIndex: 0,
     setupPlacements: 0,
     setupPendingVertexId: null,
@@ -90,4 +101,14 @@ export function createInitialState(
     lastRobbery: null,
     longestRoadPlayerId: null,
   }
+
+  if (oregonsOmens) {
+    return {
+      ...baseState,
+      omensDeck: createOmensDeck(),
+      omensDiscardPile: [],
+      activeOmensEffects: [],
+    }
+  }
+  return baseState
 }

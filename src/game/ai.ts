@@ -1,14 +1,26 @@
-import type { GameState, Terrain } from './types'
+import type { GameState, Terrain, PlayerId } from './types'
 import {
   getPlaceableVertices,
   getPlaceableRoadsForVertex,
   getPlaceableRoads,
   canAfford,
+  canAffordWithCost,
   canBuildCity,
   getMissingResources,
+  getMissingResourcesWithCost,
+  getBuildCost,
   getPlayersOnHex,
   getTradeRate,
 } from './logic'
+import {
+  isOmensEnabled,
+  canDrawOmenCard,
+  canPlayOmenCard,
+  getEffectiveBuildCost,
+  canBuildThisTurn,
+  roadIgnoresAdjacencyThisTurn,
+} from './omens'
+import type { PlayOmenTargets } from './omens'
 
 const RESOURCE_TYPES: Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore']
 
@@ -51,12 +63,22 @@ export type AITurnAction =
   | { action: 'settlement'; vertexId: string }
   | { action: 'road'; edgeId: string }
 
+function aiCanAfford(state: GameState, structure: 'road' | 'settlement' | 'city'): boolean {
+  const player = state.players[AI_PLAYER_ID - 1]
+  if (!player) return false
+  const cost = isOmensEnabled(state)
+    ? getEffectiveBuildCost(state, AI_PLAYER_ID as PlayerId, structure)
+    : getBuildCost(structure)
+  return canAffordWithCost(player, cost)
+}
+
 export function runAITurn(state: GameState): AITurnAction {
   const player = state.players[AI_PLAYER_ID - 1]
   if (!player) return { action: 'end' }
+  if (isOmensEnabled(state) && !canBuildThisTurn(state, AI_PLAYER_ID as PlayerId)) return { action: 'end' }
 
   // 1. Prefer city (2 VP)
-  if (canAfford(player, 'city') && player.citiesLeft > 0) {
+  if (aiCanAfford(state, 'city') && player.citiesLeft > 0) {
     const vertices = Object.keys(state.vertices).filter(id => canBuildCity(state, id, AI_PLAYER_ID))
     if (vertices.length > 0) {
       const best = vertices.sort((a, b) => scoreVertex(state, b) - scoreVertex(state, a))[0]
@@ -74,8 +96,8 @@ export function runAITurn(state: GameState): AITurnAction {
   }
 
   // 3. Road to extend network
-  if (canAfford(player, 'road') && player.roadsLeft > 0) {
-    const edges = getPlaceableRoads(state, AI_PLAYER_ID)
+  if (aiCanAfford(state, 'road') && player.roadsLeft > 0) {
+    const edges = getPlaceableRoads(state, AI_PLAYER_ID, isOmensEnabled(state) && roadIgnoresAdjacencyThisTurn(state, AI_PLAYER_ID as PlayerId))
     if (edges.length > 0) {
       const pick = edges[Math.floor(Math.random() * edges.length)]
       return { action: 'road', edgeId: pick }
@@ -93,8 +115,11 @@ export function runAITrade(state: GameState): { give: Terrain; get: Terrain } | 
     if (struct === 'city' && player.citiesLeft <= 0) continue
     if (struct === 'settlement' && player.settlementsLeft <= 0) continue
     if (struct === 'road' && player.roadsLeft <= 0) continue
-    if (canAfford(player, struct)) continue
-    const missing = getMissingResources(player, struct)
+    if (aiCanAfford(state, struct)) continue
+    const cost = isOmensEnabled(state)
+      ? getEffectiveBuildCost(state, AI_PLAYER_ID as PlayerId, struct)
+      : getBuildCost(struct)
+    const missing = getMissingResourcesWithCost(player, cost)
     for (const m of missing) {
       // Check all resource types, using harbor rates if available
       const giveOptions = RESOURCE_TYPES.filter(t => {
@@ -147,7 +172,7 @@ export function runAISelectPlayerToRob(state: GameState, hexId: string): number 
   const playersOnHex = getPlayersOnHex(state, hexId)
   const opponents = Array.from(playersOnHex).filter(pid => pid !== AI_PLAYER_ID)
   if (opponents.length === 0) return null
-  
+
   // Score by total resources
   const scored = opponents.map(pid => {
     const p = state.players[pid - 1]
@@ -155,10 +180,85 @@ export function runAISelectPlayerToRob(state: GameState, hexId: string): number 
     const total = (p.resources.wood || 0) + (p.resources.brick || 0) + (p.resources.sheep || 0) + (p.resources.wheat || 0) + (p.resources.ore || 0)
     return { pid, score: total }
   })
-  
+
   scored.sort((a, b) => b.score - a.score)
   const bestScore = scored[0]?.score ?? 0
   const bestPlayers = scored.filter(s => s.score === bestScore && s.score > 0)
   if (bestPlayers.length === 0) return null
   return bestPlayers[Math.floor(Math.random() * bestPlayers.length)]?.pid ?? null
+}
+
+// ——— Oregon's Omens: AI draw and play ———
+
+/** Whether the AI should draw an Omen card this turn. Avoids drawing when close to 10 VP (risk of debuff). */
+export function runAIDrawOmen(state: GameState): boolean {
+  if (!isOmensEnabled(state) || !canDrawOmenCard(state, AI_PLAYER_ID as PlayerId)) return false
+  const player = state.players[AI_PLAYER_ID - 1]
+  if (!player) return false
+  // Avoid drawing when at 8+ VP to reduce risk of game-losing debuff (e.g. Smallpox, Mass Exodus)
+  if (player.victoryPoints >= 8) return false
+  return true
+}
+
+export type AIPlayOmenResult = { cardId: string; targets?: PlayOmenTargets } | null
+
+/** Which Omen card to play this turn (priority: VP win, cost reducers, resources, robber, production). Returns null if none. */
+export function runAIPlayOmen(state: GameState): AIPlayOmenResult {
+  if (!isOmensEnabled(state)) return null
+  const player = state.players[AI_PLAYER_ID - 1]
+  if (!player || player.hasPlayedOmenThisTurn) return null
+  const hand = player.omensHand ?? []
+  if (hand.length === 0) return null
+
+  const vp = player.victoryPoints ?? 0
+
+  // 1. Manifest Destiny if it wins the game
+  if (hand.includes('manifest_destiny') && vp + 2 >= 10 && canPlayOmenCard(state, AI_PLAYER_ID as PlayerId, 'manifest_destiny')) {
+    return { cardId: 'manifest_destiny' }
+  }
+
+  // 2. Cost reducers (strategic settlement, master builder, boomtown) when we can use them
+  if (hand.includes('strategic_settlement_spot') && player.settlementsLeft > 0 && canPlayOmenCard(state, AI_PLAYER_ID as PlayerId, 'strategic_settlement_spot')) {
+    return { cardId: 'strategic_settlement_spot' }
+  }
+  if (hand.includes('master_builders_plan') && player.settlementsLeft > 0 && player.roadsLeft > 0 && canPlayOmenCard(state, AI_PLAYER_ID as PlayerId, 'master_builders_plan')) {
+    return { cardId: 'master_builders_plan' }
+  }
+  if (hand.includes('boomtown_growth') && player.settlementsLeft < 5 && canPlayOmenCard(state, AI_PLAYER_ID as PlayerId, 'boomtown_growth')) {
+    return { cardId: 'boomtown_growth' }
+  }
+
+  // 3. Resource gains (immediate value)
+  const resourceCards = ['foragers_bounty', 'skilled_prospector', 'hidden_cache', 'gold_rush'] as const
+  for (const cardId of resourceCards) {
+    if (hand.includes(cardId) && canPlayOmenCard(state, AI_PLAYER_ID as PlayerId, cardId)) {
+      return { cardId }
+    }
+  }
+
+  // 4. Robber's Regret: pick best hex and target (opponent with resources)
+  if (hand.includes('robbers_regret') && canPlayOmenCard(state, AI_PLAYER_ID as PlayerId, 'robbers_regret')) {
+    const hexId = runAIRobberMove(state)
+    const targetPlayerId = runAISelectPlayerToRob(state, hexId)
+    return { cardId: 'robbers_regret', targets: { hexId, targetPlayerId: (targetPlayerId ?? undefined) as PlayerId | undefined } }
+  }
+
+  // 5. Production boosts (reliable harvest, bountiful pastures)
+  if (hand.includes('reliable_harvest') && canPlayOmenCard(state, AI_PLAYER_ID as PlayerId, 'reliable_harvest')) {
+    const hexWithProd = state.hexes.find(h => h.terrain !== 'desert' && h.number != null)
+    return { cardId: 'reliable_harvest', targets: { hexIdForHarvest: hexWithProd?.id } }
+  }
+  if (hand.includes('bountiful_pastures') && canPlayOmenCard(state, AI_PLAYER_ID as PlayerId, 'bountiful_pastures')) {
+    return { cardId: 'bountiful_pastures' }
+  }
+
+  // 6. Other buffs (sturdy wheel, pantry, trade caravan, pathfinder)
+  const otherBuffs = ['sturdy_wagon_wheel', 'well_stocked_pantry', 'friendly_trade_caravan', 'pathfinders_insight'] as const
+  for (const cardId of otherBuffs) {
+    if (hand.includes(cardId) && canPlayOmenCard(state, AI_PLAYER_ID as PlayerId, cardId)) {
+      return { cardId }
+    }
+  }
+
+  return null
 }
