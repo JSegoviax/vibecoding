@@ -341,10 +341,13 @@ function applyDebuffEffect(state: GameState, playerId: PlayerId, cardId: string)
       lostResources = out.removed
       break
     }
-    case 'wagon_overturned':
-      next = removeOneRandomResourceStateOnly(next, playerId)
+    case 'wagon_overturned': {
+      const out = removeOneRandomResource(next, playerId)
+      next = out.state
+      lostResources = out.stolen ? [out.stolen] : undefined
       next = addActiveEffect(next, 'wagon_overturned', playerId, { type: 'cannot_build' }, { turnsRemaining: 1 })
       break
+    }
     case 'dysentery_outbreak':
       next = removeResourceWithPantryCheck(next, playerId, 'wheat', 1)
       next = addActiveEffect(next, 'dysentery_outbreak', playerId, { type: 'no_wheat_production' }, { rollsRemaining: 2 })

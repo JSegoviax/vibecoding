@@ -480,14 +480,14 @@ export function PlayerResources({
                 </div>
               </div>
             )}
-            {/* Build costs inside player card: have/cost and red when insufficient; when Omens enabled, show effective cost and debuff asterisk + tooltip/modal */}
-            {phase === 'playing' && (
+            {/* Build costs inside player card: have/cost and red when insufficient; when Omens enabled, show effective cost and debuff asterisk + tooltip/modal. Shown in setup and playing. */}
+            {(phase === 'setup' || phase === 'playing') && (
               <BuildCostsInline
                 playerResources={p.resources}
-                roadCost={oregonsOmensEnabled && getEffectiveBuildCostForPlayer ? getEffectiveBuildCostForPlayer(p.id, 'road') : undefined}
-                settlementCost={oregonsOmensEnabled && getEffectiveBuildCostForPlayer ? getEffectiveBuildCostForPlayer(p.id, 'settlement') : undefined}
-                cityCost={oregonsOmensEnabled && getEffectiveBuildCostForPlayer ? getEffectiveBuildCostForPlayer(p.id, 'city') : undefined}
-                debuffSources={oregonsOmensEnabled && getBuildCostDebuffSourcesForPlayer ? getBuildCostDebuffSourcesForPlayer(p.id) : undefined}
+                roadCost={phase === 'playing' && oregonsOmensEnabled && getEffectiveBuildCostForPlayer ? getEffectiveBuildCostForPlayer(p.id, 'road') : undefined}
+                settlementCost={phase === 'playing' && oregonsOmensEnabled && getEffectiveBuildCostForPlayer ? getEffectiveBuildCostForPlayer(p.id, 'settlement') : undefined}
+                cityCost={phase === 'playing' && oregonsOmensEnabled && getEffectiveBuildCostForPlayer ? getEffectiveBuildCostForPlayer(p.id, 'city') : undefined}
+                debuffSources={phase === 'playing' && oregonsOmensEnabled && getBuildCostDebuffSourcesForPlayer ? getBuildCostDebuffSourcesForPlayer(p.id) : undefined}
                 getOmenCardName={getOmenCardName}
               />
             )}

@@ -252,14 +252,23 @@ body::before {
   }
 }
 
-/* Game Guide: larger button and modal on touch devices */
+/* Game Guide: on mobile move to bottom so it doesn't obscure the title; larger tap target */
 @media (max-width: 768px) {
   .game-guide-btn {
     padding: 12px 20px !important;
     font-size: 16px !important;
     min-height: 44px !important;
-    top: 8px !important;
-    right: 8px !important;
+    top: auto !important;
+    bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
+    right: max(8px, env(safe-area-inset-right)) !important;
+  }
+}
+
+/* Game page: extra top padding on mobile so title isn't cramped (button is at bottom) */
+@media (max-width: 768px) {
+  .game-page.parchment-page,
+  .game-page {
+    padding-top: 12px !important;
   }
 }
 

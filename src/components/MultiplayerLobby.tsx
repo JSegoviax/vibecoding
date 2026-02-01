@@ -59,6 +59,7 @@ export function MultiplayerLobby({ onBack }: { onBack: () => void }) {
 
   return (
     <div
+      className="parchment-page"
       style={{
         minHeight: '100vh',
         display: 'flex',
@@ -67,125 +68,141 @@ export function MultiplayerLobby({ onBack }: { onBack: () => void }) {
         justifyContent: 'center',
         gap: 24,
         padding: 24,
-        background: 'linear-gradient(180deg, rgb(26, 31, 46) 0%, rgb(45, 55, 72) 100%)',
-        color: 'var(--text)',
+        background: 'var(--parchment-bg)',
+        color: 'var(--ink)',
       }}
     >
-      <h1 style={{ margin: 0, fontSize: 28 }}>Multiplayer</h1>
-      <p style={{ color: 'var(--muted)', margin: 0, maxWidth: 400, textAlign: 'center' }}>
-        Create a game and share the link, or join with a link from a friend.
-      </p>
+      <div className="paper-section" style={{ maxWidth: 480, width: '100%' }}>
+        <h1
+          style={{
+            margin: 0,
+            fontSize: 28,
+            color: 'var(--ink)',
+            fontFamily: '"Old Standard TT", Georgia, "Times New Roman", serif',
+            textTransform: 'uppercase',
+            letterSpacing: 2,
+          }}
+        >
+          Multiplayer
+        </h1>
+        <p style={{ color: 'var(--ink)', opacity: 0.85, margin: 0, maxWidth: 400, textAlign: 'center' }}>
+          Create a game and share the link, or join with a link from a friend.
+        </p>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 280 }}>
-        <div style={{ background: 'var(--surface)', borderRadius: 12, padding: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Create game</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-            <span style={{ color: 'var(--muted)', fontSize: 14 }}>Players:</span>
-            {([2, 3, 4] as const).map(n => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setNumPlayers(n)}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: 8,
-                  border: numPlayers === n ? '2px solid var(--accent)' : '1px solid var(--muted)',
-                  background: numPlayers === n ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-                  color: 'var(--text)',
-                  cursor: 'pointer',
-                  fontWeight: numPlayers === n ? 'bold' : 'normal',
-                }}
-              >
-                {n}
-              </button>
-            ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 280, marginTop: 24 }}>
+          <div style={{ background: 'var(--parchment-section)', borderRadius: 12, padding: 20, border: '1px solid var(--paper-border)' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: 'var(--ink)' }}>Create game</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <span style={{ color: 'var(--ink)', opacity: 0.85, fontSize: 14 }}>Players:</span>
+              {([2, 3, 4] as const).map(n => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setNumPlayers(n)}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    border: numPlayers === n ? '2px solid var(--cta)' : '1px solid var(--paper-border)',
+                    background: numPlayers === n ? 'var(--cta)' : 'transparent',
+                    color: numPlayers === n ? '#fff' : 'var(--ink)',
+                    cursor: 'pointer',
+                    fontWeight: numPlayers === n ? 'bold' : 'normal',
+                  }}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, cursor: 'pointer', fontSize: 14, color: 'var(--ink)' }}>
+              <input
+                type="checkbox"
+                checked={oregonsOmens}
+                onChange={e => setOregonsOmens(e.target.checked)}
+                style={{ width: 18, height: 18 }}
+              />
+              <span>Oregon&apos;s Omens (card variant)</span>
+            </label>
+            <button
+              type="button"
+              disabled={creating}
+              onClick={handleCreate}
+              style={{
+                width: '100%',
+                padding: '12px 24px',
+                fontSize: 16,
+                fontWeight: 'bold',
+                background: 'var(--cta)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                cursor: creating ? 'not-allowed' : 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              }}
+            >
+              {creating ? 'Creating…' : 'Create game'}
+            </button>
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, cursor: 'pointer', fontSize: 14 }}>
+
+          <div style={{ background: 'var(--parchment-section)', borderRadius: 12, padding: 20, border: '1px solid var(--paper-border)' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: 'var(--ink)' }}>Join game</div>
             <input
-              type="checkbox"
-              checked={oregonsOmens}
-              onChange={e => setOregonsOmens(e.target.checked)}
-              style={{ width: 18, height: 18 }}
+              type="text"
+              placeholder="Paste game link or game ID"
+              value={joinGameId}
+              onChange={e => setJoinGameId(e.target.value)}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                padding: '10px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--paper-border)',
+                background: 'var(--parchment-bg)',
+                color: 'var(--ink)',
+                fontSize: 14,
+                marginBottom: 12,
+              }}
             />
-            <span>Oregon&apos;s Omens (card variant)</span>
-          </label>
-          <button
-            type="button"
-            disabled={creating}
-            onClick={handleCreate}
-            style={{
-              width: '100%',
-              padding: '12px 24px',
-              fontSize: 16,
-              fontWeight: 'bold',
-              background: 'var(--accent)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 8,
-              cursor: creating ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {creating ? 'Creating…' : 'Create game'}
-          </button>
+            <button
+              type="button"
+              onClick={handleJoin}
+              style={{
+                width: '100%',
+                padding: '12px 24px',
+                fontSize: 16,
+                fontWeight: 'bold',
+                background: 'transparent',
+                color: 'var(--ink)',
+                border: '2px solid var(--paper-border)',
+                borderRadius: 8,
+                cursor: 'pointer',
+              }}
+            >
+              Join game
+            </button>
+          </div>
         </div>
 
-        <div style={{ background: 'var(--surface)', borderRadius: 12, padding: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Join game</div>
-          <input
-            type="text"
-            placeholder="Paste game link or game ID"
-            value={joinGameId}
-            onChange={e => setJoinGameId(e.target.value)}
-            style={{
-              width: '100%',
-              boxSizing: 'border-box',
-              padding: '10px 12px',
-              borderRadius: 8,
-              border: '1px solid var(--muted)',
-              background: 'var(--background)',
-              color: 'var(--text)',
-              fontSize: 14,
-              marginBottom: 12,
-            }}
-          />
-          <button
-            type="button"
-            onClick={handleJoin}
-            style={{
-              width: '100%',
-              padding: '12px 24px',
-              fontSize: 16,
-              fontWeight: 'bold',
-              background: 'var(--surface)',
-              color: 'var(--text)',
-              border: '2px solid var(--muted)',
-              borderRadius: 8,
-              cursor: 'pointer',
-            }}
-          >
-            Join game
-          </button>
-        </div>
+        {error && <p style={{ color: '#7f1d1d', margin: '16px 0 0', fontSize: 14 }}>{error}</p>}
+
+        <button
+          type="button"
+          onClick={onBack}
+          style={{
+            marginTop: 24,
+            padding: '12px 24px',
+            fontSize: 16,
+            fontWeight: 'bold',
+            background: 'transparent',
+            color: 'var(--ink)',
+            opacity: 0.9,
+            border: '2px solid var(--paper-border)',
+            borderRadius: 8,
+            cursor: 'pointer',
+          }}
+        >
+          Back
+        </button>
       </div>
-
-      {error && <p style={{ color: '#fca5a5', margin: 0, fontSize: 14 }}>{error}</p>}
-
-      <button
-        type="button"
-        onClick={onBack}
-        style={{
-          padding: '12px 24px',
-          fontSize: 16,
-          fontWeight: 'bold',
-          background: 'transparent',
-          color: 'var(--muted)',
-          border: '2px solid var(--muted)',
-          borderRadius: 8,
-          cursor: 'pointer',
-        }}
-      >
-        Back
-      </button>
     </div>
   )
 }

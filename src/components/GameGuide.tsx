@@ -190,7 +190,23 @@ export function GameGuide() {
                   Trading
                 </h3>
                 <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9 }}>
-                  You can trade resources with the bank at a 4:1 ratio. Give 4 of one resource type to receive 1 of another resource type.
+                  You can trade resources with the bank. The default rate is <strong>4:1</strong> — give 4 of one resource type to receive 1 of another. Harbors give you better rates (see below).
+                </p>
+              </section>
+
+              <section>
+                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--cta)' }}>
+                  Harbors
+                </h3>
+                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9, marginBottom: 8 }}>
+                  Harbors are shown on the board along the coast. If you have a <strong>settlement or city</strong> on a vertex connected to a harbor, you can use that harbor when trading with the bank:
+                </p>
+                <ul style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8, color: 'var(--ink)', opacity: 0.9 }}>
+                  <li><strong>2:1 resource harbors</strong> — When you trade the resource shown on the harbor (e.g. Wood, Brick), give only 2 of that resource to get 1 of any other. Each 2:1 harbor applies to one specific resource type.</li>
+                  <li><strong>3:1 generic harbor</strong> — Give 3 of any one resource type to get 1 of another. Better than the default 4:1.</li>
+                </ul>
+                <p style={{ margin: '8px 0 0', lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9 }}>
+                  You only get the harbor rate when your structure is on a vertex that touches that harbor. The trade UI shows your best rate (e.g. “Harbor rate: 2:1”) when you have a matching harbor.
                 </p>
               </section>
 

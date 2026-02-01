@@ -377,7 +377,7 @@ export default function App() {
         >
           <h1 style={{ margin: 0, fontSize: 28 }}>Settlers of Oregon</h1>
           <p style={{ color: 'var(--ink)', opacity: 0.85, margin: 0 }}>Choose game mode</p>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', marginTop: 28 }}>
           <button
             className="mode-btn"
             onClick={() => {
@@ -872,11 +872,11 @@ export default function App() {
                   const isVictim = r.targetPlayerId === viewerId
                   const resourceLabel = r.resource ? TERRAIN_LABELS[r.resource] : ''
                   const msg = isRobber ? `You stole ${resourceLabel}` : isVictim ? `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole your ${resourceLabel}` : `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole ${resourceLabel} from ${game.players[r.targetPlayerId - 1]?.name || `Player ${r.targetPlayerId}`}`
-                  if (isRobber) return { background: 'rgba(22, 163, 74, 0.2)', border: '1px solid rgba(22, 163, 74, 0.5)', color: '#86efac' }
-                  if (isVictim) return { background: 'rgba(185, 28, 28, 0.2)', border: '1px solid rgba(185, 28, 28, 0.5)', color: '#fca5a5' }
+                  if (isRobber) return { background: 'rgba(220, 252, 231, 0.95)', border: '1px solid rgba(22, 163, 74, 0.6)', color: '#14532d' }
+                  if (isVictim) return { background: 'rgba(254, 226, 226, 0.95)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }
                   return { background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.12)', color: 'var(--text)' }
                 })()
-              : { background: 'rgba(185, 28, 28, 0.2)', border: '1px solid rgba(185, 28, 28, 0.5)', color: '#fca5a5' }),
+              : { background: 'rgba(254, 226, 226, 0.95)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }),
             fontSize: 14,
             display: 'flex',
             alignItems: 'center',
