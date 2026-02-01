@@ -255,11 +255,20 @@ export default function App() {
     updateLongestRoad(game)
   }, [game?.edges, game?.vertices])
 
-  // Pathname-based route: /game/:id shows the multiplayer game room (lobby or started)
-  const pathMatch = typeof window !== 'undefined' && window.location.pathname.match(/^\/game\/([a-f0-9-]+)$/i)
+  // Pathname-based routes: /faq, /how-to-play, /game/:id
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '/'
+  const pathMatch = pathname.match(/^\/game\/([a-f0-9-]+)$/i)
+  const fallback = <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(180deg, rgb(26, 31, 46) 0%, rgb(45, 55, 72) 100%)', color: 'var(--text)' }}>Loading…</div>
+
+  if (pathname === '/faq') {
+    return <Suspense fallback={fallback}><FAQPage /></Suspense>
+  }
+  if (pathname === '/how-to-play') {
+    return <Suspense fallback={fallback}><HowToPlayPage /></Suspense>
+  }
   if (pathMatch) {
     return (
-      <Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(180deg, rgb(26, 31, 46) 0%, rgb(45, 55, 72) 100%)', color: 'var(--text)' }}>Loading…</div>}>
+      <Suspense fallback={fallback}>
         <GameRoom gameId={pathMatch[1]} />
       </Suspense>
     )
