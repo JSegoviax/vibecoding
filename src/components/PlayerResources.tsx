@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { TERRAIN_COLORS, TERRAIN_LABELS } from '../game/terrain'
 import { AnimatedResourceIcon } from './AnimatedResourceIcon'
-import { BuildCostsInline } from './BuildCostsLegend'
+import { BuildCostsInline, type BuildCostDebuffSources } from './BuildCostsLegend'
 import type { Terrain } from '../game/types'
 
 const RESOURCE_OPTIONS: Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore']
@@ -17,6 +17,8 @@ export interface PlayerForResources {
   settlementsLeft: number
   citiesLeft: number
   roadsLeft: number
+  /** Oregon's Omens: card IDs in hand (for Omen counter when variant enabled) */
+  omensHand?: string[]
 }
 
 interface PlayerResourcesProps {
