@@ -74,6 +74,8 @@ function updateGameState(g: GameState | null, updater: (state: GameState) => Gam
 }
 
 const GameRoom = lazy(() => import('./components/GameRoom').then(m => ({ default: m.GameRoom })))
+const FAQPage = lazy(() => import('./pages/FAQPage').then(m => ({ default: m.FAQPage })))
+const HowToPlayPage = lazy(() => import('./pages/HowToPlayPage').then(m => ({ default: m.HowToPlayPage })))
 
 type StartScreen = 'mode' | 'colors' | 'multiplayer' | 'game'
 
@@ -281,9 +283,10 @@ export default function App() {
         }}
       >
         <GameGuide />
-        <h1 style={{ margin: 0, fontSize: 28 }}>Settlers of Oregon</h1>
-        <p style={{ color: 'var(--muted)', margin: 0 }}>Choose how to play</p>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <main aria-label="Choose game mode">
+          <h1 style={{ margin: 0, fontSize: 28 }}>Settlers of Oregon</h1>
+          <p style={{ color: 'var(--muted)', margin: 0 }}>Choose how to play</p>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button
             className="mode-btn"
             onClick={() => {
@@ -324,6 +327,11 @@ export default function App() {
             Multiplayer
           </button>
         </div>
+        <p style={{ marginTop: 16, fontSize: 14, color: 'var(--muted)' }}>
+          <a href="/how-to-play" style={{ color: 'var(--accent)', textDecoration: 'none', marginRight: 16 }}>How to play</a>
+          <a href="/faq" style={{ color: 'var(--accent)', textDecoration: 'none' }}>FAQ</a>
+        </p>
+        </main>
       </div>
     )
   }

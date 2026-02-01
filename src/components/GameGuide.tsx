@@ -1,8 +1,31 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { trackEvent } from '../utils/analytics'
+
+function shouldOpenGuideFromHash(): boolean {
+  const hash = typeof window !== 'undefined' ? window.location.hash : ''
+  if (!hash) return false
+  if (hash === '#guide' || hash === '#game-guide') return true
+  // Google "Read more" and similar links use text fragments like #:~:text=Game%20Guide
+  if (hash.startsWith('#:~:text=') && /Guide/i.test(decodeURIComponent(hash))) return true
+  return false
+}
 
 export function GameGuide() {
   const [isOpen, setIsOpen] = useState(false)
+
+  useEffect(() => {
+    if (shouldOpenGuideFromHash()) {
+      setIsOpen(true)
+      if (window.location.hash !== '#guide') {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search + '#guide')
+      }
+    }
+    const onHashChange = () => {
+      if (shouldOpenGuideFromHash()) setIsOpen(true)
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
 
   const handleOpen = () => {
     trackEvent('guide_opened', 'navigation', 'game_guide')
@@ -12,6 +35,9 @@ export function GameGuide() {
   const handleClose = () => {
     trackEvent('guide_closed', 'navigation', 'game_guide')
     setIsOpen(false)
+    if (typeof window !== 'undefined' && (window.location.hash === '#guide' || window.location.hash === '#game-guide' || window.location.hash.startsWith('#:~:text='))) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
   }
 
   return (
