@@ -405,10 +405,26 @@ export function PlayerResources({
                       </>
                     )
                   })()}
-                  <button
-                    onClick={() => { onSetTradeFormOpen?.(!tradeFormOpen); onSetErrorMessage?.(null) }}
-                    style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: tradeFormOpen ? 'rgba(100,181,246,0.3)' : 'transparent', color: 'var(--text)', cursor: 'pointer', fontSize: 12 }}
-                  >Trade (4:1)</button>
+                  {(() => {
+                    const canAffordAnyTrade = getTradeRate && RESOURCE_OPTIONS.some((t) => (p.resources[t] || 0) >= getTradeRate(t as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'))
+                    const tradeDisabled = !canAffordAnyTrade
+                    return (
+                      <button
+                        disabled={tradeDisabled}
+                        onClick={() => { if (!tradeDisabled) { onSetTradeFormOpen?.(!tradeFormOpen); onSetErrorMessage?.(null) } }}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: 6,
+                          border: '1px solid var(--muted)',
+                          background: tradeFormOpen ? 'rgba(100,181,246,0.3)' : 'transparent',
+                          color: tradeDisabled ? 'var(--muted)' : 'var(--text)',
+                          cursor: tradeDisabled ? 'not-allowed' : 'pointer',
+                          fontSize: 12,
+                          ...(tradeDisabled ? { opacity: 0.5 } : {}),
+                        }}
+                      >Trade (4:1)</button>
+                    )
+                  })()}
                 </div>
                 {tradeFormOpen && onSetTradeGive && onSetTradeGet && tradeGive && tradeGet && (() => {
                   const tradeRate = getTradeRate && tradeGive !== 'desert' ? getTradeRate(tradeGive as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') : 4
