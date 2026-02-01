@@ -104,6 +104,7 @@ export default function App() {
   useEffect(() => {
     const titles: Record<StartScreen, string> = {
       mode: 'Settlers of Oregon – Catan-Style Board Game Online',
+      'ai-count': 'Settlers of Oregon – Play vs AI',
       colors: 'Settlers of Oregon – Choose Your Color',
       multiplayer: 'Settlers of Oregon – Multiplayer',
       game: 'Settlers of Oregon – Game',
