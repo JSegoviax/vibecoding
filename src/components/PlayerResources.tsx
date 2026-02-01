@@ -70,6 +70,10 @@ interface PlayerResourcesProps {
   activeOmensEffects?: Array<{ cardId: string; turnsRemaining?: number; rollsRemaining?: number; appliedEffect: Record<string, unknown> }>
   /** Oregon's Omens: get short description for an active effect */
   getActiveEffectDescription?: (effect: { cardId: string; turnsRemaining?: number; rollsRemaining?: number; appliedEffect: Record<string, unknown> }) => string
+  /** Oregon's Omens: effective build cost per structure (for debuff UI); when provided, build cost rows use this and show asterisk + tooltip for debuffed resources */
+  getEffectiveBuildCostForPlayer?: (playerId: number, structure: 'road' | 'settlement' | 'city') => Partial<Record<Terrain, number>>
+  /** Oregon's Omens: which cards are increasing each resource's cost per structure (for asterisk tooltip/modal) */
+  getBuildCostDebuffSourcesForPlayer?: (playerId: number) => BuildCostDebuffSources
 }
 
 function ResourceChip({ type, count, flash }: { type: Terrain; count: number; flash?: boolean }) {
@@ -194,6 +198,8 @@ export function PlayerResources({
   getOmenCardEffectText = () => '',
   activeOmensEffects = [],
   getActiveEffectDescription,
+  getEffectiveBuildCostForPlayer,
+  getBuildCostDebuffSourcesForPlayer,
 }: PlayerResourcesProps) {
   const [omensCardDetailId, setOmensCardDetailId] = useState<string | null>(null)
   return (
@@ -229,6 +235,26 @@ export function PlayerResources({
                   flash={lastResourceFlash?.[i]?.includes(t)}
                 />
               ))}
+              {oregonsOmensEnabled && (
+                <div
+                  className="resource-chip"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '3px 8px',
+                    borderRadius: 6,
+                    background: 'rgba(139, 92, 246, 0.25)',
+                    border: '1px solid rgba(139, 92, 246, 0.6)',
+                    fontSize: 11,
+                    color: 'var(--text)',
+                  }}
+                  title="Omen cards in hand"
+                >
+                  <span style={{ fontWeight: 500 }}>Omen</span>
+                  <span style={{ fontWeight: 600, marginLeft: 2 }}>{p.omensHand?.length ?? 0}</span>
+                </div>
+              )}
             </div>
             {showControls && lastDice == null && (
               <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
@@ -429,9 +455,9 @@ export function PlayerResources({
               <div style={{ marginTop: 8, padding: 8, borderRadius: 8, background: 'rgba(139,69,19,0.15)', border: '1px solid rgba(139,69,19,0.4)' }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>Omen cards</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {omensHand.map((cardId: string) => (
+                  {omensHand.map((cardId: string, idx: number) => (
                     <button
-                      key={cardId}
+                      key={`${cardId}-${idx}`}
                       onClick={() => setOmensCardDetailId(cardId)}
                       style={{
                         padding: '6px 10px',
@@ -452,8 +478,17 @@ export function PlayerResources({
                 </div>
               </div>
             )}
-            {/* Build costs inside player card: have/cost and red when insufficient */}
-            {phase === 'playing' && <BuildCostsInline playerResources={p.resources} />}
+            {/* Build costs inside player card: have/cost and red when insufficient; when Omens enabled, show effective cost and debuff asterisk + tooltip/modal */}
+            {phase === 'playing' && (
+              <BuildCostsInline
+                playerResources={p.resources}
+                roadCost={oregonsOmensEnabled && getEffectiveBuildCostForPlayer ? getEffectiveBuildCostForPlayer(p.id, 'road') : undefined}
+                settlementCost={oregonsOmensEnabled && getEffectiveBuildCostForPlayer ? getEffectiveBuildCostForPlayer(p.id, 'settlement') : undefined}
+                cityCost={oregonsOmensEnabled && getEffectiveBuildCostForPlayer ? getEffectiveBuildCostForPlayer(p.id, 'city') : undefined}
+                debuffSources={oregonsOmensEnabled && getBuildCostDebuffSourcesForPlayer ? getBuildCostDebuffSourcesForPlayer(p.id) : undefined}
+                getOmenCardName={getOmenCardName}
+              />
+            )}
           </div>
         )
       })}

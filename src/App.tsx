@@ -40,6 +40,7 @@ import {
   getOmenCardName,
   getOmenCardEffectText,
   getEffectiveBuildCost,
+  getBuildCostDebuffSources,
   consumeCostEffectAfterBuild,
   consumeFreeBuildEffect,
   canBuildThisTurn,
@@ -684,29 +685,31 @@ export default function App() {
 
       {/* Robber's Regret: select player to rob (or skip) */}
       {isPlaying && omenRobberMode?.step === 'player' && omenRobberMode.hexId && (
-        <div style={{ margin: '0 auto 16px', maxWidth: 400, padding: 12, borderRadius: 8, background: 'rgba(139,69,19,0.15)', border: '1px solid rgba(139,69,19,0.4)', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 13, color: 'var(--text)', width: '100%' }}>Steal from:</span>
-          {Array.from(omenRobberMode.playersOnHex ?? []).map(pid => (
+        <div style={{ margin: '0 auto 16px', maxWidth: 400, padding: 12, borderRadius: 8, background: 'rgba(139,69,19,0.15)', border: '1px solid rgba(139,69,19,0.4)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, color: 'var(--text)', textAlign: 'center' }}>Steal from:</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+            {Array.from(omenRobberMode.playersOnHex ?? []).map(pid => (
+              <button
+                key={pid}
+                onClick={() => {
+                  setGame(playOmenCard(game, actualPlayerId as PlayerId, 'robbers_regret', { hexId: omenRobberMode.hexId, targetPlayerId: pid as PlayerId }))
+                  setOmenRobberMode(null)
+                }}
+                style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontSize: 12 }}
+              >
+                {game.players[pid - 1]?.name ?? `Player ${pid}`}
+              </button>
+            ))}
             <button
-              key={pid}
               onClick={() => {
-                setGame(playOmenCard(game, actualPlayerId as PlayerId, 'robbers_regret', { hexId: omenRobberMode.hexId, targetPlayerId: pid as PlayerId }))
+                setGame(playOmenCard(game, actualPlayerId as PlayerId, 'robbers_regret', { hexId: omenRobberMode.hexId }))
                 setOmenRobberMode(null)
               }}
-              style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontSize: 12 }}
+              style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12 }}
             >
-              {game.players[pid - 1]?.name ?? `Player ${pid}`}
+              Skip (move robber only)
             </button>
-          ))}
-          <button
-            onClick={() => {
-              setGame(playOmenCard(game, actualPlayerId as PlayerId, 'robbers_regret', { hexId: omenRobberMode.hexId }))
-              setOmenRobberMode(null)
-            }}
-            style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--muted)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12 }}
-          >
-            Skip (move robber only)
-          </button>
+          </div>
         </div>
       )}
 
@@ -731,6 +734,17 @@ export default function App() {
         >
           <span>
             You drew a debuff: <strong>{getOmenCardName(game.lastOmenDebuffDrawn.cardId)}</strong> — {getOmenCardEffectText(game.lastOmenDebuffDrawn.cardId)}
+            {game.lastOmenDebuffDrawn.lostResources?.length ? (
+              <> You lost: {(() => {
+                const counts: Record<string, number> = {}
+                for (const t of game.lastOmenDebuffDrawn.lostResources!) {
+                  counts[t] = (counts[t] ?? 0) + 1
+                }
+                return Object.entries(counts)
+                  .map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`)
+                  .join(', ')
+              })()}</>
+            ) : null}
           </span>
           <button onClick={() => setGame(g => g ? { ...g, lastOmenDebuffDrawn: null } : g)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
         </div>
@@ -806,7 +820,13 @@ export default function App() {
             highlightedEdges={highlightedEdges}
             robberHexId={game.robberHexId}
             selectableRobberHexes={selectableRobberHexes}
-            selectHex={robberMode.moving ? handleSelectRobberHex : undefined}
+            selectHex={
+              omenRobberMode?.step === 'hex'
+                ? handleSelectOmenRobberHex
+                : robberMode.moving
+                  ? handleSelectRobberHex
+                  : undefined
+            }
             harbors={game.harbors}
             players={game.players.map(p => ({ colorImage: p.colorImage, color: p.color }))}
             activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
@@ -892,6 +912,8 @@ export default function App() {
             getOmenCardEffectText={getOmenCardEffectText}
             activeOmensEffects={isOmensEnabled(game) ? getActiveEffectsForPlayer(game, actualPlayerId as PlayerId) : []}
             getActiveEffectDescription={getActiveEffectDescription}
+            getEffectiveBuildCostForPlayer={isOmensEnabled(game) ? (pid, structure) => getEffectiveBuildCost(game, pid as PlayerId, structure) : undefined}
+            getBuildCostDebuffSourcesForPlayer={isOmensEnabled(game) ? (pid) => getBuildCostDebuffSources(game, pid as PlayerId) : undefined}
           />
 
           {game.phase === 'setup' && (

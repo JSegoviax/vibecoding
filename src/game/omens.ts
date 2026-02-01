@@ -118,7 +118,7 @@ export function getOmenCardEffectText(cardId: string): string {
     dysentery_outbreak: 'Lose 1 Wheat; no Wheat production for 2 rolls.',
     mass_exodus: 'Remove one of your settlements; lose 1 VP.',
     wagon_overturned: 'Lose 1 random resource; cannot build next turn.',
-    robber_barons_demand: "Robber moves; next player steals from you.",
+    robber_barons_demand: "Two effects: the robber is placed on a random hex, then the next player (in turn order) immediately steals one random resource from you.",
     famine_pestilence: 'Next roll: no production for you.',
   }
   return short[cardId] ?? 'Play this card.'
@@ -265,11 +265,16 @@ function removeOneRandomResourceStateOnly(state: GameState, playerId: PlayerId):
   return removeOneRandomResource(state, playerId).state
 }
 
-/** Remove up to `count` random resources (each can be negated by Pantry once). */
-function removeRandomResources(state: GameState, playerId: PlayerId, count: number): GameState {
+/** Remove up to `count` random resources (each can be negated by Pantry once). Returns new state and list of resource types actually removed (for UI). */
+function removeRandomResources(state: GameState, playerId: PlayerId, count: number): { state: GameState; removed: Terrain[] } {
   let next = state
-  for (let i = 0; i < count; i++) next = removeOneRandomResource(next, playerId).state
-  return next
+  const removed: Terrain[] = []
+  for (let i = 0; i < count; i++) {
+    const { state: s, stolen } = removeOneRandomResource(next, playerId)
+    next = s
+    if (stolen) removed.push(stolen)
+  }
+  return { state: next, removed }
 }
 
 function addVP(state: GameState, playerId: PlayerId, delta: number): GameState {
@@ -310,11 +315,12 @@ function drawRandomResourcesFromBank(state: GameState, playerId: PlayerId, count
   return next
 }
 
-/** Apply debuff effect (Phase 3). */
-function applyDebuffEffect(state: GameState, playerId: PlayerId, cardId: string): GameState {
+/** Apply debuff effect (Phase 3). Returns { state, lostResources? } so UI can show what was lost (e.g. lost_supplies). */
+function applyDebuffEffect(state: GameState, playerId: PlayerId, cardId: string): GameState | { state: GameState; lostResources?: Terrain[] } {
   const victimIndex = state.players.findIndex(p => p.id === playerId)
   if (victimIndex < 0) return state
   let next = state
+  let lostResources: Terrain[] | undefined
 
   switch (cardId) {
     case 'dust_storm':
@@ -323,12 +329,18 @@ function applyDebuffEffect(state: GameState, playerId: PlayerId, cardId: string)
     case 'smallpox_scare':
       next = addVP(next, playerId, -1)
       break
-    case 'lost_supplies':
-      next = removeRandomResources(next, playerId, 2)
+    case 'lost_supplies': {
+      const out = removeRandomResources(next, playerId, 2)
+      next = out.state
+      lostResources = out.removed
       break
-    case 'bandit_ransom':
-      next = removeRandomResources(next, playerId, 2)
+    }
+    case 'bandit_ransom': {
+      const out = removeRandomResources(next, playerId, 2)
+      next = out.state
+      lostResources = out.removed
       break
+    }
     case 'wagon_overturned':
       next = removeOneRandomResourceStateOnly(next, playerId)
       next = addActiveEffect(next, 'wagon_overturned', playerId, { type: 'cannot_build' }, { turnsRemaining: 1 })
@@ -382,29 +394,32 @@ function applyDebuffEffect(state: GameState, playerId: PlayerId, cardId: string)
       next = addActiveEffect(next, 'poor_trade_season', playerId, { type: 'trade_worse', tradesLeft: 2 })
       break
     case 'mass_exodus': {
-      const verts = Object.entries(state.vertices).filter(
+      const settlementVerts = Object.entries(next.vertices).filter(
         ([_, v]) => v.structure?.player === playerId && v.structure?.type === 'settlement'
       )
-      if (verts.length > 0) {
-        const [vid] = verts[Math.floor(Math.random() * verts.length)]
+      let newVertices = next.vertices
+      let settlementRemoved = false
+      if (settlementVerts.length > 0) {
+        const [vid] = settlementVerts[Math.floor(Math.random() * settlementVerts.length)]
         const v = next.vertices[vid]
         if (v?.structure) {
-          const verts2 = { ...next.vertices }
-          verts2[vid] = { ...v, structure: undefined }
-          const players = next.players.map(p =>
-            p.id === playerId
-              ? { ...p, settlementsLeft: p.settlementsLeft + 1, victoryPoints: Math.max(0, p.victoryPoints - 1) }
-              : p
-          )
-          next = { ...next, vertices: verts2, players }
+          newVertices = { ...next.vertices, [vid]: { ...v, structure: undefined } }
+          settlementRemoved = true
         }
       }
+      const newPlayers = next.players.map(p => {
+        if (p.id !== playerId) return p
+        const newVP = Math.max(0, (p.victoryPoints ?? 0) - 1)
+        const newSettlementsLeft = settlementRemoved ? (p.settlementsLeft ?? 0) + 1 : (p.settlementsLeft ?? 0)
+        return { ...p, victoryPoints: newVP, settlementsLeft: newSettlementsLeft }
+      })
+      next = { ...next, vertices: newVertices, players: newPlayers }
       break
     }
     default:
       break
   }
-  return next
+  return lostResources !== undefined ? { state: next, lostResources } : next
 }
 
 /**
@@ -452,8 +467,10 @@ export function drawOmenCard(state: GameState, playerId: PlayerId): GameState {
     players: newPlayers,
   }
   if (DEBUFF_SET.has(drawnCardId)) {
-    result = applyDebuffEffect(result, playerId, drawnCardId)
-    result = { ...result, lastOmenDebuffDrawn: { cardId: drawnCardId, playerId } }
+    const applied = applyDebuffEffect(result, playerId, drawnCardId)
+    const nextState = 'state' in applied ? applied.state : applied
+    const lostResources = 'lostResources' in applied ? applied.lostResources : undefined
+    result = { ...nextState, lastOmenDebuffDrawn: { cardId: drawnCardId, playerId, ...(lostResources?.length ? { lostResources } : {}) } }
   }
   return result
 }
@@ -663,6 +680,33 @@ export function getEffectiveBuildCost(
   return cost
 }
 
+/** Which cards (by cardId) are increasing each resource's build cost for a player. Used for UI asterisk + tooltip. */
+export function getBuildCostDebuffSources(
+  state: GameState,
+  playerId: PlayerId
+): { road: Partial<Record<Terrain, string[]>>; settlement: Partial<Record<Terrain, string[]>>; city: Partial<Record<Terrain, string[]>> } {
+  const out = {
+    road: {} as Partial<Record<Terrain, string[]>>,
+    settlement: {} as Partial<Record<Terrain, string[]>>,
+    city: {} as Partial<Record<Terrain, string[]>>,
+  }
+  if (!isOmensEnabled(state)) return out
+  const effects = state.activeOmensEffects ?? []
+  const playerEffects = effects.filter(e => e.playerId === playerId)
+  for (const e of playerEffects) {
+    const a = e.appliedEffect
+    if (a?.type !== 'cost_mod') continue
+    const structure = a.structure as 'road' | 'settlement' | 'city'
+    const map = out[structure]
+    if ((a.wood as number) > 0) (map.wood = map.wood ?? []).push(e.cardId)
+    if ((a.brick as number) > 0) (map.brick = map.brick ?? []).push(e.cardId)
+    if ((a.sheep as number) > 0) (map.sheep = map.sheep ?? []).push(e.cardId)
+    if ((a.wheat as number) > 0) (map.wheat = map.wheat ?? []).push(e.cardId)
+    if ((a.ore as number) > 0) (map.ore = map.ore ?? []).push(e.cardId)
+  }
+  return out
+}
+
 /** Consume one-use cost effects after building (sturdy_wagon_wheel, strategic_settlement_spot, worn_out_tool, broken_wagon_axle). */
 export function consumeCostEffectAfterBuild(
   state: GameState,
@@ -736,7 +780,7 @@ export function getActiveEffectDescription(effect: { cardId: string; turnsRemain
     const struct = a.structure as string
     if (a.discount === 'wood') return `${name}: next road −1 Wood`
     if (a.discount === 'brick') return `${name}: next road −1 Brick`
-    if (a.override && struct === 'settlement') return `${name}: next settlement at road cost`
+    if (a.override && struct === 'settlement') return `${name}: next settlement costs 1 Wood, 1 Brick`
     if (a.sheep === 1) return `${name}: next settlement +1 Sheep`
     if (a.wood === 1) return `${name}: next road +1 Wood`
   }

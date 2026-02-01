@@ -98,6 +98,6 @@ export interface GameState {
   omensDiscardPile?: string[]
   /** Oregon's Omens: ongoing effects (only when Omens enabled) */
   activeOmensEffects?: ActiveOmenEffect[]
-  /** Oregon's Omens: last debuff drawn (for UI feedback banner); cleared on dismiss */
-  lastOmenDebuffDrawn?: { cardId: string; playerId: PlayerId } | null
+  /** Oregon's Omens: last debuff drawn (for UI feedback banner); cleared on dismiss. lostResources set for lost_supplies (and similar) so UI can show what was lost. */
+  lastOmenDebuffDrawn?: { cardId: string; playerId: PlayerId; lostResources?: Terrain[] } | null
 }
