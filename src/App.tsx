@@ -77,12 +77,12 @@ const GameRoom = lazy(() => import('./components/GameRoom').then(m => ({ default
 const FAQPage = lazy(() => import('./pages/FAQPage').then(m => ({ default: m.FAQPage })))
 const HowToPlayPage = lazy(() => import('./pages/HowToPlayPage').then(m => ({ default: m.HowToPlayPage })))
 
-type StartScreen = 'mode' | 'colors' | 'multiplayer' | 'game'
+type StartScreen = 'mode' | 'ai-count' | 'colors' | 'multiplayer' | 'game'
 
 export default function App() {
   const [startScreen, setStartScreen] = useState<StartScreen>('mode')
   const [, setSelectedColors] = useState<string[]>([])
-  const [numPlayers] = useState<2 | 3 | 4>(2)
+  const [numPlayers, setNumPlayers] = useState<2 | 3 | 4>(2)
   const showColorSelection = startScreen === 'colors'
   const [game, setGame] = useState<ReturnType<typeof createInitialState> | null>(null)
   const [buildMode, setBuildMode] = useState<'road' | 'settlement' | 'city' | null>(null)
@@ -130,10 +130,11 @@ export default function App() {
 
   // AI: setup — place settlement then road
   useEffect(() => {
-    if (!game || game.phase !== 'setup' || setupPlayerIndex !== 1 || setupPendingVertexId) return
+    if (!game || game.phase !== 'setup' || setupPlayerIndex === 0 || setupPendingVertexId) return
     const t = setTimeout(() => {
       try {
-        const { vertexId, edgeId } = runAISetup(game)
+        const aiPlayerId = (setupPlayerIndex + 1) as PlayerId
+        const { vertexId, edgeId } = runAISetup(game, aiPlayerId)
         aiNextRoadEdge.current = edgeId
         handleSelectVertex(vertexId)
       } catch {
@@ -153,16 +154,16 @@ export default function App() {
     return () => clearTimeout(t)
   }, [setupPendingVertexId])
 
-  // AI: playing — roll, then build or end
+  // AI: playing — roll, then build or end (any AI: index 1, 2, or 3)
   useEffect(() => {
-    if (!game || game.phase !== 'playing' || game.currentPlayerIndex !== 1 || game.lastDice || winner || diceRolling) return
+    if (!game || game.phase !== 'playing' || game.currentPlayerIndex === 0 || game.lastDice || winner || diceRolling) return
     const t = setTimeout(() => handleRoll(), 300)
     return () => clearTimeout(t)
   }, [game?.phase, game?.currentPlayerIndex, game?.lastDice, winner, diceRolling])
 
-  // AI: handle robber move when 7 is rolled
+  // AI: handle robber move when 7 is rolled (any AI)
   useEffect(() => {
-    if (!game || game.phase !== 'playing' || game.currentPlayerIndex !== 1 || !game.lastDice || game.lastDice[0] + game.lastDice[1] !== 7 || !robberMode.moving || winner) return
+    if (!game || game.phase !== 'playing' || game.currentPlayerIndex === 0 || !game.lastDice || game.lastDice[0] + game.lastDice[1] !== 7 || !robberMode.moving || winner) return
     const t = setTimeout(() => {
       const hexId = runAIRobberMove(game)
       handleSelectRobberHex(hexId)
@@ -172,9 +173,10 @@ export default function App() {
 
   // AI: select player to rob
   useEffect(() => {
-    if (!game || game.phase !== 'playing' || game.currentPlayerIndex !== 1 || !robberMode.newHexId || robberMode.playersToRob.size === 0 || winner) return
+    if (!game || game.phase !== 'playing' || game.currentPlayerIndex === 0 || !robberMode.newHexId || robberMode.playersToRob.size === 0 || winner) return
     const t = setTimeout(() => {
-      const targetPlayerId = runAISelectPlayerToRob(game, robberMode.newHexId!)
+      const aiPlayerId = (game.currentPlayerIndex + 1) as PlayerId
+      const targetPlayerId = runAISelectPlayerToRob(game, robberMode.newHexId!, aiPlayerId)
       if (targetPlayerId) {
         handleSelectPlayerToRob(targetPlayerId)
       } else {
@@ -190,19 +192,20 @@ export default function App() {
   }, [robberMode.newHexId, robberMode.playersToRob, game?.phase, game?.currentPlayerIndex, winner])
 
   useEffect(() => {
-    if (!game || game.phase !== 'playing' || game.currentPlayerIndex !== 1 || !game.lastDice || winner || buildMode || robberMode.moving || robberMode.newHexId || omenRobberMode) return
+    if (!game || game.phase !== 'playing' || game.currentPlayerIndex === 0 || !game.lastDice || winner || buildMode || robberMode.moving || robberMode.newHexId || omenRobberMode) return
     const t = setTimeout(() => {
-      const playOmen = runAIPlayOmen(game)
+      const aiPlayerId = (game.currentPlayerIndex + 1) as PlayerId
+      const playOmen = runAIPlayOmen(game, aiPlayerId)
       if (playOmen) {
-        setGame(playOmenCard(game, 2, playOmen.cardId, playOmen.targets))
+        setGame(playOmenCard(game, aiPlayerId, playOmen.cardId, playOmen.targets))
         return
       }
-      const trade = runAITrade(game)
+      const trade = runAITrade(game, aiPlayerId)
       if (trade) {
         handleTrade(trade.give as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', trade.get as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')
         return
       }
-      const decision = runAITurn(game)
+      const decision = runAITurn(game, aiPlayerId)
       if (decision.action === 'end') {
         handleEndTurn()
       } else {
@@ -275,10 +278,10 @@ export default function App() {
   }
 
   // Now we can do early returns after all hooks are called
-  if (startScreen === 'mode') {
+  if (startScreen === 'ai-count') {
     return (
       <div
-        className="mode-select"
+        className="mode-select home-page parchment-page"
         style={{
           minHeight: '100vh',
           display: 'flex',
@@ -287,31 +290,109 @@ export default function App() {
           justifyContent: 'center',
           gap: 24,
           padding: 24,
-          background: 'linear-gradient(180deg, rgb(26, 31, 46) 0%, rgb(45, 55, 72) 100%)',
-          color: 'var(--text)',
+          background: 'var(--parchment-bg)',
+          color: 'var(--ink)',
         }}
       >
         <GameGuide />
-        <main aria-label="Choose game mode">
+        <main
+          aria-label="Choose number of AI opponents"
+          className="paper-section"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+          }}
+        >
+          <h1 style={{ margin: 0, fontSize: 28 }}>Play vs AI</h1>
+          <p style={{ color: 'var(--ink)', opacity: 0.85, margin: 0 }}>How many AI opponents?</p>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {([1, 2, 3] as const).map(count => (
+              <button
+                key={count}
+                className="mode-btn"
+                onClick={() => {
+                  trackEvent('play_vs_ai_clicked', 'navigation', 'ai_count', count)
+                  setNumPlayers((count + 1) as 2 | 3 | 4)
+                  setStartScreen('colors')
+                }}
+                style={{
+                  padding: '16px 32px',
+                  fontSize: 18,
+                  fontWeight: 'bold',
+                  background: count === 1 ? 'var(--cta)' : 'var(--accent-sage)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 12,
+                  cursor: 'pointer',
+                  boxShadow: count === 1 ? '0 4px 14px rgba(0,0,0,0.15)' : '0 2px 8px rgba(0,0,0,0.1)',
+                }}
+              >
+                {count} AI {count === 1 ? 'opponent' : 'opponents'}
+              </button>
+            ))}
+          </div>
+          <p style={{ marginTop: 16, fontSize: 14, color: 'var(--ink)', opacity: 0.8 }}>
+            <button
+              type="button"
+              onClick={() => setStartScreen('mode')}
+              style={{ background: 'none', border: 'none', color: 'var(--cta)', cursor: 'pointer', fontSize: 14, textDecoration: 'underline' }}
+            >
+              ← Back
+            </button>
+          </p>
+        </main>
+      </div>
+    )
+  }
+
+  if (startScreen === 'mode') {
+    return (
+      <div
+        className="mode-select home-page"
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 24,
+          padding: 24,
+          background: 'var(--parchment-bg)',
+          color: 'var(--ink)',
+        }}
+      >
+        <GameGuide />
+        <main
+          aria-label="Choose game mode"
+          className="paper-section"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+          }}
+        >
           <h1 style={{ margin: 0, fontSize: 28 }}>Settlers of Oregon</h1>
-          <p style={{ color: 'var(--muted)', margin: 0 }}>Choose how to play</p>
+          <p style={{ color: 'var(--ink)', opacity: 0.85, margin: 0 }}>Choose game mode</p>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button
             className="mode-btn"
             onClick={() => {
               trackEvent('play_vs_ai_clicked', 'navigation', 'mode_select')
-              setStartScreen('colors')
+              setStartScreen('ai-count')
             }}
             style={{
               padding: '16px 32px',
               fontSize: 18,
               fontWeight: 'bold',
-              background: 'var(--accent)',
+              background: 'var(--cta)',
               color: '#fff',
               border: 'none',
               borderRadius: 12,
               cursor: 'pointer',
-              boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
             }}
           >
             Play vs AI
@@ -326,19 +407,20 @@ export default function App() {
               padding: '16px 32px',
               fontSize: 18,
               fontWeight: 'bold',
-              background: 'var(--surface)',
-              color: 'var(--text)',
-              border: '2px solid var(--muted)',
+              background: 'var(--accent-sage)',
+              color: '#fff',
+              border: 'none',
               borderRadius: 12,
               cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
             }}
           >
             Multiplayer
           </button>
         </div>
-        <p style={{ marginTop: 16, fontSize: 14, color: 'var(--muted)' }}>
-          <a href="/how-to-play" style={{ color: 'var(--accent)', textDecoration: 'none', marginRight: 16 }}>How to play</a>
-          <a href="/faq" style={{ color: 'var(--accent)', textDecoration: 'none' }}>FAQ</a>
+        <p style={{ marginTop: 16, marginBottom: 0, fontSize: 14, color: 'var(--ink)', opacity: 0.8 }}>
+          <a href="/how-to-play" style={{ color: 'var(--cta)', textDecoration: 'none', marginRight: 16 }}>How to play</a>
+          <a href="/faq" style={{ color: 'var(--cta)', textDecoration: 'none' }}>FAQ</a>
         </p>
         </main>
       </div>
@@ -357,7 +439,13 @@ export default function App() {
   }
 
   if (showColorSelection) {
-    return <ColorSelection numPlayers={numHumanPlayers} onColorsSelected={handleColorsSelected} />
+    return (
+      <ColorSelection
+        numPlayers={numHumanPlayers}
+        onColorsSelected={handleColorsSelected}
+        onBack={() => setStartScreen('mode')}
+      />
+    )
   }
 
   if (!game) {
@@ -380,7 +468,7 @@ export default function App() {
   }
 
   const isSetupRoad = game.phase === 'setup' && setupPendingVertexId != null
-  const isAITurn = n === 2 && (game.phase === 'setup' ? actualSetupPlayerIndex === 1 : game.currentPlayerIndex === 1)
+  const isAITurn = (game.phase === 'setup' ? actualSetupPlayerIndex !== 0 : game.currentPlayerIndex !== 0)
   const placeableVertices = new Set(
     isAITurn ? [] : game.phase === 'setup' && !isSetupRoad
       ? getPlaceableVertices(game, playerId)
@@ -686,7 +774,7 @@ export default function App() {
   const isPlaying = game.phase === 'playing' && !actualWinner
 
   return (
-    <div className="game-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
+    <div className="game-page parchment-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
       <GameGuide />
       <h1 className="game-title" style={{ textAlign: 'center', marginBottom: '0.5rem' }}>Settlers of Oregon</h1>
       <p className="game-subtitle" style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 0 }}>
@@ -935,13 +1023,13 @@ export default function App() {
 
           {game.phase === 'setup' && (
             <p style={{ fontSize: 14, color: 'var(--muted)' }}>
-              {isAITurn ? 'Player 2 (AI) is placing…' : !isSetupRoad ? 'Click an empty spot to place a settlement.' : 'Click an edge connected to your settlement to place a road.'}
+              {isAITurn ? `${actualCurrentPlayer?.name ?? 'AI'} is placing…` : !isSetupRoad ? 'Click an empty spot to place a settlement.' : 'Click an edge connected to your settlement to place a road.'}
             </p>
           )}
 
           {isPlaying && isAITurn && (
             <p style={{ fontSize: 14, color: 'var(--muted)' }}>
-              {game.lastDice ? `Player 2 (AI) rolled ${game.lastDice[0]} + ${game.lastDice[1]} = ${game.lastDice[0] + game.lastDice[1]}` : 'Player 2 (AI) is thinking…'}
+              {game.lastDice ? `${actualCurrentPlayer?.name ?? 'AI'} rolled ${game.lastDice[0]} + ${game.lastDice[1]} = ${game.lastDice[0] + game.lastDice[1]}` : `${actualCurrentPlayer?.name ?? 'AI'} is thinking…`}
             </p>
           )}
 

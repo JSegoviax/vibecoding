@@ -13,6 +13,13 @@
   --p2: #1e88e5;
   --p3: #43a047;
   --p4: #fb8c00;
+  /* Oregon Trail homepage palette */
+  --parchment-bg: #F6EEE3;
+  --parchment-section: #EEE7D7;
+  --ink: #2A1A0A;
+  --cta: #D58258;
+  --accent-sage: #8BAE9B;
+  --paper-border: #D9BDA5;
 }
 
 * {
@@ -39,6 +46,83 @@ body {
   color: var(--text);
   min-height: 100vh;
   overflow-x: hidden;
+}
+
+/* Subtle grain overlay (optional, very low opacity) */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  opacity: 0.04;
+  pointer-events: none;
+  background-image: url("https://www.transparenttextures.com/patterns/stardust.png");
+  z-index: 9999;
+}
+
+/* Homepage: Oregon Trail weathered paper section */
+.paper-section {
+  background-color: var(--parchment-bg);
+  padding: 40px;
+  margin: 20px auto;
+  max-width: 800px;
+  position: relative;
+  border: 1px solid var(--paper-border);
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.1),
+    0 10px 0 -5px var(--parchment-section),
+    0 10px 1px -4px rgba(0, 0, 0, 0.15),
+    0 20px 0 -10px #E5DECF,
+    0 20px 1px -9px rgba(0, 0, 0, 0.15);
+}
+
+.home-page h1,
+.home-page h2 {
+  color: var(--ink);
+  font-family: "Old Standard TT", Georgia, "Times New Roman", serif;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.home-page .game-guide-btn {
+  background: var(--cta) !important;
+  color: #fff !important;
+}
+
+/* FAQ / How to Play: same Oregon Trail palette and serif headings */
+.parchment-page h1,
+.parchment-page h2 {
+  color: var(--ink);
+  font-family: "Old Standard TT", Georgia, "Times New Roman", serif;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+/* Game page: Oregon Trail parchment palette */
+.game-page.parchment-page {
+  background: var(--parchment-bg);
+  min-height: 100vh;
+  width: 100%;
+  --text: var(--ink);
+  --muted: rgba(42, 26, 10, 0.75);
+  --surface: var(--parchment-section);
+  --accent: var(--cta);
+}
+.game-page.parchment-page .game-title,
+.game-page.parchment-page h1 {
+  color: var(--ink);
+  font-family: "Old Standard TT", Georgia, "Times New Roman", serif;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+.game-page.parchment-page .game-guide-btn {
+  background: var(--cta) !important;
+  color: #fff !important;
+}
+.game-page.parchment-page .game-sidebar {
+  border: 1px solid var(--paper-border);
 }
 
 #root {

@@ -27,21 +27,23 @@ export function FAQPage() {
 
   return (
     <div
+      className="parchment-page"
       style={{
         minHeight: '100vh',
-        background: 'linear-gradient(180deg, rgb(26, 31, 46) 0%, rgb(45, 55, 72) 100%)',
-        color: 'var(--text)',
+        background: 'var(--parchment-bg)',
+        color: 'var(--ink)',
         padding: 24,
         paddingTop: 80,
       }}
     >
-      <div style={{ maxWidth: 640, margin: '0 auto' }}>
+      <div className="paper-section" style={{ margin: '0 auto' }}>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
         <a
           href="/"
           style={{
             display: 'inline-block',
             marginBottom: 24,
-            color: 'var(--accent)',
+            color: 'var(--cta)',
             textDecoration: 'none',
             fontWeight: 600,
             fontSize: 14,
@@ -49,18 +51,17 @@ export function FAQPage() {
         >
           ← Back to game
         </a>
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
         <h1 style={{ margin: '0 0 8px', fontSize: 28, fontWeight: 'bold' }}>FAQ</h1>
-        <p style={{ margin: '0 0 32px', color: 'var(--muted)', fontSize: 15 }}>
+        <p style={{ margin: '0 0 32px', color: 'var(--ink)', opacity: 0.85, fontSize: 15 }}>
           Frequently asked questions about Settlers of Oregon
         </p>
         <dl style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 24 }}>
           {FAQ.map((item, i) => (
             <div key={i}>
-              <dt style={{ margin: 0, fontWeight: 'bold', fontSize: 16, color: 'var(--text)' }}>
+              <dt style={{ margin: 0, fontWeight: 'bold', fontSize: 16, color: 'var(--ink)' }}>
                 {item.q}
               </dt>
-              <dd style={{ margin: '8px 0 0', paddingLeft: 0, lineHeight: 1.6, color: 'var(--text)' }}>
+              <dd style={{ margin: '8px 0 0', paddingLeft: 0, lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9 }}>
                 {item.a}
               </dd>
             </div>

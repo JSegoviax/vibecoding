@@ -23,9 +23,10 @@ export interface GameStartOptions {
 interface ColorSelectionProps {
   numPlayers: 1 | 2 | 3 | 4
   onColorsSelected: (selectedColors: string[], options?: GameStartOptions) => void
+  onBack?: () => void
 }
 
-export function ColorSelection({ numPlayers, onColorsSelected }: ColorSelectionProps) {
+export function ColorSelection({ numPlayers, onColorsSelected, onBack }: ColorSelectionProps) {
   const [selectedColors, setSelectedColors] = useState<string[]>([])
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0)
   const [oregonsOmens, setOregonsOmens] = useState(false)
@@ -48,40 +49,69 @@ export function ColorSelection({ numPlayers, onColorsSelected }: ColorSelectionP
   const availableColors = AVAILABLE_COLORS.filter(c => !selectedColors.includes(c.id))
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'linear-gradient(135deg, #1a1f2e 0%, #2d3748 100%)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 10000,
-      padding: 20,
-    }}>
-      <div style={{
-        background: 'var(--surface)',
-        borderRadius: 16,
-        padding: 32,
-        maxWidth: 600,
-        width: '100%',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-      }}>
+    <div
+      className="parchment-page"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'var(--parchment-bg)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10000,
+        padding: 20,
+      }}
+    >
+      <div
+        className="paper-section"
+        style={{
+          position: 'relative',
+          maxWidth: 600,
+          width: '100%',
+        }}
+      >
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to homepage"
+            style={{
+              position: 'absolute',
+              top: 20,
+              left: 20,
+              padding: '8px 16px',
+              fontSize: 14,
+              fontWeight: 600,
+              color: 'var(--ink)',
+              background: 'transparent',
+              border: '1px solid var(--paper-border)',
+              borderRadius: 8,
+              cursor: 'pointer',
+            }}
+          >
+            ← Back
+          </button>
+        )}
         <h1 style={{
           fontSize: 28,
           fontWeight: 'bold',
-          color: 'var(--text)',
+          color: 'var(--ink)',
           marginBottom: 8,
           textAlign: 'center',
+          fontFamily: '"Old Standard TT", Georgia, "Times New Roman", serif',
+          textTransform: 'uppercase',
+          letterSpacing: '2px',
         }}>
           Choose Your Color
         </h1>
         <p style={{
           fontSize: 16,
-          color: 'var(--muted)',
+          color: 'var(--ink)',
+          opacity: 0.85,
           marginBottom: 24,
           textAlign: 'center',
         }}>
@@ -95,7 +125,8 @@ export function ColorSelection({ numPlayers, onColorsSelected }: ColorSelectionP
           marginBottom: 20,
           cursor: 'pointer',
           fontSize: 14,
-          color: 'var(--text)',
+          color: 'var(--ink)',
+          opacity: 0.9,
         }}>
           <input
             type="checkbox"
@@ -117,8 +148,8 @@ export function ColorSelection({ numPlayers, onColorsSelected }: ColorSelectionP
               key={color.id}
               onClick={() => handleColorSelect(color.id)}
               style={{
-                background: 'var(--surface)',
-                border: '2px solid var(--muted)',
+                background: 'var(--parchment-section)',
+                border: '2px solid var(--paper-border)',
                 borderRadius: 12,
                 padding: 16,
                 cursor: 'pointer',
@@ -129,11 +160,11 @@ export function ColorSelection({ numPlayers, onColorsSelected }: ColorSelectionP
                 transition: 'all 0.2s',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'var(--accent)'
+                e.currentTarget.style.borderColor = 'var(--cta)'
                 e.currentTarget.style.transform = 'scale(1.05)'
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'var(--muted)'
+                e.currentTarget.style.borderColor = 'var(--paper-border)'
                 e.currentTarget.style.transform = 'scale(1)'
               }}
             >
@@ -150,7 +181,7 @@ export function ColorSelection({ numPlayers, onColorsSelected }: ColorSelectionP
               <span style={{
                 fontSize: 14,
                 fontWeight: 600,
-                color: 'var(--text)',
+                color: 'var(--ink)',
               }}>
                 {color.name}
               </span>
@@ -162,12 +193,14 @@ export function ColorSelection({ numPlayers, onColorsSelected }: ColorSelectionP
           <div style={{
             marginTop: 24,
             padding: 16,
-            background: 'rgba(0,0,0,0.2)',
+            background: 'rgba(42, 26, 10, 0.08)',
+            border: '1px solid var(--paper-border)',
             borderRadius: 8,
           }}>
             <div style={{
               fontSize: 12,
-              color: 'var(--muted)',
+              color: 'var(--ink)',
+              opacity: 0.8,
               marginBottom: 8,
               textTransform: 'uppercase',
               letterSpacing: '0.06em',
@@ -189,8 +222,9 @@ export function ColorSelection({ numPlayers, onColorsSelected }: ColorSelectionP
                       alignItems: 'center',
                       gap: 6,
                       padding: '4px 8px',
-                      background: 'rgba(255,255,255,0.1)',
+                      background: 'rgba(42, 26, 10, 0.06)',
                       borderRadius: 6,
+                      border: '1px solid var(--paper-border)',
                     }}
                   >
                     <img
@@ -205,7 +239,8 @@ export function ColorSelection({ numPlayers, onColorsSelected }: ColorSelectionP
                     />
                     <span style={{
                       fontSize: 12,
-                      color: 'var(--text)',
+                      color: 'var(--ink)',
+                      opacity: 0.9,
                     }}>
                       Player {idx + 1}: {color.name}
                     </span>

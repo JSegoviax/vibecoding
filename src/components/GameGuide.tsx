@@ -82,20 +82,22 @@ export function GameGuide() {
           onClick={handleClose}
         >
           <div
-            className="game-guide-modal-content"
+            className="game-guide-modal-content game-guide-parchment"
             style={{
-              background: 'var(--surface)',
+              background: 'var(--parchment-bg)',
+              color: 'var(--ink)',
+              border: '1px solid var(--paper-border)',
               borderRadius: 12,
               padding: 24,
               maxWidth: 700,
               maxHeight: '90vh',
               overflow: 'auto',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+              boxShadow: '0 1px 1px rgba(0,0,0,0.1), 0 10px 0 -5px var(--parchment-section), 0 10px 1px -4px rgba(0,0,0,0.15), 0 20px 0 -10px #E5DECF, 0 20px 1px -9px rgba(0,0,0,0.15)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: 24, fontWeight: 'bold' }}>Game Rules</h2>
+              <h2 style={{ margin: 0, fontSize: 24, fontWeight: 'bold', color: 'var(--ink)', fontFamily: '"Old Standard TT", Georgia, "Times New Roman", serif', textTransform: 'uppercase', letterSpacing: '2px' }}>Game Rules</h2>
               <button
                 type="button"
                 className="game-guide-close"
@@ -105,7 +107,7 @@ export function GameGuide() {
                   border: 'none',
                   fontSize: 24,
                   cursor: 'pointer',
-                  color: 'var(--text)',
+                  color: 'var(--ink)',
                   padding: '0 8px',
                   lineHeight: 1,
                 }}
@@ -117,10 +119,10 @@ export function GameGuide() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
               <section>
-                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--accent)' }}>
+                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--cta)' }}>
                   Setup Phase
                 </h3>
-                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--text)' }}>
+                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9 }}>
                   Players take turns placing 2 settlements and 2 roads each. Place a settlement first, then a road connected to it. 
                   Settlements must be at least 2 edges apart from other settlements. On your second settlement placement, you receive 
                   one of each resource from the 3 surrounding hexes.
@@ -128,13 +130,13 @@ export function GameGuide() {
               </section>
 
               <section>
-                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--accent)' }}>
+                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--cta)' }}>
                   Rolling the Dice
                 </h3>
-                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--text)', marginBottom: 8 }}>
+                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9, marginBottom: 8 }}>
                   On your turn, you must roll the dice first. The dice roll determines resource distribution:
                 </p>
-                <ul style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8, color: 'var(--text)' }}>
+                <ul style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8, color: 'var(--ink)', opacity: 0.9 }}>
                   <li><strong>Numbers 2-12:</strong> Each player with a settlement or city on a hex with that number receives resources:
                     <ul style={{ marginTop: 4, paddingLeft: 20 }}>
                       <li>1 resource per settlement</li>
@@ -153,30 +155,30 @@ export function GameGuide() {
               </section>
 
               <section>
-                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--accent)' }}>
+                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--cta)' }}>
                   The Robber
                 </h3>
-                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--text)', marginBottom: 8 }}>
+                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9, marginBottom: 8 }}>
                   When you roll a <strong>7</strong>, the robber is activated. No resources are distributed that turn. You must:
                 </p>
-                <ol style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8, color: 'var(--text)' }}>
+                <ol style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8, color: 'var(--ink)', opacity: 0.9 }}>
                   <li><strong>Move the robber:</strong> Click any hex on the board (except the hex where the robber currently sits). The robber must move to a different hex.</li>
                   <li><strong>Block production:</strong> The hex where the robber is placed does not produce resources for anyone until the robber moves again. If that hex’s number is rolled, no one with a settlement or city on it receives resources from that hex.</li>
                   <li><strong>Steal (if possible):</strong> If the new hex has settlements or cities belonging to other players, you must choose one of those players. You steal one random resource from their hand (you receive it, they lose it). If the chosen player has no resources, nothing is stolen. If only your own structures are on the hex—or no one’s—you just move the robber; you cannot rob yourself.</li>
                 </ol>
-                <p style={{ margin: '12px 0 0', lineHeight: 1.6, color: 'var(--text)' }}>
+                <p style={{ margin: '12px 0 0', lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9 }}>
                   You must complete the robber move (and robbery, if applicable) before building or trading. The robber stays on the new hex until someone else rolls a 7 and moves it again.
                 </p>
               </section>
 
               <section>
-                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--accent)' }}>
+                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--cta)' }}>
                   Building
                 </h3>
-                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--text)', marginBottom: 8 }}>
+                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9, marginBottom: 8 }}>
                   After rolling dice, you can build structures (optional). Each player has a limited supply per game:
                 </p>
-                <ul style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8, color: 'var(--text)' }}>
+                <ul style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8, color: 'var(--ink)', opacity: 0.9 }}>
                   <li><strong>Roads:</strong> 15 per player. Costs 1 Wood + 1 Brick. Must connect to your existing road or settlement.</li>
                   <li><strong>Settlements:</strong> 5 per player. Costs 1 Wood + 1 Brick + 1 Sheep + 1 Wheat. Must be at least two road segments away from any other settlement or city (no building on adjacent intersections) and connected by your road.</li>
                   <li><strong>Cities:</strong> 4 per player. Costs 2 Wheat + 3 Ore. Upgrades an existing settlement (you get the settlement piece back). Provides 2 resources instead of 1.</li>
@@ -184,29 +186,29 @@ export function GameGuide() {
               </section>
 
               <section>
-                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--accent)' }}>
+                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--cta)' }}>
                   Trading
                 </h3>
-                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--text)' }}>
+                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9 }}>
                   You can trade resources with the bank at a 4:1 ratio. Give 4 of one resource type to receive 1 of another resource type.
                 </p>
               </section>
 
               <section>
-                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--accent)' }}>
+                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--cta)' }}>
                   Longest Road
                 </h3>
-                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--text)' }}>
+                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9 }}>
                   The first player to build 6 or more connected roads receives the "Longest Road" card, worth 2 victory points. 
                   If another player builds a longer road, they take the card and the 2 victory points, while the previous holder loses 2 points.
                 </p>
               </section>
 
               <section>
-                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--accent)' }}>
+                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--cta)' }}>
                   Victory Points
                 </h3>
-                <ul style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8, color: 'var(--text)' }}>
+                <ul style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8, color: 'var(--ink)', opacity: 0.9 }}>
                   <li>Settlement: 1 victory point</li>
                   <li>City: 2 victory points</li>
                   <li>Longest Road: 2 victory points</li>
@@ -214,19 +216,19 @@ export function GameGuide() {
               </section>
 
               <section>
-                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--accent)' }}>
+                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--cta)' }}>
                   Winning
                 </h3>
-                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--text)' }}>
+                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9 }}>
                   The first player to reach <strong>10 victory points</strong> wins the game!
                 </p>
               </section>
 
-              <section style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--muted)' }}>
-                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 16, fontWeight: 'bold', color: 'var(--accent)' }}>
+              <section style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--paper-border)' }}>
+                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 16, fontWeight: 'bold', color: 'var(--cta)' }}>
                   Credits
                 </h3>
-                <div style={{ margin: 0, lineHeight: 1.8, color: 'var(--text)' }}>
+                <div style={{ margin: 0, lineHeight: 1.8, color: 'var(--ink)', opacity: 0.9 }}>
                   <div>Designer - Charmingtoad</div>
                   <div>VPM - Cloud</div>
                 </div>

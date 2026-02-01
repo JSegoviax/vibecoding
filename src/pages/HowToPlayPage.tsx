@@ -7,27 +7,28 @@ export function HowToPlayPage() {
   }, [])
 
   const sectionStyle = { marginBottom: 28 }
-  const h2Style = { margin: '0 0 12px', fontSize: 20, fontWeight: 'bold', color: 'var(--accent)' }
-  const pStyle = { margin: 0, lineHeight: 1.6, color: 'var(--text)' }
-  const ulStyle = { margin: '8px 0 0', paddingLeft: 20, lineHeight: 1.7, color: 'var(--text)' }
+  const h2Style = { margin: '0 0 12px', fontSize: 20, fontWeight: 'bold', color: 'var(--ink)' }
+  const pStyle = { margin: 0, lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9 }
+  const ulStyle = { margin: '8px 0 0', paddingLeft: 20, lineHeight: 1.7, color: 'var(--ink)', opacity: 0.9 }
 
   return (
     <div
+      className="parchment-page"
       style={{
         minHeight: '100vh',
-        background: 'linear-gradient(180deg, rgb(26, 31, 46) 0%, rgb(45, 55, 72) 100%)',
-        color: 'var(--text)',
+        background: 'var(--parchment-bg)',
+        color: 'var(--ink)',
         padding: 24,
         paddingTop: 80,
       }}
     >
-      <div style={{ maxWidth: 640, margin: '0 auto' }}>
+      <div className="paper-section" style={{ margin: '0 auto' }}>
         <a
           href="/"
           style={{
             display: 'inline-block',
             marginBottom: 24,
-            color: 'var(--accent)',
+            color: 'var(--cta)',
             textDecoration: 'none',
             fontWeight: 600,
             fontSize: 14,
@@ -36,7 +37,7 @@ export function HowToPlayPage() {
           ← Back to game
         </a>
         <h1 style={{ margin: '0 0 8px', fontSize: 28, fontWeight: 'bold' }}>How to Play</h1>
-        <p style={{ margin: '0 0 32px', color: 'var(--muted)', fontSize: 15 }}>
+        <p style={{ margin: '0 0 32px', color: 'var(--ink)', opacity: 0.85, fontSize: 15 }}>
           A short guide to Settlers of Oregon
         </p>
 
@@ -96,8 +97,8 @@ export function HowToPlayPage() {
           </p>
         </section>
 
-        <p style={{ marginTop: 32, color: 'var(--muted)', fontSize: 14 }}>
-          <a href="/" style={{ color: 'var(--accent)', textDecoration: 'none' }}>← Back to game</a>
+        <p style={{ marginTop: 32, color: 'var(--ink)', opacity: 0.8, fontSize: 14 }}>
+          <a href="/" style={{ color: 'var(--cta)', textDecoration: 'none' }}>← Back to game</a>
         </p>
       </div>
     </div>
