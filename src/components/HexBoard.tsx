@@ -510,7 +510,7 @@ export function HexBoard({
             <circle
               cx={harborX}
               cy={harborY}
-              r={14}
+              r={36}
               fill="#fff8dc"
               stroke="#8b4513"
               strokeWidth={2}
@@ -525,34 +525,34 @@ export function HexBoard({
                 dominantBaseline="central"
                 fill="#8b4513"
                 fontWeight="bold"
-                fontSize={18}
+                fontSize={22}
                 style={{ pointerEvents: 'none' }}
               >
-                ?
+                3:1
               </text>
             ) : (
               <>
+                <image
+                  href={`/${harbor.type}-icon.png`}
+                  x={harborX - 18}
+                  y={harborY - 28}
+                  width={36}
+                  height={36}
+                  preserveAspectRatio="xMidYMid meet"
+                  style={{ pointerEvents: 'none' }}
+                />
                 <text
                   x={harborX}
-                  y={harborY - 4}
+                  y={harborY + 20}
                   textAnchor="middle"
                   dominantBaseline="central"
                   fill="#8b4513"
                   fontWeight="bold"
-                  fontSize={14}
+                  fontSize={20}
                   style={{ pointerEvents: 'none' }}
                 >
                   2:1
                 </text>
-                <circle
-                  cx={harborX}
-                  cy={harborY + 10}
-                  r={8}
-                  fill={TERRAIN_COLORS[harbor.type as Terrain]}
-                  stroke="#fff"
-                  strokeWidth={1}
-                  style={{ pointerEvents: 'none' }}
-                />
               </>
             )}
           </g>

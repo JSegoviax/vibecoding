@@ -4,9 +4,11 @@ interface DiceRollAnimationProps {
   dice1: number
   dice2: number
   onComplete: () => void
+  /** When false, tap-anywhere overlay is hidden (e.g. in PvP only the roller may stop). Default true for single-player / AI. */
+  allowTapToStop?: boolean
 }
 
-export function DiceRollAnimation({ dice1, dice2, onComplete }: DiceRollAnimationProps) {
+export function DiceRollAnimation({ dice1, dice2, onComplete, allowTapToStop = true }: DiceRollAnimationProps) {
   const [rolling, setRolling] = useState(true)
   const [movedToCorner, setMovedToCorner] = useState(false)
   const [displayDice1, setDisplayDice1] = useState(1)
@@ -104,24 +106,38 @@ export function DiceRollAnimation({ dice1, dice2, onComplete }: DiceRollAnimatio
   }
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={rolling ? 'Tap to stop dice' : 'Dice result'}
-      className={movedToCorner ? 'dice-in-corner' : 'dice-in-center'}
-      style={{
-        position: 'absolute',
-        zIndex: 500,
-        display: 'flex',
-        gap: 20,
-        alignItems: 'center',
-        pointerEvents: 'auto',
-        isolation: 'isolate',
-        cursor: rolling ? 'pointer' : 'default',
-      }}
-      onClick={handleTapToStop}
-      onKeyDown={(e) => { if (rolling && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); handleTapToStop() } }}
-    >
+    <>
+      {rolling && allowTapToStop && (
+        <div
+          role="button"
+          aria-label="Tap anywhere to stop dice"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 499,
+            cursor: 'pointer',
+          }}
+          onClick={handleTapToStop}
+        />
+      )}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={rolling ? 'Tap to stop dice' : 'Dice result'}
+        className={movedToCorner ? 'dice-in-corner' : 'dice-in-center'}
+        style={{
+          position: 'absolute',
+          zIndex: 500,
+          display: 'flex',
+          gap: 20,
+          alignItems: 'center',
+          pointerEvents: 'auto',
+          isolation: 'isolate',
+          cursor: rolling ? 'pointer' : 'default',
+        }}
+        onClick={allowTapToStop ? handleTapToStop : undefined}
+        onKeyDown={allowTapToStop ? (e) => { if (rolling && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); handleTapToStop() } } : undefined}
+      >
       <div
         className={rolling ? 'dice-rolling-1' : 'dice-stopped'}
         style={{
@@ -208,5 +224,6 @@ export function DiceRollAnimation({ dice1, dice2, onComplete }: DiceRollAnimatio
         }
       `}</style>
     </div>
+    </>
   )
 }

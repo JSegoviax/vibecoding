@@ -624,7 +624,14 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
             resourceHighlightHexIds={game.lastResourceHexIds ? new Set(game.lastResourceHexIds) : undefined}
             robberBlockedHexIds={game.lastDice ? new Set(getHexIdsBlockedByRobber(game, game.lastDice[0] + game.lastDice[1])) : undefined}
           />
-          {diceRolling && <DiceRollAnimation dice1={diceRolling.dice1} dice2={diceRolling.dice2} onComplete={handleDiceRollComplete} />}
+          {diceRolling && (
+            <DiceRollAnimation
+              dice1={diceRolling.dice1}
+              dice2={diceRolling.dice2}
+              onComplete={handleDiceRollComplete}
+              allowTapToStop={isMyTurn}
+            />
+          )}
         </div>
 
         <aside className="game-sidebar" style={{ flex: '0 0 280px', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
