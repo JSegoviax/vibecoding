@@ -667,7 +667,7 @@ export default function App() {
     trackEvent('dice_rolled', 'gameplay', `sum_${sum}`, sum)
     setGame(g => {
       const next = updateGameState(g, (state) => {
-        const nextState: GameState = {
+        let nextState: GameState = {
           ...state,
           lastDice: [dice1, dice2] as [number, number],
           players: state.players.map(p => ({ ...p, resources: { ...p.resources } })),

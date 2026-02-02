@@ -296,7 +296,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     const sum = dice1 + dice2
     trackEvent('dice_rolled', 'gameplay', `sum_${sum}`, sum)
     setDiceRolling(null)
-    const next: GameState = {
+    let next: GameState = {
       ...game,
       lastDice: [dice1, dice2] as [number, number],
       players: game.players.map(p => ({ ...p, resources: { ...p.resources } })),

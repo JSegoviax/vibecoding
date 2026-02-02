@@ -740,13 +740,17 @@ export function playOmenCard(
       playerId,
     })
   }
-  if (cardId === 'skilled_prospector' && targets?.resourceChoices?.length >= 2) {
-    const [t1, t2] = targets.resourceChoices
-    result = appendGameLog(result, {
-      type: 'resource_gain',
-      message: `Player ${playerId} gained 1 ${TERRAIN_LABELS[t1]} and 1 ${TERRAIN_LABELS[t2]}`,
-      playerId,
-    })
+  if (cardId === 'skilled_prospector') {
+    const choices = targets?.resourceChoices
+    if (choices && choices.length >= 2) {
+      const t1: Terrain = choices[0]
+      const t2: Terrain = choices[1]
+      result = appendGameLog(result, {
+        type: 'resource_gain',
+        message: `Player ${playerId} gained 1 ${TERRAIN_LABELS[t1]} and 1 ${TERRAIN_LABELS[t2]}`,
+        playerId,
+      })
+    }
   }
   if (cardId === 'gold_rush') {
     const extra = targets?.goldRushChoice ?? 'ore'
