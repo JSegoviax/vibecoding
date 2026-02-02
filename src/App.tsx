@@ -799,6 +799,7 @@ export default function App() {
   const handleDrawOmenCard = () => {
     if (!game || !canDrawOmenCard(game, actualPlayerId as PlayerId)) return
     setGame(g => {
+      if (!g) return g
       const next = drawOmenCard(g, actualPlayerId as PlayerId)
       updateOmenHand(next)
       return next
