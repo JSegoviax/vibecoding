@@ -3,6 +3,7 @@ import { buildTopology } from './topology'
 import { createHarbors } from './harbors'
 import { createOmensDeck } from './omens'
 import type { GameState, Player, Vertex, Edge, PlayerId } from './types'
+export { appendGameLog } from './gameLog'
 import { AVAILABLE_COLORS } from '../components/ColorSelection'
 
 function createPlayer(id: PlayerId, colorId: string, isAI: boolean = false): Player {
@@ -100,6 +101,7 @@ export function createInitialState(
     robberHexId: desertHex?.id ?? null,
     lastRobbery: null,
     longestRoadPlayerId: null,
+    gameLog: [],
   }
 
   if (oregonsOmens) {

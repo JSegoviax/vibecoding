@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { trackEvent } from '../utils/analytics'
+import { BUFF_IDS, DEBUFF_IDS, getOmenCardName, getOmenCardEffectText } from '../game/omens'
 
 function shouldOpenGuideFromHash(): boolean {
   const hash = typeof window !== 'undefined' ? window.location.hash : ''
@@ -238,6 +239,36 @@ export function GameGuide() {
                 <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9 }}>
                   The first player to reach <strong>10 victory points</strong> wins the game!
                 </p>
+              </section>
+
+              <section>
+                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 'bold', color: 'var(--cta)' }}>
+                  Oregon&apos;s Omens (optional)
+                </h3>
+                <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9, marginBottom: 8 }}>
+                  When Oregon&apos;s Omens is enabled at game start, a deck of Buff and Debuff cards is added. During your build/trade phase you may:
+                </p>
+                <ul style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8, color: 'var(--ink)', opacity: 0.9, marginBottom: 12 }}>
+                  <li><strong>Draw a card:</strong> Spend 1 Wheat + 1 Sheep + 1 Ore to draw one card (once per turn). Hand limit: 5 cards.</li>
+                  <li><strong>Buffs</strong> go into your hand. You may play <strong>one buff per turn</strong> during your turn (before or after building/trading).</li>
+                  <li><strong>Debuffs</strong> are resolved immediately when drawn — you don&apos;t keep them. Some can be partly negated by Well-Stocked Pantry.</li>
+                </ul>
+                <h4 style={{ margin: '16px 0 8px', fontSize: 15, fontWeight: 'bold', color: 'var(--ink)' }}>Buff cards</h4>
+                <ul style={{ margin: '0 0 8px', paddingLeft: 20, lineHeight: 1.7, color: 'var(--ink)', opacity: 0.9, listStyle: 'none' }}>
+                  {BUFF_IDS.map((id) => (
+                    <li key={id} style={{ marginBottom: 6 }}>
+                      <strong>{getOmenCardName(id)}:</strong> {getOmenCardEffectText(id)}
+                    </li>
+                  ))}
+                </ul>
+                <h4 style={{ margin: '16px 0 8px', fontSize: 15, fontWeight: 'bold', color: 'var(--ink)' }}>Debuff cards</h4>
+                <ul style={{ margin: 0, paddingLeft: 20, lineHeight: 1.7, color: 'var(--ink)', opacity: 0.9, listStyle: 'none' }}>
+                  {DEBUFF_IDS.map((id) => (
+                    <li key={id} style={{ marginBottom: 6 }}>
+                      <strong>{getOmenCardName(id)}:</strong> {getOmenCardEffectText(id)}
+                    </li>
+                  ))}
+                </ul>
               </section>
 
               <section style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--paper-border)' }}>

@@ -459,19 +459,19 @@ export function PlayerResources({
             )}
             {/* Oregon's Omens: active effects (current player) */}
             {oregonsOmensEnabled && isActive && phase === 'playing' && activeOmensEffects.length > 0 && getActiveEffectDescription && (
-              <div style={{ marginTop: 8, padding: 6, borderRadius: 6, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', fontSize: 11 }}>
-                <div style={{ fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>Active effects</div>
-                <ul style={{ margin: 0, paddingLeft: 16, listStyle: 'disc' }}>
+              <div style={{ marginTop: 8, padding: 6, borderRadius: 6, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', fontSize: 11, color: 'var(--text)' }}>
+                <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Active effects</div>
+                <ul style={{ margin: 0, paddingLeft: 16, listStyle: 'disc', color: 'var(--text)' }}>
                   {activeOmensEffects.map((eff, idx) => (
-                    <li key={`${eff.cardId}-${idx}`} style={{ marginBottom: 2 }}>{getActiveEffectDescription(eff)}</li>
+                    <li key={`${eff.cardId}-${idx}`} style={{ marginBottom: 2, color: 'var(--text)' }}>{getActiveEffectDescription(eff)}</li>
                   ))}
                 </ul>
               </div>
             )}
             {/* Oregon's Omens: hand list (active player only) */}
             {oregonsOmensEnabled && isActive && phase === 'playing' && omensHand.length > 0 && (
-              <div style={{ marginTop: 8, padding: 8, borderRadius: 8, background: 'rgba(139,69,19,0.15)', border: '1px solid rgba(139,69,19,0.4)' }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>Omen cards</div>
+              <div style={{ marginTop: 8, padding: 8, borderRadius: 8, background: 'rgba(139,69,19,0.15)', border: '1px solid rgba(139,69,19,0.4)', color: 'var(--text)' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>Omen cards</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {omensHand.map((cardId: string, idx: number) => (
                     <button

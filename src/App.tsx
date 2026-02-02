@@ -4,9 +4,10 @@ import { PlayerResources } from './components/PlayerResources'
 import { VictoryPointTracker } from './components/VictoryPointTracker'
 import { GameGuide } from './components/GameGuide'
 import { DiceRollAnimation } from './components/DiceRollAnimation'
+import { GameHistory } from './components/GameHistory'
 import { ColorSelection } from './components/ColorSelection'
 import { MultiplayerLobby } from './components/MultiplayerLobby'
-import { createInitialState } from './game/state'
+import { createInitialState, appendGameLog } from './game/state'
 import { runAISetup, runAITurn, runAITrade, runAIRobberMove, runAISelectPlayerToRob, runAIDrawOmen, runAIPlayOmen } from './game/ai'
 import {
   canPlaceSettlement,
@@ -93,6 +94,7 @@ export default function App() {
   const [robberMode, setRobberMode] = useState<{ moving: boolean; newHexId: string | null; playersToRob: Set<number> }>({ moving: false, newHexId: null, playersToRob: new Set() })
   const [omenRobberMode, setOmenRobberMode] = useState<{ cardId: string; step: 'hex' | 'player'; hexId?: string; playersOnHex?: Set<number> } | null>(null)
   const [diceRolling, setDiceRolling] = useState<{ dice1: number; dice2: number } | null>(null)
+  const [sidebarTab, setSidebarTab] = useState<'resources' | 'history'>('resources')
   const aiNextRoadEdge = useRef<string | null>(null)
   const aiBuildTarget = useRef<{ type: string; vertexId?: string; edgeId?: string } | null>(null)
   const gameWonTrackedRef = useRef(false)
@@ -517,7 +519,7 @@ export default function App() {
           i === playerId - 1 ? { ...p, resources: { ...p.resources }, settlementsLeft: p.settlementsLeft - 1, victoryPoints: p.victoryPoints + 1 } : p
         )
         if (g.setupPlacements >= n) giveInitialResources(next, vid)
-        return next
+        return appendGameLog(next, { type: 'setup', message: `Player ${playerId} placed settlement (setup)` })
       })
       return
     }
@@ -530,25 +532,29 @@ export default function App() {
         return
       }
       trackEvent('build', 'gameplay', 'settlement', 1)
-      setGame(g => updateGameState(g, (state) => {
-        const next: GameState = {
-          ...state,
-          vertices: { ...state.vertices },
-        }
-        next.vertices[vid] = { ...next.vertices[vid], structure: { player: actualPlayerId, type: 'settlement' } }
-        next.players = state.players.map((p, i) => {
-          if (i !== actualPlayerId - 1) return p
-          const res = { ...p.resources }
-          for (const [t, n] of Object.entries(cost)) { if (n != null && n > 0) res[t as keyof typeof res] = Math.max(0, (res[t as keyof typeof res] || 0) - n) }
-          return { ...p, resources: res, settlementsLeft: p.settlementsLeft - 1, victoryPoints: p.victoryPoints + 1 }
+      setGame(g => {
+        const next = updateGameState(g, (state) => {
+          const nextState: GameState = {
+            ...state,
+            vertices: { ...state.vertices },
+          }
+          nextState.vertices[vid] = { ...nextState.vertices[vid], structure: { player: actualPlayerId, type: 'settlement' } }
+          nextState.players = state.players.map((p, i) => {
+            if (i !== actualPlayerId - 1) return p
+            const res = { ...p.resources }
+            for (const [t, n] of Object.entries(cost)) { if (n != null && n > 0) res[t as keyof typeof res] = Math.max(0, (res[t as keyof typeof res] || 0) - n) }
+            return { ...p, resources: res, settlementsLeft: p.settlementsLeft - 1, victoryPoints: p.victoryPoints + 1 }
+          })
+          let result = nextState as GameState
+          if (isOmensEnabled(result)) {
+            result = consumeCostEffectAfterBuild(result, actualPlayerId as PlayerId, 'settlement')
+            result = consumeFreeBuildEffect(result, actualPlayerId as PlayerId, 'settlement')
+          }
+          return result
         })
-        let result = next as GameState
-        if (isOmensEnabled(result)) {
-          result = consumeCostEffectAfterBuild(result, actualPlayerId as PlayerId, 'settlement')
-          result = consumeFreeBuildEffect(result, actualPlayerId as PlayerId, 'settlement')
-        }
-        return result
-      }))
+        if (!next) return g
+        return appendGameLog(next, { type: 'build', message: `Player ${actualPlayerId} built a settlement` })
+      })
       setBuildMode(null)
       setErrorMessage(null)
     }
@@ -558,24 +564,28 @@ export default function App() {
         return
       }
       trackEvent('build', 'gameplay', 'city', 1)
-      setGame(g => updateGameState(g, (state) => {
-        const cost = { wheat: 2, ore: 3 }
-        const next: GameState = {
-          ...state,
-          vertices: { ...state.vertices },
-        }
-        const v = next.vertices[vid]
-        if (v?.structure) {
-          next.vertices[vid] = { ...v, structure: { player: playerId, type: 'city' } }
-          next.players = state.players.map((p, i) => {
-            if (i !== playerId - 1) return p
-            const res = { ...p.resources }
-            for (const [t, n] of Object.entries(cost)) { res[t as keyof typeof res] = Math.max(0, (res[t as keyof typeof res] || 0) - n!) }
-            return { ...p, resources: res, settlementsLeft: p.settlementsLeft + 1, citiesLeft: p.citiesLeft - 1, victoryPoints: p.victoryPoints + 1 }
-          })
-        }
-        return next
-      }))
+      setGame(g => {
+        const next = updateGameState(g, (state) => {
+          const cost = { wheat: 2, ore: 3 }
+          const nextState: GameState = {
+            ...state,
+            vertices: { ...state.vertices },
+          }
+          const v = nextState.vertices[vid]
+          if (v?.structure) {
+            nextState.vertices[vid] = { ...v, structure: { player: playerId, type: 'city' } }
+            nextState.players = state.players.map((p, i) => {
+              if (i !== playerId - 1) return p
+              const res = { ...p.resources }
+              for (const [t, n] of Object.entries(cost)) { res[t as keyof typeof res] = Math.max(0, (res[t as keyof typeof res] || 0) - n!) }
+              return { ...p, resources: res, settlementsLeft: p.settlementsLeft + 1, citiesLeft: p.citiesLeft - 1, victoryPoints: p.victoryPoints + 1 }
+            })
+          }
+          return nextState
+        })
+        if (!next) return g
+        return appendGameLog(next, { type: 'build', message: `Player ${playerId} built a city` })
+      })
       setBuildMode(null)
       setErrorMessage(null)
     }
@@ -598,7 +608,7 @@ export default function App() {
         next.setupPlacements = (next.setupPlacements || 0) + 1
         if (next.setupPlacements >= 2 * n) next.phase = 'playing'
         updateLongestRoad(next)
-        return next
+        return appendGameLog(next, { type: 'setup', message: `Player ${actualPlayerId} placed road (setup)` })
       })
       return
     }
@@ -626,7 +636,8 @@ export default function App() {
           result = consumeFreeBuildEffect(result, actualPlayerId as PlayerId, 'road')
           if (roadIgnoresAdjacencyThisTurn(game, actualPlayerId as PlayerId)) result = consumePathfinderEffect(result, actualPlayerId as PlayerId)
         }
-        return result
+        if (!result) return g
+        return appendGameLog(result, { type: 'build', message: `Player ${actualPlayerId} built a road` })
       })
       setBuildMode(null)
       setErrorMessage(null)
@@ -646,23 +657,45 @@ export default function App() {
     const { dice1, dice2 } = diceRolling
     const sum = dice1 + dice2
     trackEvent('dice_rolled', 'gameplay', `sum_${sum}`, sum)
-    setGame(g => updateGameState(g, (state) => {
-      const next: GameState = {
-        ...state,
-        lastDice: [dice1, dice2] as [number, number],
-        players: state.players.map(p => ({ ...p, resources: { ...p.resources } })),
-        lastResourceFlash: null,
+    setGame(g => {
+      const next = updateGameState(g, (state) => {
+        const nextState: GameState = {
+          ...state,
+          lastDice: [dice1, dice2] as [number, number],
+          players: state.players.map(p => ({ ...p, resources: { ...p.resources } })),
+          lastResourceFlash: null,
+        }
+        if (sum === 7) {
+          setRobberMode({ moving: true, newHexId: null, playersToRob: new Set() })
+          nextState.lastResourceHexIds = []
+        } else {
+          nextState.lastResourceFlash = distributeResources(nextState, sum) || null
+          nextState.lastResourceHexIds = getHexIdsThatProducedResources(nextState, sum)
+        }
+        return nextState
+      })
+      if (!next) return g
+      let result = appendGameLog(next, {
+        type: 'dice',
+        message: `Player ${next.currentPlayerIndex + 1} rolled ${dice1} + ${dice2} = ${sum}`,
+      })
+      if (sum !== 7 && next.lastResourceFlash && Object.keys(next.lastResourceFlash).length > 0) {
+        const parts = Object.entries(next.lastResourceFlash)
+          .filter(([, arr]) => arr.length > 0)
+          .map(([idx, arr]) => {
+            const counts: Record<string, number> = {}
+            for (const t of arr) counts[t] = (counts[t] ?? 0) + 1
+            const list = Object.entries(counts)
+              .map(([t, n]) => (n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`))
+              .join(', ')
+            return `Player ${Number(idx) + 1} gained ${list}`
+          })
+        if (parts.length > 0) {
+          result = appendGameLog(result, { type: 'resources', message: parts.join('. ') })
+        }
       }
-      if (sum === 7) {
-        setRobberMode({ moving: true, newHexId: null, playersToRob: new Set() })
-        next.lastResourceHexIds = []
-      } else {
-        next.lastResourceFlash = distributeResources(next, sum) || null
-        next.lastResourceHexIds = getHexIdsThatProducedResources(next, sum)
-      }
-      return next
-    }))
-    // Don't set diceRolling to null - keep dice visible in corner until next roll
+      return result
+    })
   }
 
   const handleSelectOmenRobberHex = (hexId: string) => {
@@ -688,11 +721,11 @@ export default function App() {
       setRobberMode({ moving: false, newHexId: hexId, playersToRob })
     } else {
       trackEvent('robber_moved', 'gameplay', 'single_player')
-      // No players to rob, just move the robber
-      setGame(g => updateGameState(g, (state) => ({
-        ...state,
-        robberHexId: hexId,
-      })))
+      setGame(g => {
+        const next = updateGameState(g, (state) => ({ ...state, robberHexId: hexId }))
+        if (!next) return g
+        return appendGameLog(next, { type: 'robbery', message: `Player ${actualPlayerId} moved the robber` })
+      })
       setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
       setErrorMessage(null)
     }
@@ -702,13 +735,20 @@ export default function App() {
     if (!robberMode.newHexId) return
 
     const stolen = stealResource(game, actualPlayerId, targetPlayerId) as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore' | null
-    setGame(g => updateGameState(g, (state) => ({
-      ...state,
-      robberHexId: robberMode.newHexId!,
-      lastRobbery: stolen
-        ? { robbingPlayerId: actualPlayerId as PlayerId, targetPlayerId: targetPlayerId as PlayerId, resource: stolen }
-        : null,
-    })))
+    setGame(g => {
+      const next = updateGameState(g, (state) => ({
+        ...state,
+        robberHexId: robberMode.newHexId!,
+        lastRobbery: stolen
+          ? { robbingPlayerId: actualPlayerId as PlayerId, targetPlayerId: targetPlayerId as PlayerId, resource: stolen }
+          : null,
+      }))
+      if (!next) return g
+      const msg = stolen
+        ? `Player ${actualPlayerId} stole ${stolen} from Player ${targetPlayerId}`
+        : `Player ${actualPlayerId} moved the robber (Player ${targetPlayerId} had nothing to steal)`
+      return appendGameLog(next, { type: 'robbery', message: msg })
+    })
     setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
     if (stolen) {
       setErrorMessage(null)
@@ -720,20 +760,22 @@ export default function App() {
   const handleEndTurn = () => {
     trackEvent('end_turn', 'gameplay', 'single_player')
     setDiceRolling(null)
-    setGame(g =>
-      updateGameState(g, (state) => {
+    setGame(g => {
+      const next = updateGameState(g, (state) => {
         const nextIndex = (state.currentPlayerIndex + 1) % state.players.length
-        let next: GameState = {
+        let nextState: GameState = {
           ...state,
           currentPlayerIndex: nextIndex,
           lastDice: null,
           lastResourceFlash: null,
           lastResourceHexIds: null,
         }
-        next = resetPlayerOmensFlagsForNewTurn(next, nextIndex)
-        return next
+        nextState = resetPlayerOmensFlagsForNewTurn(nextState, nextIndex)
+        return nextState
       })
-    )
+      if (!next) return g
+      return appendGameLog(next, { type: 'turn', message: `Turn: Player ${next.currentPlayerIndex + 1}'s turn` })
+    })
     setBuildMode(null)
     setTradeFormOpen(false)
     setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
@@ -856,6 +898,67 @@ export default function App() {
         </div>
       )}
 
+      {/* Oregon's Omens: buff feedback (e.g. Hidden Cache — resources collected) */}
+      {game.lastOmenBuffPlayed && game.lastOmenBuffPlayed.playerId === 1 && (
+        <div
+          role="alert"
+          style={{
+            margin: '0 auto 16px',
+            maxWidth: 500,
+            padding: '10px 14px',
+            borderRadius: 8,
+            background: 'rgba(220, 252, 231, 0.95)',
+            border: '1px solid rgba(22, 163, 74, 0.6)',
+            color: '#14532d',
+            fontSize: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <span>
+            <strong>{getOmenCardName(game.lastOmenBuffPlayed.cardId)}:</strong> you collected{' '}
+            {(() => {
+              const counts: Record<string, number> = {}
+              for (const t of game.lastOmenBuffPlayed.resourcesGained) {
+                counts[t] = (counts[t] ?? 0) + 1
+              }
+              return Object.entries(counts)
+                .map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`)
+                .join(', ')
+            })()}
+          </span>
+          <button onClick={() => setGame(g => g ? { ...g, lastOmenBuffPlayed: null } : g)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+        </div>
+      )}
+
+      {/* Well-Stocked Pantry negated a debuff */}
+      {game.lastPantryNegation && game.lastPantryNegation.playerId === 1 && (
+        <div
+          role="alert"
+          style={{
+            margin: '0 auto 16px',
+            maxWidth: 500,
+            padding: '10px 14px',
+            borderRadius: 8,
+            background: 'rgba(220, 252, 231, 0.95)',
+            border: '1px solid rgba(22, 163, 74, 0.6)',
+            color: '#14532d',
+            fontSize: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <span>
+            <strong>Well-Stocked Pantry</strong> negated <strong>{getOmenCardName(game.lastPantryNegation.negatedCardId)}</strong> — no resources lost.
+          </span>
+          <button onClick={() => setGame(g => g ? { ...g, lastPantryNegation: null } : g)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+        </div>
+      )}
+
       {(game.lastRobbery || errorMessage) && (
         <div
           role="alert"
@@ -949,6 +1052,44 @@ export default function App() {
         </div>
 
         <aside className="game-sidebar" style={{ flex: '0 0 280px', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+            <button
+              type="button"
+              onClick={() => setSidebarTab('resources')}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                border: sidebarTab === 'resources' ? 'none' : '1px solid var(--paper-border, rgba(0, 0, 0, 0.15))',
+                borderRadius: 8,
+                background: sidebarTab === 'resources' ? 'var(--accent)' : 'rgba(255, 255, 255, 0.15)',
+                color: sidebarTab === 'resources' ? '#fff' : 'var(--text)',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontSize: 13,
+              }}
+            >
+              Resources
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarTab('history')}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                border: sidebarTab === 'history' ? 'none' : '1px solid var(--paper-border, rgba(0, 0, 0, 0.15))',
+                borderRadius: 8,
+                background: sidebarTab === 'history' ? 'var(--accent)' : 'rgba(255, 255, 255, 0.15)',
+                color: sidebarTab === 'history' ? '#fff' : 'var(--text)',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontSize: 13,
+              }}
+            >
+              History
+            </button>
+          </div>
+          {sidebarTab === 'resources' && (
+            <>
           <VictoryPointTracker
             vertices={game.vertices}
             players={game.players}
@@ -1021,6 +1162,11 @@ export default function App() {
             getEffectiveBuildCostForPlayer={isOmensEnabled(game) ? (pid, structure) => getEffectiveBuildCost(game, pid as PlayerId, structure) : undefined}
             getBuildCostDebuffSourcesForPlayer={isOmensEnabled(game) ? (pid) => getBuildCostDebuffSources(game, pid as PlayerId) : undefined}
           />
+            </>
+          )}
+          {sidebarTab === 'history' && (
+            <GameHistory gameLog={game.gameLog ?? []} maxHeight={420} />
+          )}
 
           {game.phase === 'setup' && (
             <p style={{ fontSize: 14, color: 'var(--muted)' }}>

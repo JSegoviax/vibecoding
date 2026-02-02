@@ -100,4 +100,18 @@ export interface GameState {
   activeOmensEffects?: ActiveOmenEffect[]
   /** Oregon's Omens: last debuff drawn (for UI feedback banner); cleared on dismiss. lostResources set for lost_supplies (and similar) so UI can show what was lost. */
   lastOmenDebuffDrawn?: { cardId: string; playerId: PlayerId; lostResources?: Terrain[] } | null
+  /** Oregon's Omens: last buff played that gained resources (e.g. Hidden Cache); for UI banner. Cleared on dismiss. */
+  lastOmenBuffPlayed?: { cardId: string; playerId: PlayerId; resourcesGained: Terrain[] } | null
+  /** Oregon's Omens: Well-Stocked Pantry negated a loss; negatedCardId is the debuff that was negated. For UI banner. Cleared on dismiss. */
+  lastPantryNegation?: { playerId: PlayerId; negatedCardId: string } | null
+  /** Running game log for History tab (dice, builds, robberies, omens, etc.). */
+  gameLog?: GameLogEntry[]
+}
+
+export interface GameLogEntry {
+  id: string
+  type: 'dice' | 'resources' | 'robbery' | 'build' | 'turn' | 'omen_play' | 'omen_draw_debuff' | 'omen_buff' | 'pantry_negate' | 'setup'
+  message: string
+  playerId?: number
+  turnIndex?: number
 }

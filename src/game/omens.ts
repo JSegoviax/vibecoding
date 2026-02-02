@@ -5,6 +5,7 @@
 
 import type { ActiveOmenEffect, GameState, PlayerId } from './types'
 import type { Terrain } from './types'
+import { appendGameLog } from './gameLog'
 
 const TERRAINS: Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore']
 
@@ -217,17 +218,21 @@ function consumeWellStockedPantry(state: GameState, playerId: PlayerId): { state
   return { state: { ...state, activeOmensEffects: nextEffects }, consumed: true }
 }
 
-/** Remove one resource of type from player; if Pantry active, consume it and skip one loss. Returns new state. */
+/** Remove one resource of type from player; if Pantry active, consume it and skip one loss. Returns { state, pantryConsumed }. */
 function removeResourceWithPantryCheck(
   state: GameState,
   playerId: PlayerId,
   terrain: Terrain,
   count: number
-): GameState {
+): { state: GameState; pantryConsumed: boolean } {
   let next = state
+  let pantryConsumed = false
   for (let c = 0; c < count; c++) {
     const { state: s, consumed } = consumeWellStockedPantry(next, playerId)
-    if (consumed) continue
+    if (consumed) {
+      pantryConsumed = true
+      continue
+    }
     const idx = next.players.findIndex(p => p.id === playerId)
     if (idx < 0) break
     const p = next.players[idx]
@@ -239,14 +244,14 @@ function removeResourceWithPantryCheck(
     players[idx] = { ...p, resources: res }
     next = { ...next, players }
   }
-  return next
+  return { state: next, pantryConsumed }
 }
 
-/** Pick a random resource type the player has; remove one (with Pantry check). Returns { state, stolen } (stolen null if none). */
+/** Pick a random resource type the player has; remove one (with Pantry check). Returns { state, stolen, pantryConsumed? }. */
 function removeOneRandomResource(
   state: GameState,
   playerId: PlayerId
-): { state: GameState; stolen: Terrain | null } {
+): { state: GameState; stolen: Terrain | null; pantryConsumed?: boolean } {
   const idx = state.players.findIndex(p => p.id === playerId)
   if (idx < 0) return { state, stolen: null }
   const p = state.players[idx]
@@ -257,24 +262,26 @@ function removeOneRandomResource(
   }
   if (available.length === 0) return { state, stolen: null }
   const terrain = available[Math.floor(Math.random() * available.length)]
-  const next = removeResourceWithPantryCheck(state, playerId, terrain, 1)
-  return { state: next, stolen: terrain }
+  const out = removeResourceWithPantryCheck(state, playerId, terrain, 1)
+  return { state: out.state, stolen: terrain, pantryConsumed: out.pantryConsumed }
 }
 
 function removeOneRandomResourceStateOnly(state: GameState, playerId: PlayerId): GameState {
   return removeOneRandomResource(state, playerId).state
 }
 
-/** Remove up to `count` random resources (each can be negated by Pantry once). Returns new state and list of resource types actually removed (for UI). */
-function removeRandomResources(state: GameState, playerId: PlayerId, count: number): { state: GameState; removed: Terrain[] } {
+/** Remove up to `count` random resources (each can be negated by Pantry once). Returns state, removed list, and whether Pantry negated at least one. */
+function removeRandomResources(state: GameState, playerId: PlayerId, count: number): { state: GameState; removed: Terrain[]; pantryConsumed: boolean } {
   let next = state
   const removed: Terrain[] = []
+  let pantryConsumed = false
   for (let i = 0; i < count; i++) {
-    const { state: s, stolen } = removeOneRandomResource(next, playerId)
+    const { state: s, stolen, pantryConsumed: pc } = removeOneRandomResource(next, playerId)
     next = s
     if (stolen) removed.push(stolen)
+    if (pc) pantryConsumed = true
   }
-  return { state: next, removed }
+  return { state: next, removed, pantryConsumed }
 }
 
 function addVP(state: GameState, playerId: PlayerId, delta: number): GameState {
@@ -315,12 +322,33 @@ function drawRandomResourcesFromBank(state: GameState, playerId: PlayerId, count
   return next
 }
 
-/** Apply debuff effect (Phase 3). Returns { state, lostResources? } so UI can show what was lost (e.g. lost_supplies). */
-function applyDebuffEffect(state: GameState, playerId: PlayerId, cardId: string): GameState | { state: GameState; lostResources?: Terrain[] } {
+/** Draw N random resources from bank and return state plus list of drawn terrains (for UI feedback). */
+function drawRandomResourcesFromBankWithFeedback(
+  state: GameState,
+  playerId: PlayerId,
+  count: number
+): { state: GameState; drawn: Terrain[] } {
+  let next = state
+  const drawn: Terrain[] = []
+  for (let i = 0; i < count; i++) {
+    const t = TERRAINS[Math.floor(Math.random() * TERRAINS.length)]
+    next = addResource(next, playerId, t, 1)
+    drawn.push(t)
+  }
+  return { state: next, drawn }
+}
+
+/** Apply debuff effect (Phase 3). Returns { state, lostResources?, pantryConsumed? } so UI can show what was lost / Pantry negated. */
+function applyDebuffEffect(
+  state: GameState,
+  playerId: PlayerId,
+  cardId: string
+): GameState | { state: GameState; lostResources?: Terrain[]; pantryConsumed?: boolean } {
   const victimIndex = state.players.findIndex(p => p.id === playerId)
   if (victimIndex < 0) return state
   let next = state
   let lostResources: Terrain[] | undefined
+  let pantryConsumed = false
 
   switch (cardId) {
     case 'dust_storm':
@@ -333,25 +361,31 @@ function applyDebuffEffect(state: GameState, playerId: PlayerId, cardId: string)
       const out = removeRandomResources(next, playerId, 2)
       next = out.state
       lostResources = out.removed
+      if (out.pantryConsumed) pantryConsumed = true
       break
     }
     case 'bandit_ransom': {
       const out = removeRandomResources(next, playerId, 2)
       next = out.state
       lostResources = out.removed
+      if (out.pantryConsumed) pantryConsumed = true
       break
     }
     case 'wagon_overturned': {
       const out = removeOneRandomResource(next, playerId)
       next = out.state
       lostResources = out.stolen ? [out.stolen] : undefined
+      if (out.pantryConsumed) pantryConsumed = true
       next = addActiveEffect(next, 'wagon_overturned', playerId, { type: 'cannot_build' }, { turnsRemaining: 1 })
       break
     }
-    case 'dysentery_outbreak':
-      next = removeResourceWithPantryCheck(next, playerId, 'wheat', 1)
+    case 'dysentery_outbreak': {
+      const out = removeResourceWithPantryCheck(next, playerId, 'wheat', 1)
+      next = out.state
+      if (out.pantryConsumed) pantryConsumed = true
       next = addActiveEffect(next, 'dysentery_outbreak', playerId, { type: 'no_wheat_production' }, { rollsRemaining: 2 })
       break
+    }
     case 'resource_theft': {
       const hexes = state.hexes.filter(h => h.terrain !== 'desert')
       const hex = hexes[Math.floor(Math.random() * hexes.length)]
@@ -359,9 +393,10 @@ function applyDebuffEffect(state: GameState, playerId: PlayerId, cardId: string)
       const robberId = state.players[nextPlayerIndex]?.id
       next = { ...next, robberHexId: hex.id }
       if (robberId) {
-        const { state: afterRemove, stolen } = removeOneRandomResource(next, playerId)
+        const { state: afterRemove, stolen, pantryConsumed: pc } = removeOneRandomResource(next, playerId)
         next = afterRemove
         if (stolen) next = addResource(next, robberId, stolen, 1)
+        if (pc) pantryConsumed = true
       }
       break
     }
@@ -372,9 +407,10 @@ function applyDebuffEffect(state: GameState, playerId: PlayerId, cardId: string)
       const robberId = state.players[nextPlayerIndex]?.id
       next = { ...next, robberHexId: hex.id }
       if (robberId) {
-        const { state: afterRemove, stolen } = removeOneRandomResource(next, playerId)
+        const { state: afterRemove, stolen, pantryConsumed: pc } = removeOneRandomResource(next, playerId)
         next = afterRemove
         if (stolen) next = addResource(next, robberId, stolen, 1)
+        if (pc) pantryConsumed = true
       }
       break
     }
@@ -422,7 +458,10 @@ function applyDebuffEffect(state: GameState, playerId: PlayerId, cardId: string)
     default:
       break
   }
-  return lostResources !== undefined ? { state: next, lostResources } : next
+  if (pantryConsumed || lostResources !== undefined) {
+    return { state: next, lostResources, pantryConsumed }
+  }
+  return next
 }
 
 /**
@@ -473,7 +512,30 @@ export function drawOmenCard(state: GameState, playerId: PlayerId): GameState {
     const applied = applyDebuffEffect(result, playerId, drawnCardId)
     const nextState = 'state' in applied ? applied.state : applied
     const lostResources = 'lostResources' in applied ? applied.lostResources : undefined
-    result = { ...nextState, lastOmenDebuffDrawn: { cardId: drawnCardId, playerId, ...(lostResources?.length ? { lostResources } : {}) } }
+    const pantryNegated = 'pantryConsumed' in applied && applied.pantryConsumed
+    result = {
+      ...nextState,
+      lastOmenDebuffDrawn: { cardId: drawnCardId, playerId, ...(lostResources?.length ? { lostResources } : {}) },
+      ...(pantryNegated ? { lastPantryNegation: { playerId, negatedCardId: drawnCardId } } : {}),
+    }
+    result = appendGameLog(result, {
+      type: 'omen_draw_debuff',
+      message: `Player ${playerId} drew ${getOmenCardName(drawnCardId)} (debuff)`,
+      playerId,
+    })
+    if (pantryNegated) {
+      result = appendGameLog(result, {
+        type: 'pantry_negate',
+        message: `Player ${playerId}'s Well-Stocked Pantry negated the debuff.`,
+        playerId,
+      })
+    }
+  } else {
+    result = appendGameLog(result, {
+      type: 'omen_buff',
+      message: `Player ${playerId} drew ${getOmenCardName(drawnCardId)}`,
+      playerId,
+    })
   }
   return result
 }
@@ -536,9 +598,11 @@ function applyBuffEffect(
       if (pair.length >= 2) next = addResources(next, playerId, { [pair[0]]: 1, [pair[1]]: 1 })
       break
     }
-    case 'hidden_cache':
-      next = drawRandomResourcesFromBank(next, playerId, 2)
+    case 'hidden_cache': {
+      const { state: nextState, drawn } = drawRandomResourcesFromBankWithFeedback(next, playerId, 2)
+      next = { ...nextState, lastOmenBuffPlayed: { cardId: 'hidden_cache', playerId, resourcesGained: drawn } }
       break
+    }
     case 'gold_rush':
       next = addResource(next, playerId, 'ore', 3)
       next = addResource(next, playerId, targets?.goldRushChoice ?? 'ore', 1)
@@ -642,6 +706,11 @@ export function playOmenCard(
     players: newPlayers,
   }
   result = applyBuffEffect(result, cardId, playerId, targets)
+  result = appendGameLog(result, {
+    type: 'omen_play',
+    message: `Player ${playerId} played ${getOmenCardName(cardId)}`,
+    playerId,
+  })
   return result
 }
 
@@ -672,7 +741,8 @@ export function getEffectiveBuildCost(
     const a = e.appliedEffect
     if (a?.type !== 'cost_mod') continue
     if (a.structure === structure) {
-      if (a.override) cost = { ...cost, ...(a.override as Partial<Record<Terrain, number>>) }
+      // override replaces the cost (e.g. Strategic Settlement Spot: 1 Wood, 1 Brick only)
+      if (a.override) cost = { ...(a.override as Partial<Record<Terrain, number>>) }
       if (a.wood !== undefined) cost.wood = (cost.wood ?? 0) + (a.wood as number)
       if (a.brick !== undefined) cost.brick = (cost.brick ?? 0) + (a.brick as number)
       if (a.sheep !== undefined) cost.sheep = (cost.sheep ?? 0) + (a.sheep as number)
@@ -877,9 +947,9 @@ export function applyProductionModifiersAfterRoll(state: GameState, dice: number
         }
       }
       const woodPenalty = (e.appliedEffect.wood as number) ?? 0
-      if (woodPenalty < 0) next = removeResourceWithPantryCheck(next, e.playerId, 'wood', 1)
+      if (woodPenalty < 0) next = removeResourceWithPantryCheck(next, e.playerId, 'wood', 1).state
       const wheatPenalty = (e.appliedEffect.wheat as number) ?? 0
-      if (wheatPenalty < 0) next = removeResourceWithPantryCheck(next, e.playerId, 'wheat', 1)
+      if (wheatPenalty < 0) next = removeResourceWithPantryCheck(next, e.playerId, 'wheat', 1).state
     }
     if (e.appliedEffect?.type === 'no_wheat_production' && (e.rollsRemaining ?? 0) > 0) {
       const flash = next.lastResourceFlash ?? {}
@@ -887,7 +957,7 @@ export function applyProductionModifiersAfterRoll(state: GameState, dice: number
       if (playerIndex >= 0) {
         const terrains = flash[playerIndex] ?? []
         const wheatCount = terrains.filter(t => t === 'wheat').length
-        if (wheatCount > 0) next = removeResourceWithPantryCheck(next, e.playerId, 'wheat', wheatCount)
+        if (wheatCount > 0) next = removeResourceWithPantryCheck(next, e.playerId, 'wheat', wheatCount).state
       }
     }
     if (e.appliedEffect?.type === 'production_halt' && (e.rollsRemaining ?? 0) > 0) {
@@ -895,7 +965,7 @@ export function applyProductionModifiersAfterRoll(state: GameState, dice: number
       const playerIndex = next.players.findIndex(p => p.id === e.playerId)
       if (playerIndex >= 0) {
         const terrains = flash[playerIndex] ?? []
-        for (const t of terrains) next = removeResourceWithPantryCheck(next, e.playerId, t, 1)
+        for (const t of terrains) next = removeResourceWithPantryCheck(next, e.playerId, t, 1).state
       }
     }
   }
