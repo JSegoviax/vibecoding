@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { TERRAIN_COLORS, TERRAIN_LABELS } from '../game/terrain'
+import type { PlayOmenTargets } from '../game/omens'
 import { AnimatedResourceIcon } from './AnimatedResourceIcon'
 import { BuildCostsInline, type BuildCostDebuffSources } from './BuildCostsLegend'
 import type { Terrain } from '../game/types'
@@ -7,6 +8,8 @@ import type { Terrain } from '../game/types'
 const RESOURCE_OPTIONS: Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore']
 
 const RESOURCE_TYPES: Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore']
+
+const OMEN_CARDS_WITH_CHOICE = ['foragers_bounty', 'skilled_prospector', 'gold_rush', 'sturdy_wagon_wheel', 'reliable_harvest'] as const
 
 export interface PlayerForResources {
   id: number
@@ -62,8 +65,8 @@ interface PlayerResourcesProps {
   omensHand?: string[]
   /** Oregon's Omens: whether the active player can play this card (phase, turn, preconditions) */
   canPlayOmenCard?: (cardId: string) => boolean
-  /** Oregon's Omens: play a buff card from hand */
-  onPlayOmenCard?: (cardId: string) => void
+  /** Oregon's Omens: play a buff card from hand (optional targets e.g. Forager's Bounty: resourceChoice) */
+  onPlayOmenCard?: (cardId: string, targets?: PlayOmenTargets) => void
   /** Oregon's Omens: get display name for a card ID */
   getOmenCardName?: (cardId: string) => string
   /** Oregon's Omens: get short effect text for a card ID */
@@ -76,6 +79,12 @@ interface PlayerResourcesProps {
   getEffectiveBuildCostForPlayer?: (playerId: number, structure: 'road' | 'settlement' | 'city') => Partial<Record<Terrain, number>>
   /** Oregon's Omens: which cards are increasing each resource's cost per structure (for asterisk tooltip/modal) */
   getBuildCostDebuffSourcesForPlayer?: (playerId: number) => BuildCostDebuffSources
+  /** Oregon's Omens: hex options for Reliable Harvest (player's producing hexes: terrain + number). When provided and non-empty, player picks which hex gets +1 on next roll. */
+  reliableHarvestHexOptions?: Array<{ hexId: string; label: string }>
+  /** Oregon's Omens: number of cards drawn (in hands + discard) for "x/45 cards purchased" tally */
+  omenCardsPurchased?: number
+  /** Oregon's Omens: total deck size (45) for "x/45 cards purchased" tally */
+  omenCardsTotal?: number
 }
 
 function ResourceChip({ type, count, flash }: { type: Terrain; count: number; flash?: boolean }) {
@@ -202,6 +211,9 @@ export function PlayerResources({
   getActiveEffectDescription,
   getEffectiveBuildCostForPlayer,
   getBuildCostDebuffSourcesForPlayer,
+  reliableHarvestHexOptions = [],
+  omenCardsPurchased,
+  omenCardsTotal,
 }: PlayerResourcesProps) {
   const [omensCardDetailId, setOmensCardDetailId] = useState<string | null>(null)
   return (
@@ -505,6 +517,9 @@ export function PlayerResources({
                 cityCost={phase === 'playing' && oregonsOmensEnabled && getEffectiveBuildCostForPlayer ? getEffectiveBuildCostForPlayer(p.id, 'city') : undefined}
                 debuffSources={phase === 'playing' && oregonsOmensEnabled && getBuildCostDebuffSourcesForPlayer ? getBuildCostDebuffSourcesForPlayer(p.id) : undefined}
                 getOmenCardName={getOmenCardName}
+                oregonsOmensEnabled={oregonsOmensEnabled}
+                cardsPurchased={oregonsOmensEnabled ? omenCardsPurchased : undefined}
+                totalOmenCards={oregonsOmensEnabled ? omenCardsTotal : undefined}
               />
             )}
           </div>
@@ -542,29 +557,145 @@ export function PlayerResources({
             <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
               {getOmenCardEffectText(omensCardDetailId)}
             </div>
+            {omensCardDetailId === 'foragers_bounty' && canPlayOmenCard?.(omensCardDetailId) && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Choose resource:</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => {
+                      onPlayOmenCard?.('foragers_bounty', { resourceChoice: 'wood' })
+                      setOmensCardDetailId(null)
+                    }}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                  >
+                    Gain 1 Wood
+                  </button>
+                  <button
+                    onClick={() => {
+                      onPlayOmenCard?.('foragers_bounty', { resourceChoice: 'wheat' })
+                      setOmensCardDetailId(null)
+                    }}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                  >
+                    Gain 1 Wheat
+                  </button>
+                </div>
+              </div>
+            )}
+            {omensCardDetailId === 'skilled_prospector' && canPlayOmenCard?.(omensCardDetailId) && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Choose pair:</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => {
+                      onPlayOmenCard?.('skilled_prospector', { resourceChoices: ['ore', 'wood'] })
+                      setOmensCardDetailId(null)
+                    }}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                  >
+                    Ore + Wood
+                  </button>
+                  <button
+                    onClick={() => {
+                      onPlayOmenCard?.('skilled_prospector', { resourceChoices: ['brick', 'wheat'] })
+                      setOmensCardDetailId(null)
+                    }}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                  >
+                    Brick + Wheat
+                  </button>
+                </div>
+              </div>
+            )}
+            {omensCardDetailId === 'gold_rush' && canPlayOmenCard?.(omensCardDetailId) && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Choose 1 extra resource (you also get 3 Ore):</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {RESOURCE_OPTIONS.map(t => (
+                    <button
+                      key={t}
+                      onClick={() => {
+                        onPlayOmenCard?.('gold_rush', { goldRushChoice: t })
+                        setOmensCardDetailId(null)
+                      }}
+                      style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                    >
+                      {TERRAIN_LABELS[t]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {omensCardDetailId === 'sturdy_wagon_wheel' && canPlayOmenCard?.(omensCardDetailId) && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Next road costs 1 less:</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => {
+                      onPlayOmenCard?.('sturdy_wagon_wheel', { roadDiscount: 'wood' })
+                      setOmensCardDetailId(null)
+                    }}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                  >
+                    Wood
+                  </button>
+                  <button
+                    onClick={() => {
+                      onPlayOmenCard?.('sturdy_wagon_wheel', { roadDiscount: 'brick' })
+                      setOmensCardDetailId(null)
+                    }}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                  >
+                    Brick
+                  </button>
+                </div>
+              </div>
+            )}
+            {omensCardDetailId === 'reliable_harvest' && canPlayOmenCard?.(omensCardDetailId) && reliableHarvestHexOptions.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Choose hex for +1 on next roll:</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {reliableHarvestHexOptions.map(({ hexId, label }) => (
+                    <button
+                      key={hexId}
+                      onClick={() => {
+                        onPlayOmenCard?.('reliable_harvest', { hexIdForHarvest: hexId })
+                        setOmensCardDetailId(null)
+                      }}
+                      style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => {
-                  if (canPlayOmenCard?.(omensCardDetailId)) {
-                    onPlayOmenCard?.(omensCardDetailId)
-                    setOmensCardDetailId(null)
-                  }
-                }}
-                disabled={!canPlayOmenCard?.(omensCardDetailId)}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: 8,
-                  background: canPlayOmenCard?.(omensCardDetailId) ? 'var(--accent)' : 'var(--muted)',
-                  border: 'none',
-                  color: '#fff',
-                  cursor: canPlayOmenCard?.(omensCardDetailId) ? 'pointer' : 'not-allowed',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  opacity: canPlayOmenCard?.(omensCardDetailId) ? 1 : 0.6,
-                }}
-              >
-                Play card
-              </button>
+              {(!OMEN_CARDS_WITH_CHOICE.includes(omensCardDetailId as typeof OMEN_CARDS_WITH_CHOICE[number]) ||
+                (omensCardDetailId === 'reliable_harvest' && reliableHarvestHexOptions.length === 0)) && (
+                <button
+                  onClick={() => {
+                    if (canPlayOmenCard?.(omensCardDetailId)) {
+                      onPlayOmenCard?.(omensCardDetailId)
+                      setOmensCardDetailId(null)
+                    }
+                  }}
+                  disabled={!canPlayOmenCard?.(omensCardDetailId)}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    background: canPlayOmenCard?.(omensCardDetailId) ? 'var(--accent)' : 'var(--muted)',
+                    border: 'none',
+                    color: '#fff',
+                    cursor: canPlayOmenCard?.(omensCardDetailId) ? 'pointer' : 'not-allowed',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    opacity: canPlayOmenCard?.(omensCardDetailId) ? 1 : 0.6,
+                  }}
+                >
+                  Play card
+                </button>
+              )}
               <button
                 onClick={() => setOmensCardDetailId(null)}
                 style={{

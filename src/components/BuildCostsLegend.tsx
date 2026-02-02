@@ -150,6 +150,8 @@ export type BuildCostDebuffSources = {
   city: Partial<Record<Terrain, string[]>>
 }
 
+const OMEN_DRAW_COST: Partial<Record<Terrain, number>> = { wheat: 1, sheep: 1, ore: 1 }
+
 /** Inline build costs for use inside a player card. When effective costs / debuffSources provided (Oregon's Omens), shows adjusted cost and asterisk + tooltip/modal for debuffed resources. */
 export function BuildCostsInline({
   playerResources,
@@ -158,6 +160,9 @@ export function BuildCostsInline({
   cityCost: cityCostProp,
   debuffSources,
   getOmenCardName = (id: string) => id.replace(/_/g, ' '),
+  oregonsOmensEnabled,
+  cardsPurchased,
+  totalOmenCards,
 }: {
   playerResources: Record<Terrain, number>
   roadCost?: Partial<Record<Terrain, number>>
@@ -165,6 +170,10 @@ export function BuildCostsInline({
   cityCost?: Partial<Record<Terrain, number>>
   debuffSources?: BuildCostDebuffSources
   getOmenCardName?: (cardId: string) => string
+  /** When true, show Omen card draw cost row and x/total cards purchased tally */
+  oregonsOmensEnabled?: boolean
+  cardsPurchased?: number
+  totalOmenCards?: number
 }) {
   const baseRoad = getBuildCost('road')
   const baseSettlement = getBuildCost('settlement')
@@ -228,6 +237,33 @@ export function BuildCostsInline({
         </div>
         <CostRow cost={cityCost} debuffMap={debuffSources?.city} />
       </div>
+      {oregonsOmensEnabled && (
+        <>
+          <div style={sectionStyle}>
+            <div style={titleStyle}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: 20,
+                  height: 28,
+                  borderRadius: 4,
+                  background: 'linear-gradient(135deg, #8B7355 0%, #6B5344 100%)',
+                  border: '1px solid rgba(0,0,0,0.2)',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                }}
+                title="Omen card"
+              />
+              <span>Omen card</span>
+            </div>
+            <CostRow cost={OMEN_DRAW_COST} />
+          </div>
+          {cardsPurchased != null && totalOmenCards != null && (
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+              {cardsPurchased}/{totalOmenCards} cards purchased
+            </div>
+          )}
+        </>
+      )}
       {debuffModalMessage && (
         <div
           role="dialog"

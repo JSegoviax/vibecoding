@@ -51,7 +51,9 @@ import {
   consumePathfinderEffect,
   getActiveEffectsForPlayer,
   getActiveEffectDescription,
+  TOTAL_OMEN_DECK_SIZE,
 } from './game/omens'
+import type { PlayOmenTargets } from './game/omens'
 import type { GameState, PlayerId } from './game/types'
 import { TERRAIN_LABELS } from './game/terrain'
 import { trackEvent } from './utils/analytics'
@@ -77,6 +79,7 @@ function updateGameState(g: GameState | null, updater: (state: GameState) => Gam
 const GameRoom = lazy(() => import('./components/GameRoom').then(m => ({ default: m.GameRoom })))
 const FAQPage = lazy(() => import('./pages/FAQPage').then(m => ({ default: m.FAQPage })))
 const HowToPlayPage = lazy(() => import('./pages/HowToPlayPage').then(m => ({ default: m.HowToPlayPage })))
+const AboutPage = lazy(() => import('./pages/AboutPage').then(m => ({ default: m.AboutPage })))
 
 type StartScreen = 'mode' | 'ai-count' | 'colors' | 'multiplayer' | 'game'
 
@@ -272,6 +275,9 @@ export default function App() {
   if (pathname === '/how-to-play') {
     return <Suspense fallback={fallback}><HowToPlayPage /></Suspense>
   }
+  if (pathname === '/about') {
+    return <Suspense fallback={fallback}><AboutPage /></Suspense>
+  }
   if (pathMatch) {
     return (
       <Suspense fallback={fallback}>
@@ -423,6 +429,7 @@ export default function App() {
         </div>
         <p style={{ marginTop: 16, marginBottom: 0, fontSize: 14, color: 'var(--ink)', opacity: 0.8 }}>
           <a href="/how-to-play" style={{ color: 'var(--cta)', textDecoration: 'none', marginRight: 16 }}>How to play</a>
+          <a href="/about" style={{ color: 'var(--cta)', textDecoration: 'none', marginRight: 16 }}>About</a>
           <a href="/faq" style={{ color: 'var(--cta)', textDecoration: 'none' }}>FAQ</a>
         </p>
         </main>
@@ -559,14 +566,13 @@ export default function App() {
       setErrorMessage(null)
     }
     if (buildMode === 'city' && canBuildCity(game, vid, playerId)) {
-      if (!currentPlayer || !canAfford(currentPlayer, 'city')) {
-        setErrorMessage('Insufficient resources. Need: ' + (currentPlayer ? getMissingResources(currentPlayer, 'city').map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', ') : 'unknown'))
+      if (!currentPlayer || !canAffordWithCost(currentPlayer, cityCost)) {
+        setErrorMessage('Insufficient resources. Need: ' + (currentPlayer ? getMissingResourcesWithCost(currentPlayer, cityCost).map(m => `${m.need} ${TERRAIN_LABELS[m.terrain]}`).join(', ') : 'unknown'))
         return
       }
       trackEvent('build', 'gameplay', 'city', 1)
       setGame(g => {
         const next = updateGameState(g, (state) => {
-          const cost = { wheat: 2, ore: 3 }
           const nextState: GameState = {
             ...state,
             vertices: { ...state.vertices },
@@ -577,14 +583,16 @@ export default function App() {
             nextState.players = state.players.map((p, i) => {
               if (i !== playerId - 1) return p
               const res = { ...p.resources }
-              for (const [t, n] of Object.entries(cost)) { res[t as keyof typeof res] = Math.max(0, (res[t as keyof typeof res] || 0) - n!) }
+              for (const [t, n] of Object.entries(cityCost)) { if (n != null && n > 0) res[t as keyof typeof res] = Math.max(0, (res[t as keyof typeof res] || 0) - n) }
               return { ...p, resources: res, settlementsLeft: p.settlementsLeft + 1, citiesLeft: p.citiesLeft - 1, victoryPoints: p.victoryPoints + 1 }
             })
           }
           return nextState
         })
         if (!next) return g
-        return appendGameLog(next, { type: 'build', message: `Player ${playerId} built a city` })
+        let result = next
+        if (isOmensEnabled(result)) result = consumeFreeBuildEffect(result, actualPlayerId as PlayerId, 'city')
+        return appendGameLog(result, { type: 'build', message: `Player ${playerId} built a city` })
       })
       setBuildMode(null)
       setErrorMessage(null)
@@ -671,6 +679,11 @@ export default function App() {
         } else {
           nextState.lastResourceFlash = distributeResources(nextState, sum) || null
           nextState.lastResourceHexIds = getHexIdsThatProducedResources(nextState, sum)
+          // Oregon's Omens: must run after every roll. Applies Dysentery (no Wheat), Drought, Famine, etc.,
+          // and ticks rollsRemaining so roll-based effects expire. Do not remove.
+          if (isOmensEnabled(nextState)) {
+            nextState = applyProductionModifiersAfterRoll(nextState, sum)
+          }
         }
         return nextState
       })
@@ -1143,9 +1156,9 @@ export default function App() {
             canPlayOmenCard={isPlaying && !isAITurn ? (cardId: string) => canPlayOmenCard(game, actualPlayerId as PlayerId, cardId) : undefined}
             onPlayOmenCard={
               isPlaying && !isAITurn
-                ? (cardId: string) => {
+                ? (cardId: string, targets?: PlayOmenTargets) => {
                     if (cardId === 'robbers_regret') setOmenRobberMode({ cardId: 'robbers_regret', step: 'hex' })
-                    else setGame(playOmenCard(game, actualPlayerId as PlayerId, cardId))
+                    else setGame(playOmenCard(game, actualPlayerId as PlayerId, cardId, targets))
                   }
                 : undefined
             }
@@ -1155,6 +1168,29 @@ export default function App() {
             getActiveEffectDescription={getActiveEffectDescription}
             getEffectiveBuildCostForPlayer={isOmensEnabled(game) ? (pid, structure) => getEffectiveBuildCost(game, pid as PlayerId, structure) : undefined}
             getBuildCostDebuffSourcesForPlayer={isOmensEnabled(game) ? (pid) => getBuildCostDebuffSources(game, pid as PlayerId) : undefined}
+            omenCardsPurchased={
+              isOmensEnabled(game)
+                ? game.players.reduce((s, p) => s + (p.omensHand?.length ?? 0), 0) + (game.omensDiscardPile?.length ?? 0)
+                : undefined
+            }
+            omenCardsTotal={isOmensEnabled(game) ? TOTAL_OMEN_DECK_SIZE : undefined}
+            reliableHarvestHexOptions={
+              isOmensEnabled(game) && isPlaying && !isAITurn
+                ? (() => {
+                    const seen = new Map<string, string>()
+                    for (const v of Object.values(game.vertices)) {
+                      if (v.structure?.player !== actualPlayerId || !v.hexIds?.length) continue
+                      for (const hid of v.hexIds) {
+                        if (seen.has(hid)) continue
+                        const h = game.hexes.find(x => x.id === hid)
+                        if (h && h.terrain !== 'desert' && h.number != null)
+                          seen.set(hid, `${TERRAIN_LABELS[h.terrain]} (${h.number})`)
+                      }
+                    }
+                    return Array.from(seen.entries()).map(([hexId, label]) => ({ hexId, label }))
+                  })()
+                : undefined
+            }
           />
             </>
           )}

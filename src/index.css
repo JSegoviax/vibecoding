@@ -102,13 +102,21 @@ body::before {
 
 /* Game page: Oregon Trail parchment palette */
 .game-page.parchment-page {
-  background: var(--parchment-bg);
+  background: var(--parchment-bg, #F6EEE3);
   min-height: 100vh;
   width: 100%;
   --text: var(--ink);
   --muted: rgba(42, 26, 10, 0.75);
   --surface: var(--parchment-section);
   --accent: var(--cta);
+}
+
+/* Board area: explicit background so layout is clear (avoids one big “block” look) */
+.game-page .game-board {
+  background: var(--surface, #252b3b);
+}
+.game-page.parchment-page .game-board {
+  background: var(--parchment-section, #EEE7D7);
 }
 .game-page.parchment-page .game-title,
 .game-page.parchment-page h1 {
@@ -157,14 +165,14 @@ body::before {
     overflow-x: hidden;
   }
 
-  /* Board: fit within phone width, no horizontal overflow */
+  /* Board: fit within phone width; cap height so sidebar (Resources/History) is visible */
   .game-board {
     order: 1;
     min-width: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
-    min-height: 280px;
-    max-height: 58vh;
+    min-height: 240px;
+    max-height: 42vh;
     overflow: hidden;
     display: flex !important;
     align-items: center;
@@ -174,8 +182,8 @@ body::before {
   .game-board svg {
     width: 100% !important;
     max-width: 100% !important;
-    min-height: 260px !important;
-    max-height: 56vh !important;
+    min-height: 200px !important;
+    max-height: 40vh !important;
   }
 
   /* Modules (VP, Resources, etc.) below the board */
@@ -213,13 +221,13 @@ body::before {
 
 @media (max-width: 480px) {
   .game-board {
-    min-height: 240px;
-    max-height: 52vh;
+    min-height: 200px;
+    max-height: 38vh;
   }
 
   .game-board svg {
-    min-height: 220px !important;
-    max-height: 50vh !important;
+    min-height: 180px !important;
+    max-height: 36vh !important;
   }
 }
 

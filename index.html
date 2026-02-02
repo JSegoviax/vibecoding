@@ -30,7 +30,7 @@
     <!-- Theme / PWA -->
     <meta name="theme-color" content="#1a1f2e" />
     <meta name="apple-mobile-web-app-title" content="Settlers of Oregon" />
-    <!-- JSON-LD for search engines -->
+    <!-- JSON-LD for search engines: WebApplication + VideoGame (browser game) -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -41,6 +41,17 @@
         "applicationCategory": "Game",
         "operatingSystem": "Any",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "Settlers of Oregon",
+        "genre": ["Strategy", "Board Game", "Survival"],
+        "playMode": "MultiPlayer",
+        "applicationCategory": "Browser Game",
+        "operatingSystem": "Any"
       }
     </script>
     <!-- Google Analytics -->

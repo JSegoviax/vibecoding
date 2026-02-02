@@ -52,6 +52,7 @@ function entryTypeColor(type: GameLogEntry['type']): string {
     case 'dice':
       return 'var(--accent)'
     case 'resources':
+    case 'resource_gain':
       return '#22c55e'
     case 'robbery':
       return '#e11d48'

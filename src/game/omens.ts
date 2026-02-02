@@ -5,6 +5,7 @@
 
 import type { ActiveOmenEffect, GameState, PlayerId } from './types'
 import type { Terrain } from './types'
+import { TERRAIN_LABELS } from './terrain'
 import { appendGameLog } from './gameLog'
 
 const TERRAINS: Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore']
@@ -143,6 +144,9 @@ function shuffle<T>(arr: T[]): T[] {
   }
   return out
 }
+
+/** Total number of cards in the Oregon's Omens deck (2× each buff, 1× each debuff). */
+export const TOTAL_OMEN_DECK_SIZE = BUFF_IDS.length * 2 + DEBUFF_IDS.length
 
 /** Build and shuffle the Oregon's Omens deck. */
 export function createOmensDeck(): string[] {
@@ -628,15 +632,33 @@ function applyBuffEffect(
     case 'pathfinders_insight':
       next = addActiveEffect(next, 'pathfinders_insight', playerId, { type: 'road_no_adjacency' }, { turnsRemaining: 1 })
       break
-    case 'reliable_harvest':
+    case 'reliable_harvest': {
+      let hexId = targets?.hexIdForHarvest
+      if (!hexId) {
+        const vertsWithPlayer = (Object.values(state.vertices) as { id: string; hexIds?: string[]; structure?: { player: number } }[]).filter(
+          v => v.structure?.player === playerId && v.hexIds?.length
+        )
+        for (const v of vertsWithPlayer) {
+          for (const hid of v.hexIds ?? []) {
+            const h = state.hexes.find(x => x.id === hid)
+            if (h && h.terrain !== 'desert' && h.number != null) {
+              hexId = hid
+              break
+            }
+          }
+          if (hexId) break
+        }
+        hexId = hexId ?? state.hexes.find(h => h.terrain !== 'desert' && h.number != null)?.id
+      }
       next = addActiveEffect(
         next,
         'reliable_harvest',
         playerId,
-        { type: 'production_bonus', hexId: targets?.hexIdForHarvest ?? state.hexes[0]?.id },
+        { type: 'production_bonus', hexId },
         { rollsRemaining: 1 }
       )
       break
+    }
     case 'strategic_settlement_spot':
       next = addActiveEffect(next, 'strategic_settlement_spot', playerId, {
         type: 'cost_mod',
@@ -711,6 +733,29 @@ export function playOmenCard(
     message: `Player ${playerId} played ${getOmenCardName(cardId)}`,
     playerId,
   })
+  if (cardId === 'foragers_bounty' && (targets?.resourceChoice === 'wood' || targets?.resourceChoice === 'wheat')) {
+    result = appendGameLog(result, {
+      type: 'resource_gain',
+      message: `Player ${playerId} gained 1 ${TERRAIN_LABELS[targets.resourceChoice]}`,
+      playerId,
+    })
+  }
+  if (cardId === 'skilled_prospector' && targets?.resourceChoices?.length >= 2) {
+    const [t1, t2] = targets.resourceChoices
+    result = appendGameLog(result, {
+      type: 'resource_gain',
+      message: `Player ${playerId} gained 1 ${TERRAIN_LABELS[t1]} and 1 ${TERRAIN_LABELS[t2]}`,
+      playerId,
+    })
+  }
+  if (cardId === 'gold_rush') {
+    const extra = targets?.goldRushChoice ?? 'ore'
+    result = appendGameLog(result, {
+      type: 'resource_gain',
+      message: `Player ${playerId} gained 3 Ore and 1 ${TERRAIN_LABELS[extra]}`,
+      playerId,
+    })
+  }
   return result
 }
 
@@ -913,7 +958,11 @@ export function tickActiveOmensEffects(state: GameState, event: 'turn_start' | '
   return { ...state, activeOmensEffects: nextEffects }
 }
 
-/** Apply production modifiers (Reliable Harvest +1, Bountiful Pastures +1 sheep, Drought/Confusing Tracks/Dysentery/Famine). Call after distributeResources. */
+/**
+ * Apply production modifiers (Reliable Harvest +1, Bountiful Pastures +1 sheep, Drought/Confusing Tracks/Dysentery/Famine).
+ * Must be called after every dice roll (when sum !== 7), after distributeResources, by App and MultiplayerGame.
+ * Applies no_wheat (Dysentery), production_mod (Drought, Confusing Tracks), production_halt (Famine), ticks rollsRemaining, removes expired effects.
+ */
 export function applyProductionModifiersAfterRoll(state: GameState, dice: number): GameState {
   if (!isOmensEnabled(state)) return state
   const effects = state.activeOmensEffects ?? []
@@ -957,7 +1006,12 @@ export function applyProductionModifiersAfterRoll(state: GameState, dice: number
       if (playerIndex >= 0) {
         const terrains = flash[playerIndex] ?? []
         const wheatCount = terrains.filter(t => t === 'wheat').length
-        if (wheatCount > 0) next = removeResourceWithPantryCheck(next, e.playerId, 'wheat', wheatCount).state
+        if (wheatCount > 0) {
+          next = removeResourceWithPantryCheck(next, e.playerId, 'wheat', wheatCount).state
+          const updated = { ...next.lastResourceFlash } as Record<number, Terrain[]>
+          updated[playerIndex] = (updated[playerIndex] ?? []).filter(t => t !== 'wheat')
+          next = { ...next, lastResourceFlash: updated }
+        }
       }
     }
     if (e.appliedEffect?.type === 'production_halt' && (e.rollsRemaining ?? 0) > 0) {
@@ -965,7 +1019,12 @@ export function applyProductionModifiersAfterRoll(state: GameState, dice: number
       const playerIndex = next.players.findIndex(p => p.id === e.playerId)
       if (playerIndex >= 0) {
         const terrains = flash[playerIndex] ?? []
-        for (const t of terrains) next = removeResourceWithPantryCheck(next, e.playerId, t, 1).state
+        if (terrains.length > 0) {
+          for (const t of terrains) next = removeResourceWithPantryCheck(next, e.playerId, t, 1).state
+          const updated = { ...next.lastResourceFlash } as Record<number, Terrain[]>
+          updated[playerIndex] = []
+          next = { ...next, lastResourceFlash: updated }
+        }
       }
     }
   }

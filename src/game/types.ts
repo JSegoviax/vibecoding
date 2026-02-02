@@ -110,7 +110,7 @@ export interface GameState {
 
 export interface GameLogEntry {
   id: string
-  type: 'dice' | 'resources' | 'robbery' | 'build' | 'turn' | 'omen_play' | 'omen_draw_debuff' | 'omen_buff' | 'pantry_negate' | 'setup'
+  type: 'dice' | 'resources' | 'resource_gain' | 'robbery' | 'build' | 'turn' | 'omen_play' | 'omen_draw_debuff' | 'omen_buff' | 'pantry_negate' | 'setup'
   message: string
   playerId?: number
   turnIndex?: number

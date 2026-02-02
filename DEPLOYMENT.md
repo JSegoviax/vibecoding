@@ -141,6 +141,30 @@ This will build and serve your app locally so you can verify everything works.
 
 ---
 
+## Google Search Console (Indexing)
+
+If Google Search Console reports **"Page with redirect"** for `http://hexhobbyist.com/` or says the page isn’t indexed:
+
+1. **HTTP → HTTPS is correct**  
+   Vercel redirects `http://hexhobbyist.com/` to `https://hexhobbyist.com/` by default. Google lists the HTTP URL as "Page with redirect" and should index the **HTTPS** URL instead.
+
+2. **Use the HTTPS property in Search Console**  
+   - In [Google Search Console](https://search.google.com/search-console), add a property for **`https://hexhobbyist.com`** (with `https`), not only `http://`.  
+   - Verify ownership (HTML tag, DNS, or Google Analytics).
+
+3. **Submit the sitemap**  
+   - In Search Console → Sitemaps, submit:  
+     **`https://hexhobbyist.com/sitemap.xml`**
+
+4. **Request indexing for the homepage**  
+   - In Search Console → URL Inspection, enter **`https://hexhobbyist.com/`**.  
+   - Click **Request indexing** so Google recrawls and can index the canonical URL.
+
+5. **Give it time**  
+   Indexing can take a few days. The site is already set up with a canonical URL, `robots.txt`, and sitemap pointing to HTTPS.
+
+---
+
 ## Important Notes
 
 - Make sure all your assets (images in `public/`) are committed to git

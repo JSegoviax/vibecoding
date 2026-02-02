@@ -49,7 +49,9 @@ import {
   getEffectiveTradeRate,
   getActiveEffectsForPlayer,
   getActiveEffectDescription,
+  TOTAL_OMEN_DECK_SIZE,
 } from '../game/omens'
+import type { PlayOmenTargets } from '../game/omens'
 import { appendGameLog } from '../game/state'
 import type { GameState, PlayerId } from '../game/types'
 import { TERRAIN_LABELS } from '../game/terrain'
@@ -215,10 +217,12 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
         next.players = game.players.map((p, i) => {
           if (i !== playerId - 1) return p
           const res = { ...p.resources }
-          for (const [t, n] of Object.entries(cost)) (res as Record<string, number>)[t] = Math.max(0, ((res as Record<string, number>)[t] || 0) - (n as number))
+          for (const [t, n] of Object.entries(cost)) { if (n != null && n > 0) (res as Record<string, number>)[t] = Math.max(0, ((res as Record<string, number>)[t] || 0) - (n as number)) }
           return { ...p, resources: res, settlementsLeft: p.settlementsLeft + 1, citiesLeft: p.citiesLeft - 1, victoryPoints: p.victoryPoints + 1 }
         })
-        sendStateUpdate(appendGameLog(next, { type: 'build', message: `Player ${playerId} built a city` }))
+        let result = next
+        if (isOmensEnabled(result)) result = consumeFreeBuildEffect(result, playerId as PlayerId, 'city')
+        sendStateUpdate(appendGameLog(result, { type: 'build', message: `Player ${playerId} built a city` }))
         setBuildMode(null)
         setErrorMessage(null)
       }
@@ -269,7 +273,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     sendStateUpdate(drawOmenCard(game, playerId as PlayerId))
   }
 
-  const handlePlayOmenCard = (cardId: string, targets?: { hexId?: string; targetPlayerId?: PlayerId }) => {
+  const handlePlayOmenCard = (cardId: string, targets?: PlayOmenTargets) => {
     if (!isMyTurn || !canPlayOmenCard(game, playerId as PlayerId, cardId, targets)) return
     if (cardId === 'robbers_regret') {
       setOmenRobberMode({ cardId: 'robbers_regret', step: 'hex' })
@@ -304,6 +308,11 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     } else {
       next.lastResourceFlash = distributeResources(next, sum) || null
       next.lastResourceHexIds = getHexIdsThatProducedResources(next, sum)
+      // Oregon's Omens: must run after every roll. Applies Dysentery (no Wheat), Drought, Famine, etc.,
+      // and ticks rollsRemaining so roll-based effects expire. Do not remove.
+      if (isOmensEnabled(next)) {
+        next = applyProductionModifiersAfterRoll(next, sum)
+      }
     }
     let result = appendGameLog(next, { type: 'dice', message: `Player ${playerId} rolled ${dice1} + ${dice2} = ${sum}` })
     if (sum !== 7 && next.lastResourceFlash && Object.keys(next.lastResourceFlash).length > 0) {
@@ -721,13 +730,36 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
             omensHandCount={currentPlayer?.omensHand?.length ?? 0}
             omensHand={currentPlayer?.omensHand ?? []}
             canPlayOmenCard={isPlaying && isMyTurn ? (cardId: string) => canPlayOmenCard(game, playerId as PlayerId, cardId) : undefined}
-            onPlayOmenCard={isPlaying && isMyTurn ? (cardId: string) => handlePlayOmenCard(cardId) : undefined}
+            onPlayOmenCard={isPlaying && isMyTurn ? (cardId: string, targets?: PlayOmenTargets) => handlePlayOmenCard(cardId, targets) : undefined}
             getOmenCardName={getOmenCardName}
             getOmenCardEffectText={getOmenCardEffectText}
             activeOmensEffects={isOmensEnabled(game) ? getActiveEffectsForPlayer(game, playerId as PlayerId) : []}
             getActiveEffectDescription={getActiveEffectDescription}
             getEffectiveBuildCostForPlayer={isOmensEnabled(game) ? (pid, structure) => getEffectiveBuildCost(game, pid as PlayerId, structure) : undefined}
             getBuildCostDebuffSourcesForPlayer={isOmensEnabled(game) ? (pid) => getBuildCostDebuffSources(game, pid as PlayerId) : undefined}
+            omenCardsPurchased={
+              isOmensEnabled(game)
+                ? game.players.reduce((s, p) => s + (p.omensHand?.length ?? 0), 0) + (game.omensDiscardPile?.length ?? 0)
+                : undefined
+            }
+            omenCardsTotal={isOmensEnabled(game) ? TOTAL_OMEN_DECK_SIZE : undefined}
+            reliableHarvestHexOptions={
+              isOmensEnabled(game) && isPlaying && isMyTurn
+                ? (() => {
+                    const seen = new Map<string, string>()
+                    for (const v of Object.values(game.vertices)) {
+                      if (v.structure?.player !== playerId || !v.hexIds?.length) continue
+                      for (const hid of v.hexIds) {
+                        if (seen.has(hid)) continue
+                        const h = game.hexes.find(x => x.id === hid)
+                        if (h && h.terrain !== 'desert' && h.number != null)
+                          seen.set(hid, `${TERRAIN_LABELS[h.terrain]} (${h.number})`)
+                      }
+                    }
+                    return Array.from(seen.entries()).map(([hexId, label]) => ({ hexId, label }))
+                  })()
+                : undefined
+            }
           />
             </>
           )}
