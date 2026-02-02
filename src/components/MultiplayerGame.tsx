@@ -600,7 +600,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
       )}
 
       <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-        <div className="game-board" style={{ flex: '1 1 auto', minWidth: 600, borderRadius: 12, overflow: 'visible', backgroundColor: '#e0d5c4', backgroundImage: 'url(/harbor-docks.png)', backgroundSize: 'cover', backgroundPosition: 'center', border: '3px solid #c4b59a', boxShadow: 'inset 0 0 60px rgba(139,115,85,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+        <div className="game-board" style={{ flex: '1 1 auto', minWidth: 600, borderRadius: 12, overflow: 'visible', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
           <HexBoard
             hexes={game.hexes}
             vertexStates={vertexStates}

@@ -76,8 +76,8 @@ export function HexBoard({
   const cx = useMemo(() => (bounds.minX + bounds.maxX) / 2, [bounds])
   const cy = useMemo(() => (bounds.minY + bounds.maxY) / 2, [bounds])
   
-  // Use actual bounds with minimal padding (reduce padding to make board larger)
-  const padding = HEX_R * 0.3 // Reduced from 2 * HEX_R to make board fill more space
+  // Padding around board
+  const padding = HEX_R * 0.3
   const w = useMemo(() => (bounds.maxX - bounds.minX) + padding * 2, [bounds, padding])
   const h = useMemo(() => (bounds.maxY - bounds.minY) + padding * 2, [bounds, padding])
 
@@ -102,6 +102,11 @@ export function HexBoard({
       preserveAspectRatio="xMidYMid meet"
       style={{ maxHeight: '90vh', minHeight: 500, width: '100%', position: 'relative', zIndex: 1 }}
     >
+      <defs>
+        <filter id="hex-number-shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx={0} dy={1} stdDeviation={2} floodColor="#000" floodOpacity={0.5} />
+        </filter>
+      </defs>
       {/* Define clip paths for hexes */}
       <defs>
         {hexes.map(h => {
@@ -177,11 +182,11 @@ export function HexBoard({
               <g clipPath={`url(#hex-clip-${h.id})`}>
                 <image
                   href="/wood-hex.png"
-                  x={center.x - HEX_R * 2}
-                  y={center.y - HEX_R * 2}
-                  width={HEX_R * 4}
-                  height={HEX_R * 4}
-                  preserveAspectRatio="none"
+                  x={center.x - HEX_R}
+                  y={center.y - HEX_R}
+                  width={HEX_R * 2}
+                  height={HEX_R * 2}
+                  preserveAspectRatio="xMidYMid meet"
                   style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
                 />
               </g>
@@ -229,11 +234,11 @@ export function HexBoard({
               <g clipPath={`url(#hex-clip-${h.id})`}>
                 <image
                   href="/sheep-hex.png"
-                  x={center.x - HEX_R * 2}
-                  y={center.y - HEX_R * 2}
-                  width={HEX_R * 4}
-                  height={HEX_R * 4}
-                  preserveAspectRatio="none"
+                  x={center.x - HEX_R}
+                  y={center.y - HEX_R}
+                  width={HEX_R * 2}
+                  height={HEX_R * 2}
+                  preserveAspectRatio="xMidYMid meet"
                   style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
                 />
               </g>
@@ -257,12 +262,13 @@ export function HexBoard({
                 y={center.y}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fill={h.number === 6 || h.number === 8 ? '#b91c1c' : '#2d2216'}
+                fill={h.number === 6 || h.number === 8 ? '#b91c1c' : '#1a1a1a'}
                 fontWeight="bold"
                 fontSize={47.5}
                 stroke="#ffffff"
-                strokeWidth={2}
+                strokeWidth={4}
                 paintOrder="stroke"
+                filter="url(#hex-number-shadow)"
                 style={{ pointerEvents: 'none' }}
               >
                 {h.number}
