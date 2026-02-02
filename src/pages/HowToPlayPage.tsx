@@ -87,13 +87,14 @@ export function HowToPlayPage() {
             <li>Settlement: 1 VP</li>
             <li>City: 2 VP</li>
             <li>Longest Road (5+ connected roads): 2 VP</li>
+            <li>Omen Hand (5+ Omen cards purchased, Oregon&apos;s Omens only): 2 VP</li>
           </ul>
         </section>
 
         <section style={sectionStyle}>
           <h2 style={h2Style}>Oregon's Omens (optional)</h2>
           <p style={pStyle}>
-            When enabled, you can spend 1 Wheat, 1 Sheep, and 1 Ore to draw an Omen card. Cards can give one-time bonuses (e.g. cheaper builds, extra resources) or temporary effects. Some cards help you; others are debuffs. Use the in-game Game Guide (📖 button) for full rules.
+            When enabled, you can spend 1 Wheat, 1 Sheep, and 1 Ore to draw an Omen card. Cards can give one-time bonuses (e.g. cheaper builds, extra resources) or temporary effects. Some cards help you; others are debuffs. The first player to have <strong>purchased</strong> 5 or more Omen cards earns the Omen Hand award (2 VP). Use the in-game Game Guide (📖 button) for full rules.
           </p>
         </section>
 

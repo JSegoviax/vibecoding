@@ -12,6 +12,9 @@ interface VictoryPointTrackerProps {
   activePlayerIndex: number
   phase: string
   longestRoadPlayerId?: number | null
+  /** Oregon's Omens: player who holds Omen Hand (5+ cards purchased); only shown when true */
+  oregonsOmensEnabled?: boolean
+  omenHandPlayerId?: number | null
 }
 
 function getVPBreakdown(vertices: Record<string, Vertex>, playerId: number) {
@@ -27,7 +30,7 @@ function getVPBreakdown(vertices: Record<string, Vertex>, playerId: number) {
   return { settlements, cities, fromSettlements, fromCities, total: fromSettlements + fromCities }
 }
 
-export function VictoryPointTracker({ vertices, players, activePlayerIndex, phase, longestRoadPlayerId }: VictoryPointTrackerProps) {
+export function VictoryPointTracker({ vertices, players, activePlayerIndex, phase, longestRoadPlayerId, oregonsOmensEnabled, omenHandPlayerId }: VictoryPointTrackerProps) {
   return (
     <div>
       <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -36,7 +39,9 @@ export function VictoryPointTracker({ vertices, players, activePlayerIndex, phas
       {players.map((p, i) => {
         const { settlements, cities, fromSettlements, fromCities, total } = getVPBreakdown(vertices, p.id)
         const hasLongestRoad = longestRoadPlayerId === p.id
-        const totalWithLongestRoad = total + (hasLongestRoad ? 2 : 0)
+        const hasOmenHand = oregonsOmensEnabled && omenHandPlayerId === p.id
+        const bonusVP = (hasLongestRoad ? 2 : 0) + (hasOmenHand ? 2 : 0)
+        const totalDisplay = total + bonusVP
         const isActive = phase === 'setup' ? activePlayerIndex === i : activePlayerIndex === i
         return (
           <div
@@ -51,7 +56,7 @@ export function VictoryPointTracker({ vertices, players, activePlayerIndex, phas
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
               <span style={{ fontWeight: 'bold', color: p.color, fontSize: 13 }}>{p.name}</span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{totalWithLongestRoad} VP</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{totalDisplay} VP</span>
             </div>
             <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
               {settlements > 0 && (
@@ -63,7 +68,10 @@ export function VictoryPointTracker({ vertices, players, activePlayerIndex, phas
               {hasLongestRoad && (
                 <div style={{ color: '#fbbf24', fontWeight: 600 }}>Longest Road: +2 VP</div>
               )}
-              {settlements === 0 && cities === 0 && !hasLongestRoad && (
+              {hasOmenHand && (
+                <div style={{ color: '#a78bfa', fontWeight: 600 }}>Omen Hand: +2 VP</div>
+              )}
+              {settlements === 0 && cities === 0 && !hasLongestRoad && !hasOmenHand && (
                 <div style={{ fontStyle: 'italic' }}>No structures yet</div>
               )}
             </div>

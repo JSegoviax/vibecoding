@@ -64,6 +64,8 @@ export interface Player {
   roadsLeft: number
   /** Oregon's Omens: card IDs in hand (only when Omens enabled) */
   omensHand?: string[]
+  /** Oregon's Omens: total cards ever purchased (drawn from deck), for Omen Hand award */
+  omenCardsPurchased?: number
   /** Oregon's Omens: reset at start of turn */
   hasDrawnOmenThisTurn?: boolean
   /** Oregon's Omens: reset at start of turn */
@@ -92,6 +94,8 @@ export interface GameState {
   lastRobbery: { robbingPlayerId: PlayerId; targetPlayerId: PlayerId; resource: Terrain | null } | null
   /** Player ID who currently has the longest road (minimum 5 roads) */
   longestRoadPlayerId: PlayerId | null
+  /** Oregon's Omens: player ID who holds the Omen Hand award (5+ cards purchased); only when Omens enabled */
+  omenHandPlayerId?: PlayerId | null
   /** Oregon's Omens: draw pile (only when Omens enabled) */
   omensDeck?: string[]
   /** Oregon's Omens: played/discarded cards (only when Omens enabled) */

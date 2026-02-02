@@ -448,3 +448,27 @@ export function updateLongestRoad(state: GameState): void {
   }
 }
 
+const MIN_OMEN_HAND = 5
+
+/** Update Omen Hand award (Oregon's Omens only): player with 5+ cards purchased gets 2 VP. Call after drawOmenCard. Tie: current holder keeps. */
+export function updateOmenHand(state: GameState): void {
+  if (state.omensDeck == null) return
+  const maxPurchased = Math.max(0, ...state.players.map(p => p.omenCardsPurchased ?? 0))
+  if (maxPurchased < MIN_OMEN_HAND) return
+  const candidates = state.players.filter(p => (p.omenCardsPurchased ?? 0) === maxPurchased)
+  const currentHolder = state.omenHandPlayerId ?? null
+  const keepCurrent = currentHolder != null && candidates.some(p => p.id === currentHolder)
+  const newOmenHandPlayerId = keepCurrent ? currentHolder : (candidates[0]?.id ?? null)
+  const oldOmenHandPlayerId = state.omenHandPlayerId ?? null
+  if (oldOmenHandPlayerId === newOmenHandPlayerId) return
+  if (oldOmenHandPlayerId) {
+    const oldPlayer = state.players[oldOmenHandPlayerId - 1]
+    if (oldPlayer) oldPlayer.victoryPoints = Math.max(0, oldPlayer.victoryPoints - 2)
+  }
+  if (newOmenHandPlayerId) {
+    const newPlayer = state.players[newOmenHandPlayerId - 1]
+    if (newPlayer) newPlayer.victoryPoints += 2
+  }
+  state.omenHandPlayerId = newOmenHandPlayerId
+}
+

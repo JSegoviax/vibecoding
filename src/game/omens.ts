@@ -503,6 +503,7 @@ export function drawOmenCard(state: GameState, playerId: PlayerId): GameState {
     ...player,
     resources: newResources,
     omensHand: newHand,
+    omenCardsPurchased: (player.omenCardsPurchased ?? 0) + 1,
     hasDrawnOmenThisTurn: true,
   }
 

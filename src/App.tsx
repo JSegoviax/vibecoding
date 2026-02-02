@@ -29,6 +29,7 @@ import {
   getPlayersOnHex,
   stealResource,
   updateLongestRoad,
+  updateOmenHand,
   getTradeRate,
 } from './game/logic'
 import {
@@ -797,7 +798,11 @@ export default function App() {
 
   const handleDrawOmenCard = () => {
     if (!game || !canDrawOmenCard(game, actualPlayerId as PlayerId)) return
-    setGame(drawOmenCard(game, actualPlayerId as PlayerId))
+    setGame(g => {
+      const next = drawOmenCard(g, actualPlayerId as PlayerId)
+      updateOmenHand(next)
+      return next
+    })
   }
 
   const handleTrade = (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => {
@@ -823,8 +828,11 @@ export default function App() {
       if (stateAfterTrade) next = { ...stateAfterTrade, players: next.players }
       return next
     }))
-    setTradeFormOpen(false)
-    setErrorMessage(null)
+    // Defer closing the trade form to the next frame to avoid Chrome layout/compositor glitches when resources and form disappear in the same paint
+    requestAnimationFrame(() => {
+      setTradeFormOpen(false)
+      setErrorMessage(null)
+    })
   }
 
   const isPlaying = game.phase === 'playing' && !actualWinner
@@ -1103,6 +1111,8 @@ export default function App() {
             activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
             phase={game.phase}
             longestRoadPlayerId={game.longestRoadPlayerId}
+            oregonsOmensEnabled={isOmensEnabled(game)}
+            omenHandPlayerId={game.omenHandPlayerId ?? null}
           />
 
           <PlayerResources

@@ -229,6 +229,7 @@ export function GameGuide() {
                   <li>Settlement: 1 victory point</li>
                   <li>City: 2 victory points</li>
                   <li>Longest Road: 2 victory points</li>
+                  <li>Omen Hand: 2 victory points (Oregon&apos;s Omens only)</li>
                 </ul>
               </section>
 
@@ -253,6 +254,9 @@ export function GameGuide() {
                   <li><strong>Buffs</strong> go into your hand. You may play <strong>one buff per turn</strong> during your turn (before or after building/trading).</li>
                   <li><strong>Debuffs</strong> are resolved immediately when drawn — you don&apos;t keep them. Some can be partly negated by Well-Stocked Pantry.</li>
                 </ul>
+                <p style={{ margin: '8px 0', lineHeight: 1.6, color: 'var(--ink)', opacity: 0.9 }}>
+                  <strong>Omen Hand:</strong> The first player to have <strong>purchased</strong> (drawn from the deck) 5 or more Omen cards receives the &quot;Omen Hand&quot; award, worth 2 victory points. If another player has purchased more cards than the current holder, they take the award and the 2 VP (the previous holder loses 2 VP). Count is total cards ever purchased, not cards currently in hand.
+                </p>
                 <h4 style={{ margin: '16px 0 8px', fontSize: 15, fontWeight: 'bold', color: 'var(--ink)' }}>Buff cards</h4>
                 <ul style={{ margin: '0 0 8px', paddingLeft: 20, lineHeight: 1.7, color: 'var(--ink)', opacity: 0.9, listStyle: 'none' }}>
                   {BUFF_IDS.map((id) => (

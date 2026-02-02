@@ -80,6 +80,7 @@ export function createInitialState(
     ? players.map(p => ({
         ...p,
         omensHand: [],
+        omenCardsPurchased: 0,
         hasDrawnOmenThisTurn: false,
         hasPlayedOmenThisTurn: false,
       }))
@@ -107,6 +108,7 @@ export function createInitialState(
   if (oregonsOmens) {
     return {
       ...baseState,
+      omenHandPlayerId: null,
       omensDeck: createOmensDeck(),
       omensDiscardPile: [],
       activeOmensEffects: [],

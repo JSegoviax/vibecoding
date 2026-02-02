@@ -27,6 +27,7 @@ import {
   getPlayersOnHex,
   stealResource,
   updateLongestRoad,
+  updateOmenHand,
   getTradeRate,
 } from '../game/logic'
 import {
@@ -270,7 +271,9 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
 
   const handleDrawOmenCard = () => {
     if (!isMyTurn || !canDrawOmenCard(game, playerId as PlayerId)) return
-    sendStateUpdate(drawOmenCard(game, playerId as PlayerId))
+    const next = drawOmenCard(game, playerId as PlayerId)
+    updateOmenHand(next)
+    sendStateUpdate(next)
   }
 
   const handlePlayOmenCard = (cardId: string, targets?: PlayOmenTargets) => {
@@ -415,8 +418,11 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     }
     if (stateAfterTrade) next = { ...stateAfterTrade, players: next.players }
     sendStateUpdate(next)
-    setTradeFormOpen(false)
-    setErrorMessage(null)
+    // Defer closing the trade form to the next frame to avoid Chrome layout/compositor glitches when resources and form disappear in the same paint
+    requestAnimationFrame(() => {
+      setTradeFormOpen(false)
+      setErrorMessage(null)
+    })
   }
 
   useEffect(() => {
@@ -682,7 +688,15 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
           </div>
           {sidebarTab === 'resources' && (
             <>
-          <VictoryPointTracker vertices={game.vertices} players={game.players} activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex} phase={game.phase} longestRoadPlayerId={game.longestRoadPlayerId} />
+          <VictoryPointTracker
+            vertices={game.vertices}
+            players={game.players}
+            activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
+            phase={game.phase}
+            longestRoadPlayerId={game.longestRoadPlayerId}
+            oregonsOmensEnabled={isOmensEnabled(game)}
+            omenHandPlayerId={game.omenHandPlayerId ?? null}
+          />
           <PlayerResources
             players={game.players}
             activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
