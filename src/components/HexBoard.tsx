@@ -400,6 +400,160 @@ export function HexBoard({
         )
       })}
 
+      {/* Harbors (piers + circle) - render before vertices so piers sit behind settlements */}
+      {harbors.map((harbor: Harbor) => {
+        const edge = eById[harbor.edgeId]
+        if (!edge) {
+          console.warn('Harbor edge not found:', harbor.edgeId)
+          return null
+        }
+        const v1 = vById[edge.v1]
+        const v2 = vById[edge.v2]
+        if (!v1 || !v2) {
+          console.warn('Harbor vertices not found:', edge.v1, edge.v2)
+          return null
+        }
+        
+        // Circle at center of water hex; piers point diagonally from v1 and v2 toward the circle
+        const midX = (v1.x + v2.x) / 2
+        const midY = (v1.y + v2.y) / 2
+        
+        // Perpendicular to edge pointing outward (toward water)
+        const dx = v2.x - v1.x
+        const dy = v2.y - v1.y
+        const perpX1 = -dy
+        const perpY1 = dx
+        const perpX2 = dy
+        const perpY2 = -dx
+        const centerToMidX = midX - cx
+        const centerToMidY = midY - cy
+        const dot1 = perpX1 * centerToMidX + perpY1 * centerToMidY
+        const dot2 = perpX2 * centerToMidX + perpY2 * centerToMidY
+        const perpX = dot1 > dot2 ? perpX1 : perpX2
+        const perpY = dot1 > dot2 ? perpY1 : perpY2
+        const len = Math.sqrt(perpX * perpX + perpY * perpY)
+        const normX = len > 0 ? perpX / len : 0
+        const normY = len > 0 ? perpY / len : 0
+        
+        // Badge at center of water hex (apothem = HEX_R * sqrt(3)/2 from edge mid)
+        const waterHexCenterOffset = HEX_R * (Math.sqrt(3) / 2)
+        const harborX = midX + waterHexCenterOffset * normX
+        const harborY = midY + waterHexCenterOffset * normY
+        
+        // Piers: start on land (at vertex), extend out toward the circle
+        const dockW = 58
+        const dockH = 24
+        
+        const v1ToCircleX = harborX - v1.x
+        const v1ToCircleY = harborY - v1.y
+        const v2ToCircleX = harborX - v2.x
+        const v2ToCircleY = harborY - v2.y
+        
+        const len1 = Math.hypot(v1ToCircleX, v1ToCircleY) || 1
+        const len2 = Math.hypot(v2ToCircleX, v2ToCircleY) || 1
+        const u1x = v1ToCircleX / len1
+        const u1y = v1ToCircleY / len1
+        const u2x = v2ToCircleX / len2
+        const u2y = v2ToCircleY / len2
+        
+        // Pier center = vertex + half length toward circle so the back of the pier sits on land
+        const halfW = dockW / 2
+        const dock1CenterX = v1.x + halfW * u1x
+        const dock1CenterY = v1.y + halfW * u1y
+        const dock2CenterX = v2.x + halfW * u2x
+        const dock2CenterY = v2.y + halfW * u2y
+        
+        const angleDeg1 = (Math.atan2(v1ToCircleY, v1ToCircleX) * 180) / Math.PI
+        const angleDeg2 = (Math.atan2(v2ToCircleY, v2ToCircleX) * 180) / Math.PI
+        // Flip pier image when pointing left/west so the top surface looks right-side up
+        const flip1 = u1x < 0 ? ' scale(1,-1)' : ''
+        const flip2 = u2x < 0 ? ' scale(1,-1)' : ''
+        
+        return (
+          <g key={harbor.id} style={{ zIndex: 100 }}>
+            {/* Pier 1: from first vertex, diagonal toward circle */}
+            <g
+              transform={`translate(${dock1CenterX}, ${dock1CenterY}) rotate(${angleDeg1})${flip1}`}
+              style={{ pointerEvents: 'none' }}
+            >
+              <image
+                href="/port-dock.png"
+                x={-dockW / 2}
+                y={-dockH / 2}
+                width={dockW}
+                height={dockH}
+                preserveAspectRatio="none"
+                style={{ imageRendering: 'auto' }}
+              />
+            </g>
+            {/* Pier 2: from second vertex, diagonal toward circle */}
+            <g
+              transform={`translate(${dock2CenterX}, ${dock2CenterY}) rotate(${angleDeg2})${flip2}`}
+              style={{ pointerEvents: 'none' }}
+            >
+              <image
+                href="/port-dock.png"
+                x={-dockW / 2}
+                y={-dockH / 2}
+                width={dockW}
+                height={dockH}
+                preserveAspectRatio="none"
+                style={{ imageRendering: 'auto' }}
+              />
+            </g>
+            {/* Harbor trade rate badge at center of water hex */}
+            <circle
+              cx={harborX}
+              cy={harborY}
+              r={36}
+              fill="#fff8dc"
+              stroke="#8b4513"
+              strokeWidth={2}
+              style={{ pointerEvents: 'none' }}
+              opacity={0.95}
+            />
+            {harbor.type === 'generic' ? (
+              <text
+                x={harborX}
+                y={harborY}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill="#8b4513"
+                fontWeight="bold"
+                fontSize={22}
+                style={{ pointerEvents: 'none' }}
+              >
+                3:1
+              </text>
+            ) : (
+              <>
+                <image
+                  href={`/${harbor.type}-icon.png`}
+                  x={harborX - 18}
+                  y={harborY - 28}
+                  width={36}
+                  height={36}
+                  preserveAspectRatio="xMidYMid meet"
+                  style={{ pointerEvents: 'none' }}
+                />
+                <text
+                  x={harborX}
+                  y={harborY + 20}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill="#8b4513"
+                  fontWeight="bold"
+                  fontSize={20}
+                  style={{ pointerEvents: 'none' }}
+                >
+                  2:1
+                </text>
+              </>
+            )}
+          </g>
+        )
+      })}
+
       {/* Vertices (settlements = house images, cities = larger house images; potential spots = pixel-art icons) */}
       {vertices.map((v) => {
         const s = vertexStates[v.id]
@@ -411,7 +565,7 @@ export function HexBoard({
         const isCity = s?.type === 'city'
         const size = isCity ? 72 : 54  // Increased by 50%: city was 48, settlement was 36
 
-        // Potential settlement spot: rendered after harbors so it sits above the port (see below)
+        // Potential settlement spot: rendered in separate block below so it sits above the port
         if (hl && !s) return null
         
         if (player?.colorImage) {
@@ -463,147 +617,6 @@ export function HexBoard({
             />
           )
         }
-      })}
-
-      {/* Harbors - render after other elements to ensure visibility */}
-      {harbors.map((harbor: Harbor) => {
-        const edge = eById[harbor.edgeId]
-        if (!edge) {
-          console.warn('Harbor edge not found:', harbor.edgeId)
-          return null
-        }
-        const v1 = vById[edge.v1]
-        const v2 = vById[edge.v2]
-        if (!v1 || !v2) {
-          console.warn('Harbor vertices not found:', edge.v1, edge.v2)
-          return null
-        }
-        
-        // Dock extends FROM a settlement spot (vertex) OUT into water — anchor at vertex
-        const midX = (v1.x + v2.x) / 2
-        const midY = (v1.y + v2.y) / 2
-        
-        // Perpendicular to edge (two possible directions)
-        const dx = v2.x - v1.x
-        const dy = v2.y - v1.y
-        const perpX1 = -dy
-        const perpY1 = dx
-        const perpX2 = dy
-        const perpY2 = -dx
-        
-        // Which perpendicular points outward (toward water)
-        const centerToMidX = midX - cx
-        const centerToMidY = midY - cy
-        const dot1 = perpX1 * centerToMidX + perpY1 * centerToMidY
-        const dot2 = perpX2 * centerToMidX + perpY2 * centerToMidY
-        const perpX = dot1 > dot2 ? perpX1 : perpX2
-        const perpY = dot1 > dot2 ? perpY1 : perpY2
-        
-        const len = Math.sqrt(perpX * perpX + perpY * perpY)
-        const normX = len > 0 ? perpX / len : 0
-        const normY = len > 0 ? perpY / len : 0
-        
-        // Two docks: one from each settlement spot (v1 and v2), both extending outward into water
-        const halfDockLength = 18
-        const angleRad = Math.atan2(perpY, perpX)
-        const angleDeg = (angleRad * 180) / Math.PI
-        const dockW = 38
-        const dockH = 14
-        
-        // Dock center = vertex + halfDockLength * outward (landward end at vertex)
-        const dock1CenterX = v1.x + halfDockLength * normX
-        const dock1CenterY = v1.y + halfDockLength * normY
-        const dock2CenterX = v2.x + halfDockLength * normX
-        const dock2CenterY = v2.y + halfDockLength * normY
-        
-        // Trade-rate badge between the two docks (slightly further out into water)
-        const badgeOffset = halfDockLength + 16
-        const harborX = midX + badgeOffset * normX
-        const harborY = midY + badgeOffset * normY
-        
-        return (
-          <g key={harbor.id} style={{ zIndex: 100 }}>
-            {/* Dock 1: from first settlement spot into water (clipped port image) */}
-            <g
-              transform={`translate(${dock1CenterX}, ${dock1CenterY}) rotate(${angleDeg})`}
-              style={{ pointerEvents: 'none' }}
-            >
-              <image
-                href="/port-dock.png"
-                x={-dockW / 2}
-                y={-dockH / 2}
-                width={dockW}
-                height={dockH}
-                preserveAspectRatio="none"
-                style={{ imageRendering: 'auto' }}
-              />
-            </g>
-            {/* Dock 2: from second settlement spot into water */}
-            <g
-              transform={`translate(${dock2CenterX}, ${dock2CenterY}) rotate(${angleDeg})`}
-              style={{ pointerEvents: 'none' }}
-            >
-              <image
-                href="/port-dock.png"
-                x={-dockW / 2}
-                y={-dockH / 2}
-                width={dockW}
-                height={dockH}
-                preserveAspectRatio="none"
-                style={{ imageRendering: 'auto' }}
-              />
-            </g>
-            {/* Harbor trade rate badge (between the two docks) */}
-            <circle
-              cx={harborX}
-              cy={harborY}
-              r={36}
-              fill="#fff8dc"
-              stroke="#8b4513"
-              strokeWidth={2}
-              style={{ pointerEvents: 'none' }}
-              opacity={0.95}
-            />
-            {harbor.type === 'generic' ? (
-              <text
-                x={harborX}
-                y={harborY}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fill="#8b4513"
-                fontWeight="bold"
-                fontSize={22}
-                style={{ pointerEvents: 'none' }}
-              >
-                3:1
-              </text>
-            ) : (
-              <>
-                <image
-                  href={`/${harbor.type}-icon.png`}
-                  x={harborX - 18}
-                  y={harborY - 28}
-                  width={36}
-                  height={36}
-                  preserveAspectRatio="xMidYMid meet"
-                  style={{ pointerEvents: 'none' }}
-                />
-                <text
-                  x={harborX}
-                  y={harborY + 20}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fill="#8b4513"
-                  fontWeight="bold"
-                  fontSize={20}
-                  style={{ pointerEvents: 'none' }}
-                >
-                  2:1
-                </text>
-              </>
-            )}
-          </g>
-        )
       })}
 
       {/* Potential settlement spots - render after harbors so they sit above the port */}

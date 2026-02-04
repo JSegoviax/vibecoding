@@ -430,6 +430,7 @@ export function SettlersGamePage() {
         numPlayers={numHumanPlayers}
         onColorsSelected={handleColorsSelected}
         onBack={() => setStartScreen('mode')}
+        isVsAIMode
       />
     )
   }

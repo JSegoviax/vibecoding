@@ -24,9 +24,11 @@ interface ColorSelectionProps {
   numPlayers: 1 | 2 | 3 | 4
   onColorsSelected: (selectedColors: string[], options?: GameStartOptions) => void
   onBack?: () => void
+  /** When true, player 1 is human and 2+ are AI; title shows "Choose Player N's color" for AI */
+  isVsAIMode?: boolean
 }
 
-export function ColorSelection({ numPlayers, onColorsSelected, onBack }: ColorSelectionProps) {
+export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMode }: ColorSelectionProps) {
   const [selectedColors, setSelectedColors] = useState<string[]>([])
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0)
   const [oregonsOmens, setOregonsOmens] = useState(false)
@@ -106,7 +108,9 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack }: ColorSe
           textTransform: 'uppercase',
           letterSpacing: '2px',
         }}>
-          Choose Your Color
+          {isVsAIMode && currentPlayerIndex >= 1
+            ? `Choose Player ${currentPlayerIndex + 1}'s Color`
+            : 'Choose Your Color'}
         </h1>
         <p style={{
           fontSize: 16,
@@ -115,7 +119,9 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack }: ColorSe
           marginBottom: 24,
           textAlign: 'center',
         }}>
-          Player {currentPlayerIndex + 1} of {numPlayers}
+          {isVsAIMode && currentPlayerIndex >= 1
+            ? `AI Player ${currentPlayerIndex + 1} of ${numPlayers}`
+            : `Player ${currentPlayerIndex + 1} of ${numPlayers}`}
         </p>
 
         <label style={{
