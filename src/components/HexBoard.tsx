@@ -221,11 +221,11 @@ export function HexBoard({
               <g clipPath={`url(#hex-clip-${h.id})`}>
                 <image
                   href="/ore-hex.png"
-                  x={center.x - HEX_R * 2}
-                  y={center.y - HEX_R * 2}
-                  width={HEX_R * 4}
-                  height={HEX_R * 4}
-                  preserveAspectRatio="none"
+                  x={center.x - HEX_R}
+                  y={center.y - HEX_R}
+                  width={HEX_R * 2}
+                  height={HEX_R * 2}
+                  preserveAspectRatio="xMidYMid meet"
                   style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
                 />
               </g>
