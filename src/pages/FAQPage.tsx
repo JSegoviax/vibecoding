@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Link } from 'react-router-dom'
 
 const FAQ: { q: string; a: string }[] = [
   { q: 'What is Settlers of Oregon?', a: 'A free online Catan-style strategy board game. Collect resources, trade, and build roads, settlements, and cities. First to 10 victory points wins.' },
@@ -38,8 +39,8 @@ export function FAQPage() {
     >
       <div className="paper-section" style={{ margin: '0 auto' }}>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
-        <a
-          href="/"
+        <Link
+          to="/games/settlers-of-oregon"
           style={{
             display: 'inline-block',
             marginBottom: 24,
@@ -50,7 +51,7 @@ export function FAQPage() {
           }}
         >
           ← Back to game
-        </a>
+        </Link>
         <h1 style={{ margin: '0 0 8px', fontSize: 28, fontWeight: 'bold' }}>FAQ</h1>
         <p style={{ margin: '0 0 32px', color: 'var(--ink)', opacity: 0.85, fontSize: 15 }}>
           Frequently asked questions about Settlers of Oregon

@@ -1,15 +1,15 @@
 import { useState } from 'react'
 import { trackEvent } from '../utils/analytics'
+import { settlersGameRoomUrl } from '../config/games'
 
 const STORAGE_KEY = (gameId: string) => `supabase_game_${gameId}`
 
 function parseGameId(input: string): string | null {
   const trimmed = input.trim()
   if (!trimmed) return null
-  // If it looks like a full URL, extract the id after /game/
-  const match = trimmed.match(/\/game\/([a-f0-9-]+)$/i)
+  // Match /game/xxx or /games/settlers-of-oregon/game/xxx
+  const match = trimmed.match(/\/(?:games\/settlers-of-oregon\/)?game\/([a-f0-9-]+)(?:\?|$)/i)
   if (match) return match[1]
-  // Otherwise treat as raw uuid
   if (/^[a-f0-9-]{36}$/i.test(trimmed)) return trimmed
   return trimmed
 }
@@ -39,7 +39,7 @@ export function MultiplayerLobby({ onBack }: { onBack: () => void }) {
       if (insertPlayerError) throw insertPlayerError
       localStorage.setItem(STORAGE_KEY(id), JSON.stringify({ playerIndex: 0 }))
       trackEvent('multiplayer_game_created', 'multiplayer', `players_${numPlayers}`)
-      window.location.href = `/game/${id}?host=1`
+      window.location.href = settlersGameRoomUrl(id, true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create game')
       setCreating(false)
@@ -54,7 +54,7 @@ export function MultiplayerLobby({ onBack }: { onBack: () => void }) {
     }
     setError(null)
     trackEvent('multiplayer_join_clicked', 'multiplayer', 'join_by_link')
-    window.location.href = `/game/${id}`
+    window.location.href = settlersGameRoomUrl(id)
   }
 
   return (

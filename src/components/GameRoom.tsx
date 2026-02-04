@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { settlersGameRoomUrl, SETTLERS_PATH } from '../config/games'
 import { createInitialState } from '../game/state'
 import { MultiplayerGame } from './MultiplayerGame'
 import { trackEvent } from '../utils/analytics'
@@ -202,7 +203,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     await fetchGame()
   }
 
-  const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/game/${gameId}` : ''
+  const shareUrl = settlersGameRoomUrl(gameId)
 
   const copyLink = () => {
     trackEvent('multiplayer_link_copied', 'multiplayer', 'share_link')
@@ -222,7 +223,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24, background: 'linear-gradient(180deg, rgb(26, 31, 46) 0%, rgb(45, 55, 72) 100%)', color: 'var(--text)' }}>
         <h1 style={{ margin: 0, fontSize: 24 }}>Game not found</h1>
         <p style={{ color: 'var(--muted)', margin: 0 }}>{error}</p>
-        <a href="/" style={{ color: 'var(--accent)', fontWeight: 'bold' }}>Back to home</a>
+        <a href={SETTLERS_PATH} style={{ color: 'var(--accent)', fontWeight: 'bold' }}>Back to game</a>
       </div>
     )
   }

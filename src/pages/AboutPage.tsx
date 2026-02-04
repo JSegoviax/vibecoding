@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Link } from 'react-router-dom'
 
 export function AboutPage() {
   useEffect(() => {
@@ -22,8 +23,8 @@ export function AboutPage() {
       }}
     >
       <div className="paper-section" style={{ margin: '0 auto', maxWidth: 720 }}>
-        <a
-          href="/"
+        <Link
+          to="/games/settlers-of-oregon"
           style={{
             display: 'inline-block',
             marginBottom: 24,
@@ -34,7 +35,7 @@ export function AboutPage() {
           }}
         >
           ← Back to game
-        </a>
+        </Link>
 
         <h1 style={{ margin: '0 0 8px', fontSize: 28, fontWeight: 'bold', color: 'var(--ink)' }}>
           About Settlers of Oregon
@@ -115,7 +116,7 @@ export function AboutPage() {
         </section>
 
         <p style={{ marginTop: 32, color: 'var(--ink)', opacity: 0.8, fontSize: 14 }}>
-          <a href="/" style={{ color: 'var(--cta)', textDecoration: 'none' }}>← Back to game</a>
+          <Link to="/games/settlers-of-oregon" style={{ color: 'var(--cta)', textDecoration: 'none' }}>← Back to game</Link>
         </p>
       </div>
     </div>

@@ -33,6 +33,12 @@ interface HexBoardProps {
   resourceHighlightHexIds?: Set<string>
   /** Hex IDs that would have produced but were blocked by the robber (red highlight) */
   robberBlockedHexIds?: Set<string>
+  /** Oregon Capitalist: hex IDs that are hidden/fogged (show silhouette + optional cost) */
+  hiddenHexIds?: Set<string>
+  /** Oregon Capitalist: unlock cost to display on fogged hexes */
+  hiddenHexCosts?: Record<string, string>
+  /** When false, hide number tokens (2-12) on hexes. Default true for Catan-style games. */
+  showNumberTokens?: boolean
 }
 
 export function HexBoard({
@@ -51,6 +57,9 @@ export function HexBoard({
   activePlayerIndex = 0,
   resourceHighlightHexIds,
   robberBlockedHexIds,
+  hiddenHexIds,
+  hiddenHexCosts,
+  showNumberTokens = true,
 }: HexBoardProps) {
   const { vertices, edges } = useMemo(() => buildTopology(hexes), [hexes])
   const vById = useMemo(() => Object.fromEntries(vertices.map(v => [v.id, v])), [vertices])
@@ -100,7 +109,15 @@ export function HexBoard({
       width="100%"
       height="100%"
       preserveAspectRatio="xMidYMid meet"
-      style={{ maxHeight: '90vh', minHeight: 500, width: '100%', position: 'relative', zIndex: 1 }}
+      style={{
+        maxHeight: '90vh',
+        minHeight: 500,
+        width: '100%',
+        position: 'relative',
+        zIndex: 1,
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+      }}
     >
       <defs>
         <filter id="hex-number-shadow" x="-20%" y="-20%" width="140%" height="140%">
@@ -168,6 +185,36 @@ export function HexBoard({
         const fill = TERRAIN_COLORS[h.terrain]
         const isRobberHex = h.id === robberHexId
         const isSelectable = selectableRobberHexes?.has(h.id)
+        const isHidden = hiddenHexIds?.has(h.id)
+        const costLabel = hiddenHexCosts?.[h.id]
+
+        if (isHidden) {
+          return (
+            <g key={h.id}>
+              <path
+                d={d}
+                fill="#2a2a2a"
+                fillOpacity={0.9}
+                stroke="#4a4a4a"
+                strokeWidth={5}
+              />
+              {costLabel && (
+                <text
+                  x={center.x}
+                  y={center.y}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill="#999"
+                  fontSize={14}
+                  style={{ pointerEvents: 'none' }}
+                >
+                  {costLabel}
+                </text>
+              )}
+            </g>
+          )
+        }
+
         return (
           <g key={h.id}>
             <path
@@ -256,7 +303,7 @@ export function HexBoard({
                 />
               </g>
             )}
-            {h.number != null && (
+            {showNumberTokens && h.number != null && (
               <text
                 x={center.x}
                 y={center.y}

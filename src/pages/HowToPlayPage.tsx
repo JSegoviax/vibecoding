@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Link } from 'react-router-dom'
 
 export function HowToPlayPage() {
   useEffect(() => {
@@ -23,8 +24,8 @@ export function HowToPlayPage() {
       }}
     >
       <div className="paper-section" style={{ margin: '0 auto' }}>
-        <a
-          href="/"
+        <Link
+          to="/games/settlers-of-oregon"
           style={{
             display: 'inline-block',
             marginBottom: 24,
@@ -35,7 +36,7 @@ export function HowToPlayPage() {
           }}
         >
           ← Back to game
-        </a>
+        </Link>
         <h1 style={{ margin: '0 0 8px', fontSize: 28, fontWeight: 'bold' }}>How to Play</h1>
         <p style={{ margin: '0 0 32px', color: 'var(--ink)', opacity: 0.85, fontSize: 15 }}>
           A short guide to Settlers of Oregon
@@ -99,7 +100,7 @@ export function HowToPlayPage() {
         </section>
 
         <p style={{ marginTop: 32, color: 'var(--ink)', opacity: 0.8, fontSize: 14 }}>
-          <a href="/" style={{ color: 'var(--cta)', textDecoration: 'none' }}>← Back to game</a>
+          <Link to="/games/settlers-of-oregon" style={{ color: 'var(--cta)', textDecoration: 'none' }}>← Back to game</Link>
         </p>
       </div>
     </div>
