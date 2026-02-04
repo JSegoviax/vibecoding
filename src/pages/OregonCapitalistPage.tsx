@@ -11,7 +11,8 @@ import {
   upgradeHex,
   hireManager,
   purchaseGlobalBuff,
-  getUnlockCost,
+  getUnlockRequirement,
+  canAffordUnlock,
   getUpgradeCost,
   getHireCost,
   getProductionPerSecond,
@@ -214,13 +215,19 @@ export function OregonCapitalistPage() {
 
   const hiddenHexCosts = useMemo(() => {
     const costs: Record<string, string> = {}
-    const unlockIndex = Math.max(0, state.ownedHexIds.size - 1)
-    const cost = getUnlockCost(unlockIndex, totalProductionPerSec)
     for (const hex of unlockableHexes) {
-      costs[hex.id] = `${formatNumber(cost)} total`
+      const req = getUnlockRequirement(state, hex.id, state.ownedHexIds.size)
+      if (!req) continue
+      if (req.kind === 'anySingle') {
+        costs[hex.id] = `${formatNumber(req.cost)} (any 1 resource)`
+      } else {
+        costs[hex.id] = req.items
+          .map((it) => `${formatNumber(it.amount)} ${TERRAIN_LABELS[it.terrain]}`)
+          .join(' + ')
+      }
     }
     return costs
-  }, [unlockableHexes, state.ownedHexIds.size, totalProductionPerSec])
+  }, [unlockableHexes, state, state.ownedHexIds.size])
 
   const { available: availableBuffs, purchased: purchasedBuffs } = useMemo(
     () =>
@@ -453,26 +460,39 @@ export function OregonCapitalistPage() {
 
           <h3 style={{ margin: '24px 0 12px', fontSize: 18 }}>Unlock hex</h3>
           <p style={{ margin: '0 0 8px', fontSize: 13, opacity: 0.9 }}>
-            Cost: any resource type (e.g. 15 wood unlocks brick hex; scales with production)
+            Cost: early game is flexible; later some hexes require specific or multiple resources.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {unlockableHexes.map((hex) => {
-              const cost = getUnlockCost(Math.max(0, state.ownedHexIds.size - 1), totalProductionPerSec)
-              const spendFrom = (['wood', 'brick', 'sheep', 'wheat', 'ore'] as Terrain[])
-                .filter((t) => (state.resources[t] ?? 0) >= cost)
-                .sort((a, b) => (state.resources[b] ?? 0) - (state.resources[a] ?? 0))[0]
-              const canAfford = !!spendFrom
-              const maxResource = Math.max(
-                ...(['wood', 'brick', 'sheep', 'wheat', 'ore'] as Terrain[]).map((t) => state.resources[t] ?? 0)
-              )
               const sameTerrainCount = Array.from(state.ownedHexIds).filter(
                 (id) => state.hexes.find((h) => h.id === id)?.terrain === hex.terrain
               ).length
               const tierIfUnlocked = sameTerrainCount + 1
               const businessName = getBusinessName(hex.terrain, tierIfUnlocked)
-              const costLabel = canAfford
-                ? `Unlock (${formatNumber(cost)} ${spendFrom ? TERRAIN_LABELS[spendFrom] : 'resources'})`
-                : `${formatNumber(maxResource)}/${formatNumber(cost)}`
+              const req = getUnlockRequirement(state, hex.id, state.ownedHexIds.size)
+              if (!req) return null
+              const canAfford = canAffordUnlock(state, req)
+
+              const costLabel =
+                req.kind === 'anySingle'
+                  ? `Unlock (${formatNumber(req.cost)} any 1 resource)`
+                  : `Unlock (${req.items
+                      .map((it) => `${formatNumber(it.amount)} ${TERRAIN_LABELS[it.terrain]}`)
+                      .join(' + ')})`
+
+              const progressLabel =
+                req.kind === 'anySingle'
+                  ? (() => {
+                      const maxHave = Math.max(
+                        ...(['wood', 'brick', 'sheep', 'wheat', 'ore'] as Terrain[]).map(
+                          (t) => state.resources[t] ?? 0
+                        )
+                      )
+                      return `${formatNumber(maxHave)}/${formatNumber(req.cost)}`
+                    })()
+                  : req.items
+                      .map((it) => `${formatNumber(state.resources[it.terrain] ?? 0)}/${formatNumber(it.amount)} ${TERRAIN_LABELS[it.terrain]}`)
+                      .join(' · ')
               return (
                 <button
                   key={hex.id}
@@ -492,7 +512,7 @@ export function OregonCapitalistPage() {
                   }}
                 >
                   <span>{businessName}</span>
-                  <span>{costLabel}</span>
+                  <span>{canAfford ? costLabel : progressLabel}</span>
                 </button>
               )
             })}

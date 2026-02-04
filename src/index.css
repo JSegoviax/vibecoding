@@ -272,6 +272,12 @@ body::before {
   }
 }
 
+/* Game page: minimal top padding to maximize board visibility */
+.game-page.parchment-page,
+.game-page {
+  padding-top: 8px !important;
+}
+
 /* Game page: extra top padding on mobile so title isn't cramped (button is at bottom) */
 @media (max-width: 768px) {
   .game-page.parchment-page,

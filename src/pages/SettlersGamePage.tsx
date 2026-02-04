@@ -815,10 +815,10 @@ export function SettlersGamePage() {
   const isPlaying = game.phase === 'playing' && !actualWinner
 
   return (
-    <div className="game-page parchment-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
+    <div className="game-page parchment-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px', paddingTop: '8px' }}>
       <GameGuide />
-      <h1 className="game-title" style={{ textAlign: 'center', marginBottom: '0.5rem' }}>Settlers of Oregon</h1>
-      <p className="game-subtitle" style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 0 }}>
+      <h1 className="game-title" style={{ textAlign: 'center', marginBottom: '0.25rem', marginTop: 0, fontSize: '1.5rem' }}>Settlers of Oregon</h1>
+      <p className="game-subtitle" style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 0, marginBottom: '0.5rem' }}>
         {game.phase === 'setup' && !isSetupRoad && `Place a settlement`}
         {game.phase === 'setup' && isSetupRoad && `Place a road next to it`}
         {isPlaying && robberMode.moving && !omenRobberMode && `Rolled 7! Click a hex to move the robber`}
@@ -1044,6 +1044,29 @@ export function SettlersGamePage() {
         </div>
 
         <aside className="game-sidebar" style={{ flex: '0 0 280px', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {actualWinner && (
+            <button
+              onClick={() => {
+                trackEvent('new_game', 'gameplay', 'single_player')
+                gameWonTrackedRef.current = false
+                setGame(createInitialState(2))
+                setBuildMode(null)
+              }}
+              style={{ 
+                padding: '10px 20px', 
+                background: 'var(--accent)', 
+                border: 'none', 
+                borderRadius: 8, 
+                color: '#fff', 
+                fontWeight: 'bold', 
+                cursor: 'pointer',
+                marginBottom: 8,
+                width: '100%'
+              }}
+            >
+              New game
+            </button>
+          )}
           <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
             <button
               type="button"
@@ -1197,17 +1220,6 @@ export function SettlersGamePage() {
             </p>
           )}
 
-          {actualWinner && (
-            <button
-              onClick={() => {
-                trackEvent('new_game', 'gameplay', 'single_player')
-                gameWonTrackedRef.current = false
-                setGame(createInitialState(2))
-                setBuildMode(null)
-              }}
-              style={{ padding: '10px 20px', background: 'var(--accent)', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 'bold', cursor: 'pointer', marginTop: 8 }}
-            >New game</button>
-          )}
         </aside>
       </div>
     </div>

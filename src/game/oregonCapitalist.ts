@@ -135,6 +135,165 @@ export function produceFromClick(
 /** Resource types that can be used to pay for hex unlock (excludes desert). */
 const PAYABLE_TERRAINS: Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore']
 
+export type UnlockRequirementItem = { terrain: Terrain; amount: number }
+
+export type UnlockRequirement =
+  | { kind: 'anySingle'; cost: number }
+  | { kind: 'specific'; items: UnlockRequirementItem[]; cost: number }
+
+function hashToUint32(input: string): number {
+  // djb2-ish, deterministic across sessions
+  let h = 5381
+  for (let i = 0; i < input.length; i++) {
+    h = ((h << 5) + h + input.charCodeAt(i)) >>> 0
+  }
+  return h >>> 0
+}
+
+function terrainsProducedByPlayer(state: OregonCapitalistState): Terrain[] {
+  const set = new Set<Terrain>()
+  for (const id of state.ownedHexIds) {
+    const hex = state.hexes.find((h) => h.id === id)
+    if (hex && hex.terrain !== 'desert') set.add(hex.terrain)
+  }
+  return Array.from(set)
+}
+
+function clampMin(n: number, min: number): number {
+  return n < min ? min : n
+}
+
+function splitCost(total: number, parts: number[]): number[] {
+  const raw = parts.map((p) => Math.floor(total * p))
+  let sum = raw.reduce((a, b) => a + b, 0)
+  // distribute remainder to earliest items
+  for (let i = 0; sum < total; i = (i + 1) % raw.length) {
+    raw[i] += 1
+    sum += 1
+  }
+  return raw
+}
+
+/**
+ * Unlock requirements progression:
+ * - Early: any single resource can unlock (avoids deadlocks).
+ * - Mid: some unlocks require a specific resource type.
+ * - Later: some unlocks require 2+ resource types.
+ *
+ * Requirements are deterministic per (hexId, ownedCount) so UI stays stable.
+ * IMPORTANT: Requirements only pull from terrains the player can currently produce
+ * (i.e., terrains already owned), so unlocks are always achievable.
+ */
+export function getUnlockRequirement(
+  state: OregonCapitalistState,
+  hexId: string,
+  ownedCount: number
+): UnlockRequirement | null {
+  const hex = state.hexes.find((h) => h.id === hexId)
+  if (!hex || hex.terrain === 'desert') return null
+
+  const totalProd = getTotalProductionPerSec(state)
+  const cost = getUnlockCost(Math.max(0, ownedCount - 1), totalProd)
+
+  // Early game: keep it flexible.
+  if (ownedCount < 5) return { kind: 'anySingle', cost }
+
+  const produced = terrainsProducedByPlayer(state).filter((t) => t !== 'desert')
+  const producedPool = produced.length > 0 ? produced : PAYABLE_TERRAINS
+
+  const seed = hashToUint32(`${hexId}:${ownedCount}`)
+  const roll = seed % 100
+
+  // Midgame: introduce specific resource unlocks
+  // Later: introduce 2+ resource unlocks
+  const enableTwo = ownedCount >= 10 && producedPool.length >= 2
+  const enableThree = ownedCount >= 18 && producedPool.length >= 3
+
+  // probabilities (tuned to match "some" + "mid requires 2+")
+  const pSpecific = ownedCount < 10 ? 35 : ownedCount < 18 ? 25 : 20
+  const pTwo = enableTwo ? (ownedCount < 18 ? 45 : 55) : 0
+  const pThree = enableThree ? 15 : 0
+
+  // Pick requirement kind deterministically
+  if (roll < pSpecific) {
+    const idx = seed % producedPool.length
+    const t = producedPool[idx]
+    return { kind: 'specific', cost, items: [{ terrain: t, amount: cost }] }
+  }
+
+  if (enableTwo && roll < pSpecific + pTwo) {
+    const i1 = seed % producedPool.length
+    const i2 = (seed >>> 8) % producedPool.length
+    const t1 = producedPool[i1]
+    const t2 = producedPool[i2 === i1 ? (i2 + 1) % producedPool.length : i2]
+    const [a1, a2] = splitCost(cost, [0.6, 0.4]).map((a) => clampMin(a, 1))
+    return {
+      kind: 'specific',
+      cost,
+      items: [
+        { terrain: t1, amount: a1 },
+        { terrain: t2, amount: a2 },
+      ],
+    }
+  }
+
+  if (enableThree && roll < pSpecific + pTwo + pThree) {
+    const i1 = seed % producedPool.length
+    const i2 = (seed >>> 8) % producedPool.length
+    const i3 = (seed >>> 16) % producedPool.length
+    const picked = [producedPool[i1], producedPool[i2], producedPool[i3]].filter(
+      (t, idx, arr) => arr.indexOf(t) === idx
+    )
+    // ensure 3 unique; if not enough, fall back to 2
+    if (picked.length < 3) {
+      const uniques = Array.from(new Set(producedPool))
+      if (uniques.length >= 3) picked.splice(0, picked.length, uniques[0], uniques[1], uniques[2])
+    }
+    const [a1, a2, a3] = splitCost(cost, [0.5, 0.3, 0.2]).map((a) => clampMin(a, 1))
+    return {
+      kind: 'specific',
+      cost,
+      items: [
+        { terrain: picked[0], amount: a1 },
+        { terrain: picked[1], amount: a2 },
+        { terrain: picked[2], amount: a3 },
+      ],
+    }
+  }
+
+  // Default fallback: any single resource.
+  return { kind: 'anySingle', cost }
+}
+
+export function canAffordUnlock(state: OregonCapitalistState, req: UnlockRequirement): boolean {
+  if (req.kind === 'anySingle') {
+    return PAYABLE_TERRAINS.some((t) => (state.resources[t] ?? 0) >= req.cost)
+  }
+  return req.items.every((it) => (state.resources[it.terrain] ?? 0) >= it.amount)
+}
+
+export function payUnlockCost(
+  state: OregonCapitalistState,
+  req: UnlockRequirement
+): { resources: Record<Terrain, number>; paidLabel: string } | null {
+  if (req.kind === 'anySingle') {
+    const spendFrom = PAYABLE_TERRAINS
+      .filter((t) => (state.resources[t] ?? 0) >= req.cost)
+      .sort((a, b) => (state.resources[b] ?? 0) - (state.resources[a] ?? 0))[0]
+    if (!spendFrom) return null
+    const newResources = { ...state.resources }
+    newResources[spendFrom] = (newResources[spendFrom] ?? 0) - req.cost
+    return { resources: newResources, paidLabel: spendFrom }
+  }
+
+  const newResources = { ...state.resources }
+  for (const it of req.items) {
+    if ((newResources[it.terrain] ?? 0) < it.amount) return null
+    newResources[it.terrain] = (newResources[it.terrain] ?? 0) - it.amount
+  }
+  return { resources: newResources, paidLabel: 'multi' }
+}
+
 export function unlockHex(
   state: OregonCapitalistState,
   hexId: string,
@@ -143,26 +302,21 @@ export function unlockHex(
   const hex = state.hexes.find((h) => h.id === hexId)
   if (!hex || hex.terrain === 'desert') return null
 
-  const totalProd = getTotalProductionPerSec(state)
-  const cost = getUnlockCost(Math.max(0, ownedCount - 1), totalProd)
-
-  // Can pay with any resource type (avoids getting stuck with only one resource)
-  const spendFrom = PAYABLE_TERRAINS
-    .filter((t) => (state.resources[t] ?? 0) >= cost)
-    .sort((a, b) => (state.resources[b] ?? 0) - (state.resources[a] ?? 0))[0]
-  if (!spendFrom) return null
+  const req = getUnlockRequirement(state, hexId, ownedCount)
+  if (!req) return null
+  if (!canAffordUnlock(state, req)) return null
 
   const sameTerrainCount = Array.from(state.ownedHexIds).filter(
     (id) => state.hexes.find((h) => h.id === id)?.terrain === hex.terrain
   ).length
   const tier = sameTerrainCount + 1
 
-  const newResources = { ...state.resources }
-  newResources[spendFrom] = (newResources[spendFrom] ?? 0) - cost
+  const paid = payUnlockCost(state, req)
+  if (!paid) return null
 
   return {
     ...state,
-    resources: newResources,
+    resources: paid.resources,
     ownedHexIds: new Set([...state.ownedHexIds, hexId]),
     hexLevels: { ...state.hexLevels, [hexId]: 1 },
     hexTiers: { ...state.hexTiers, [hexId]: tier },
