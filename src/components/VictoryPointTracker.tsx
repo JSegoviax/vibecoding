@@ -4,6 +4,8 @@ interface PlayerInfo {
   id: number
   name: string
   color: string
+  /** When provided (e.g. from game state), used as the displayed total so debuffs (e.g. Smallpox Scare) are reflected */
+  victoryPoints?: number
 }
 
 interface VictoryPointTrackerProps {
@@ -41,7 +43,9 @@ export function VictoryPointTracker({ vertices, players, activePlayerIndex, phas
         const hasLongestRoad = longestRoadPlayerId === p.id
         const hasOmenHand = oregonsOmensEnabled && omenHandPlayerId === p.id
         const bonusVP = (hasLongestRoad ? 2 : 0) + (hasOmenHand ? 2 : 0)
-        const totalDisplay = total + bonusVP
+        const computedTotal = total + bonusVP
+        const totalDisplay = typeof p.victoryPoints === 'number' ? p.victoryPoints : computedTotal
+        const debuffVP = computedTotal - totalDisplay
         const isActive = phase === 'setup' ? activePlayerIndex === i : activePlayerIndex === i
         return (
           <div
@@ -71,7 +75,10 @@ export function VictoryPointTracker({ vertices, players, activePlayerIndex, phas
               {hasOmenHand && (
                 <div style={{ color: '#a78bfa', fontWeight: 600 }}>Omen Hand: +2 VP</div>
               )}
-              {settlements === 0 && cities === 0 && !hasLongestRoad && !hasOmenHand && (
+              {debuffVP > 0 && (
+                <div style={{ color: '#ef4444', fontWeight: 600 }}>Debuffs: −{debuffVP} VP</div>
+              )}
+              {settlements === 0 && cities === 0 && !hasLongestRoad && !hasOmenHand && debuffVP <= 0 && (
                 <div style={{ fontStyle: 'italic' }}>No structures yet</div>
               )}
             </div>

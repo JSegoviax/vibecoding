@@ -7,6 +7,7 @@ import type { ActiveOmenEffect, GameState, PlayerId } from './types'
 import type { Terrain } from './types'
 import { TERRAIN_LABELS } from './terrain'
 import { appendGameLog } from './gameLog'
+import { getPlayersOnHex } from './logic'
 
 const TERRAINS: Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore']
 
@@ -27,6 +28,7 @@ export const BUFF_IDS = [
   'gold_rush',
   'robbers_regret',
   'manifest_destiny',
+  'farm_swap',
 ] as const
 
 export const DEBUFF_IDS = [
@@ -63,6 +65,23 @@ export interface PlayOmenTargets {
   hexIdForHarvest?: string
   /** Sturdy Wagon Wheel: which to reduce (wood or brick). */
   roadDiscount?: 'wood' | 'brick'
+  /** Farm Swap: your hex to swap. */
+  farmSwapMyHexId?: string
+  /** Farm Swap: opponent's hex to swap with. */
+  farmSwapTargetHexId?: string
+}
+
+/** Hexes the player can use for Farm Swap: their producing hexes and opponent producing hexes. */
+export function getHexesForFarmSwap(state: GameState, playerId: PlayerId): { myHexIds: string[]; targetHexIds: string[] } {
+  const producing = state.hexes.filter(h => h.terrain !== 'desert' && h.number != null)
+  const myHexIds: string[] = []
+  const targetHexIds: string[] = []
+  for (const h of producing) {
+    const players = getPlayersOnHex(state, h.id)
+    if (players.has(playerId)) myHexIds.push(h.id)
+    if (players.size > 0 && (players.size > 1 || !players.has(playerId))) targetHexIds.push(h.id)
+  }
+  return { myHexIds, targetHexIds }
 }
 
 const DEBUFF_SET = new Set<string>(DEBUFF_IDS)
@@ -84,6 +103,7 @@ const OMEN_CARD_NAMES: Record<string, string> = {
   gold_rush: 'Gold Rush!',
   robbers_regret: "Robber's Regret",
   manifest_destiny: 'Manifest Destiny',
+  farm_swap: 'Farm Swap',
 }
 
 export function getOmenCardName(cardId: string): string {
@@ -107,6 +127,7 @@ export function getOmenCardEffectText(cardId: string): string {
     gold_rush: 'Gain 3 Ore and 1 resource of your choice.',
     robbers_regret: 'Move the robber to any hex; optionally steal from a player there.',
     manifest_destiny: 'Gain 2 Victory Points.',
+    farm_swap: 'Choose one of your hexes and one opponent hex; swap their resource type and number token.',
     dust_storm: 'Lose 1 random resource.',
     worn_out_tool: 'Next settlement costs +1 Sheep.',
     confusing_tracks: 'Next roll: −1 Wood from your production.',
@@ -557,6 +578,10 @@ function getBuffPlayPrecondition(state: GameState, playerId: PlayerId, cardId: s
       return (p.settlementsLeft ?? 0) > 0 && (p.roadsLeft ?? 0) > 0
     case 'boomtown_growth':
       return (p.settlementsLeft ?? 0) < 5 // has at least one settlement on board
+    case 'farm_swap': {
+      const { myHexIds, targetHexIds } = getHexesForFarmSwap(state, playerId)
+      return myHexIds.length > 0 && targetHexIds.length > 0
+    }
     default:
       return true
   }
@@ -690,6 +715,23 @@ function applyBuffEffect(
         const { state: afterRemove, stolen } = removeOneRandomResource(next, targetPlayerId)
         next = afterRemove
         if (stolen) next = addResource(next, playerId, stolen, 1)
+      }
+      break
+    }
+    case 'farm_swap': {
+      const myId = targets?.farmSwapMyHexId
+      const targetId = targets?.farmSwapTargetHexId
+      if (!myId || !targetId || myId === targetId) break
+      const myHex = next.hexes.find(h => h.id === myId)
+      const targetHex = next.hexes.find(h => h.id === targetId)
+      if (!myHex || !targetHex || myHex.terrain === 'desert' || targetHex.terrain === 'desert') break
+      next = {
+        ...next,
+        hexes: next.hexes.map(h => {
+          if (h.id === myId) return { ...h, terrain: targetHex.terrain, number: targetHex.number }
+          if (h.id === targetId) return { ...h, terrain: myHex.terrain, number: myHex.number }
+          return h
+        }),
       }
       break
     }

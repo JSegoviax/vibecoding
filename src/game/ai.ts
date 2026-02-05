@@ -19,6 +19,7 @@ import {
   getEffectiveBuildCost,
   canBuildThisTurn,
   roadIgnoresAdjacencyThisTurn,
+  getHexesForFarmSwap,
 } from './omens'
 import type { PlayOmenTargets } from './omens'
 
@@ -190,13 +191,51 @@ export function runAISelectPlayerToRob(state: GameState, hexId: string, aiPlayer
 
 // ——— Oregon's Omens: AI draw and play ———
 
-/** Whether the AI should draw an Omen card this turn. Avoids drawing when close to 10 VP (risk of debuff). */
+/** Whether spending 1W+1S+1O on an Omen would delay a build we're close to. Skip draw when it's better to save for settlement/city. */
+function aiCloseToBuild(state: GameState, aiPlayerId: PlayerId): boolean {
+  const player = state.players[aiPlayerId - 1]
+  if (!player) return false
+  const settlementCost = isOmensEnabled(state)
+    ? getEffectiveBuildCost(state, aiPlayerId, 'settlement')
+    : getBuildCost('settlement')
+  const cityCost = isOmensEnabled(state)
+    ? getEffectiveBuildCost(state, aiPlayerId, 'city')
+    : getBuildCost('city')
+
+  const missingSettlement = getMissingResourcesWithCost(player, settlementCost)
+  const missingCity = getMissingResourcesWithCost(player, cityCost)
+
+  // One resource short of settlement and it's wheat or sheep (Omen cost uses both) → hold off
+  if (player.settlementsLeft > 0 && missingSettlement.length === 1) {
+    const t = missingSettlement[0].terrain
+    if (t === 'wheat' || t === 'sheep') return true
+  }
+  if (player.settlementsLeft > 0 && missingSettlement.length === 2) {
+    const terrains = new Set(missingSettlement.map(m => m.terrain))
+    if (terrains.has('wheat') || terrains.has('sheep')) return true
+  }
+
+  // One or two short of city; Omen uses 1 wheat + 1 ore → hold off if we're missing wheat or ore
+  if (player.citiesLeft > 0 && missingCity.length >= 1) {
+    const terrains = new Set(missingCity.map(m => m.terrain))
+    if (terrains.has('wheat') || terrains.has('ore')) return true
+  }
+
+  return false
+}
+
+/** Whether the AI should draw an Omen card this turn. Avoids drawing when close to 10 VP (risk of debuff) or when close to a key build. */
 export function runAIDrawOmen(state: GameState, aiPlayerId: PlayerId = DEFAULT_AI_PLAYER_ID): boolean {
   if (!isOmensEnabled(state) || !canDrawOmenCard(state, aiPlayerId)) return false
   const player = state.players[aiPlayerId - 1]
   if (!player) return false
   // Avoid drawing when at 8+ VP to reduce risk of game-losing debuff (e.g. Smallpox, Mass Exodus)
   if (player.victoryPoints >= 8) return false
+  // Prefer building over drawing when we can afford a settlement or city this turn
+  if (aiCanAfford(state, 'settlement', aiPlayerId) && player.settlementsLeft > 0 && getPlaceableVertices(state, aiPlayerId).length > 0) return false
+  if (aiCanAfford(state, 'city', aiPlayerId) && player.citiesLeft > 0 && Object.keys(state.vertices).some(id => canBuildCity(state, id, aiPlayerId))) return false
+  // Hold off when we're one or two resources away from settlement/city and Omen cost would delay that build
+  if (aiCloseToBuild(state, aiPlayerId)) return false
   return true
 }
 
@@ -252,7 +291,7 @@ export function runAIPlayOmen(state: GameState, aiPlayerId: PlayerId = DEFAULT_A
     return { cardId: 'bountiful_pastures' }
   }
 
-  // 6. Other buffs (sturdy wheel, pantry, trade caravan, pathfinder)
+  // 7. Other buffs (sturdy wheel, pantry, trade caravan, pathfinder)
   const otherBuffs = ['sturdy_wagon_wheel', 'well_stocked_pantry', 'friendly_trade_caravan', 'pathfinders_insight'] as const
   for (const cardId of otherBuffs) {
     if (hand.includes(cardId) && canPlayOmenCard(state, aiPlayerId, cardId)) {

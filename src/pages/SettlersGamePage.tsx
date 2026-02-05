@@ -48,6 +48,7 @@ import {
   consumeFreeBuildEffect,
   canBuildThisTurn,
   roadIgnoresAdjacencyThisTurn,
+  getHexesForFarmSwap,
   applyProductionModifiersAfterRoll,
   getEffectiveTradeRate,
   consumePathfinderEffect,
@@ -198,6 +199,15 @@ export function SettlersGamePage() {
     if (!game || game.phase !== 'playing' || game.currentPlayerIndex === 0 || !game.lastDice || winner || buildMode || robberMode.moving || robberMode.newHexId || omenRobberMode) return
     const t = setTimeout(() => {
       const aiPlayerId = (game.currentPlayerIndex + 1) as PlayerId
+      if (runAIDrawOmen(game, aiPlayerId)) {
+        setGame(g => {
+          if (!g) return g
+          const next = drawOmenCard(g, aiPlayerId)
+          updateOmenHand(next)
+          return next
+        })
+        return
+      }
       const playOmen = runAIPlayOmen(game, aiPlayerId)
       if (playOmen) {
         setGame(playOmenCard(game, aiPlayerId, playOmen.cardId, playOmen.targets))
@@ -456,22 +466,23 @@ export function SettlersGamePage() {
 
   const isSetupRoad = game.phase === 'setup' && setupPendingVertexId != null
   const isAITurn = (game.phase === 'setup' ? actualSetupPlayerIndex !== 0 : game.currentPlayerIndex !== 0)
+  const inRobberFlow = robberMode.moving || robberMode.newHexId != null
   const placeableVertices = new Set(
-    isAITurn ? [] : game.phase === 'setup' && !isSetupRoad
+    isAITurn || inRobberFlow ? [] : game.phase === 'setup' && !isSetupRoad
       ? getPlaceableVertices(game, playerId)
       : buildMode === 'settlement'
         ? getPlaceableVertices(game, playerId)
         : []
   )
   const placeableEdges = new Set(
-    isAITurn ? [] : isSetupRoad && setupPendingVertexId
+    isAITurn || inRobberFlow ? [] : isSetupRoad && setupPendingVertexId
       ? getPlaceableRoadsForVertex(game, setupPendingVertexId, playerId)
       : buildMode === 'road'
         ? getPlaceableRoads(game, playerId, isOmensEnabled(game) && roadIgnoresAdjacencyThisTurn(game, actualPlayerId as PlayerId))
         : []
   )
   const placeableCityVertices = new Set(
-    isAITurn ? [] : buildMode === 'city'
+    isAITurn || inRobberFlow ? [] : buildMode === 'city'
       ? Object.keys(game.vertices).filter(id => canBuildCity(game, id, playerId))
       : []
   )
@@ -651,6 +662,7 @@ export function SettlersGamePage() {
           lastResourceFlash: null,
         }
         if (sum === 7) {
+          setBuildMode(null)
           setRobberMode({ moving: true, newHexId: null, playersToRob: new Set() })
           nextState.lastResourceHexIds = []
         } else {
@@ -711,6 +723,7 @@ export function SettlersGamePage() {
       setRobberMode({ moving: false, newHexId: hexId, playersToRob })
     } else {
       trackEvent('robber_moved', 'gameplay', 'single_player')
+      setBuildMode(null)
       setGame(g => {
         const next = updateGameState(g, (state) => ({ ...state, robberHexId: hexId }))
         if (!next) return g
@@ -739,6 +752,7 @@ export function SettlersGamePage() {
         : `Player ${actualPlayerId} moved the robber (Player ${targetPlayerId} had nothing to steal)`
       return appendGameLog(next, { type: 'robbery', message: msg })
     })
+    setBuildMode(null)
     setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
     if (stolen) {
       setErrorMessage(null)
@@ -1198,6 +1212,28 @@ export function SettlersGamePage() {
                       }
                     }
                     return Array.from(seen.entries()).map(([hexId, label]) => ({ hexId, label }))
+                  })()
+                : undefined
+            }
+            farmSwapMyHexOptions={
+              isOmensEnabled(game) && isPlaying && !isAITurn
+                ? (() => {
+                    const { myHexIds } = getHexesForFarmSwap(game, actualPlayerId as PlayerId)
+                    return myHexIds.map(hexId => {
+                      const h = game.hexes.find(x => x.id === hexId)
+                      return { hexId, label: h ? `${TERRAIN_LABELS[h.terrain]} (${h.number})` : hexId }
+                    })
+                  })()
+                : undefined
+            }
+            farmSwapTargetHexOptions={
+              isOmensEnabled(game) && isPlaying && !isAITurn
+                ? (() => {
+                    const { targetHexIds } = getHexesForFarmSwap(game, actualPlayerId as PlayerId)
+                    return targetHexIds.map(hexId => {
+                      const h = game.hexes.find(x => x.id === hexId)
+                      return { hexId, label: h ? `${TERRAIN_LABELS[h.terrain]} (${h.number})` : hexId }
+                    })
                   })()
                 : undefined
             }

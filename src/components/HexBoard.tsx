@@ -501,54 +501,39 @@ export function HexBoard({
                 style={{ imageRendering: 'auto' }}
               />
             </g>
-            {/* Harbor trade rate badge at center of water hex */}
-            <circle
-              cx={harborX}
-              cy={harborY}
-              r={36}
-              fill="#fff8dc"
-              stroke="#8b4513"
-              strokeWidth={2}
-              style={{ pointerEvents: 'none' }}
-              opacity={0.95}
+            {/* Harbor icon (ship) at center of water hex */}
+            <image
+              href="/harbor-ship.png"
+              x={harborX - 33}
+              y={harborY - 33}
+              width={66}
+              height={66}
+              preserveAspectRatio="xMidYMid meet"
+              style={{ pointerEvents: 'none', imageRendering: 'pixelated' }}
             />
             {harbor.type === 'generic' ? (
               <text
-                x={harborX}
-                y={harborY}
+                x={harborX - 8}
+                y={harborY - 4}
                 textAnchor="middle"
                 dominantBaseline="central"
                 fill="#8b4513"
                 fontWeight="bold"
-                fontSize={22}
+                fontSize={18}
                 style={{ pointerEvents: 'none' }}
               >
-                3:1
+                ?
               </text>
             ) : (
-              <>
-                <image
-                  href={`/${harbor.type}-icon.png`}
-                  x={harborX - 18}
-                  y={harborY - 28}
-                  width={36}
-                  height={36}
-                  preserveAspectRatio="xMidYMid meet"
-                  style={{ pointerEvents: 'none' }}
-                />
-                <text
-                  x={harborX}
-                  y={harborY + 20}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fill="#8b4513"
-                  fontWeight="bold"
-                  fontSize={20}
-                  style={{ pointerEvents: 'none' }}
-                >
-                  2:1
-                </text>
-              </>
+              <image
+                href={`/${harbor.type}-icon.png`}
+                x={harborX - 15}
+                y={harborY - 11}
+                width={12}
+                height={12}
+                preserveAspectRatio="xMidYMid meet"
+                style={{ pointerEvents: 'none', imageRendering: 'pixelated' }}
+              />
             )}
           </g>
         )

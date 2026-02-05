@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { TERRAIN_COLORS, TERRAIN_LABELS } from '../game/terrain'
 import type { PlayOmenTargets } from '../game/omens'
 import { AnimatedResourceIcon } from './AnimatedResourceIcon'
@@ -81,6 +81,10 @@ interface PlayerResourcesProps {
   getBuildCostDebuffSourcesForPlayer?: (playerId: number) => BuildCostDebuffSources
   /** Oregon's Omens: hex options for Reliable Harvest (player's producing hexes: terrain + number). When provided and non-empty, player picks which hex gets +1 on next roll. */
   reliableHarvestHexOptions?: Array<{ hexId: string; label: string }>
+  /** Oregon's Omens: Farm Swap — your producing hexes (terrain + number). */
+  farmSwapMyHexOptions?: Array<{ hexId: string; label: string }>
+  /** Oregon's Omens: Farm Swap — opponent hexes available to swap with. */
+  farmSwapTargetHexOptions?: Array<{ hexId: string; label: string }>
   /** Oregon's Omens: number of cards drawn (in hands + discard) for "x/45 cards purchased" tally */
   omenCardsPurchased?: number
   /** Oregon's Omens: total deck size (45) for "x/45 cards purchased" tally */
@@ -212,10 +216,20 @@ export function PlayerResources({
   getEffectiveBuildCostForPlayer,
   getBuildCostDebuffSourcesForPlayer,
   reliableHarvestHexOptions = [],
+  farmSwapMyHexOptions = [],
+  farmSwapTargetHexOptions = [],
   omenCardsPurchased,
   omenCardsTotal,
 }: PlayerResourcesProps) {
   const [omensCardDetailId, setOmensCardDetailId] = useState<string | null>(null)
+  const [farmSwapMyHexId, setFarmSwapMyHexId] = useState<string | null>(null)
+  const [farmSwapTargetHexId, setFarmSwapTargetHexId] = useState<string | null>(null)
+  useEffect(() => {
+    if (omensCardDetailId === 'farm_swap') {
+      setFarmSwapMyHexId(null)
+      setFarmSwapTargetHexId(null)
+    }
+  }, [omensCardDetailId])
   return (
     <div>
       <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -265,6 +279,7 @@ export function PlayerResources({
                   }}
                   title="Omen cards in hand"
                 >
+                  <img src="/omen-card-icon.png" alt="" style={{ width: 14, height: 14, flexShrink: 0, imageRendering: 'pixelated' }} />
                   <span style={{ fontWeight: 500 }}>Omen</span>
                   <span style={{ fontWeight: 600, marginLeft: 2 }}>{p.omensHand?.length ?? 0}</span>
                 </div>
@@ -401,6 +416,9 @@ export function PlayerResources({
                             disabled={!canDrawOmenCard}
                             title="Cost: 1 Wheat, 1 Sheep, 1 Ore. Draw one Omen card (max 5 in hand)."
                             style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
                               padding: '6px 12px',
                               borderRadius: 6,
                               border: '1px solid var(--muted)',
@@ -411,6 +429,7 @@ export function PlayerResources({
                               ...(!canDrawOmenCard ? { opacity: 0.5 } : {}),
                             }}
                           >
+                            <img src="/omen-card-icon.png" alt="" style={{ width: 14, height: 14, imageRendering: 'pixelated' }} />
                             Draw Omen ({omensHandCount}/5)
                           </button>
                         )}
@@ -483,7 +502,10 @@ export function PlayerResources({
             {/* Oregon's Omens: hand list (active player only) */}
             {oregonsOmensEnabled && isActive && phase === 'playing' && omensHand.length > 0 && (
               <div style={{ marginTop: 8, padding: 8, borderRadius: 8, background: 'rgba(139,69,19,0.15)', border: '1px solid rgba(139,69,19,0.4)', color: 'var(--text)' }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>Omen cards</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <img src="/omen-card-icon.png" alt="" style={{ width: 14, height: 14, imageRendering: 'pixelated' }} />
+                  Omen cards
+                </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {omensHand.map((cardId: string, idx: number) => (
                     <button
@@ -670,46 +692,135 @@ export function PlayerResources({
                 </div>
               </div>
             )}
+            {omensCardDetailId === 'farm_swap' && canPlayOmenCard?.(omensCardDetailId) && farmSwapMyHexOptions.length > 0 && farmSwapTargetHexOptions.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>Your hex to swap:</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {farmSwapMyHexOptions.map(({ hexId, label }) => (
+                    <button
+                      key={hexId}
+                      onClick={() => setFarmSwapMyHexId(hexId)}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: 8,
+                        border: farmSwapMyHexId === hexId ? '2px solid var(--accent)' : '1px solid var(--muted)',
+                        background: farmSwapMyHexId === hexId ? 'var(--accent)' : 'transparent',
+                        color: farmSwapMyHexId === hexId ? '#fff' : 'var(--text)',
+                        cursor: 'pointer',
+                        fontSize: 13,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>Opponent hex to swap with:</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {farmSwapTargetHexOptions.map(({ hexId, label }) => (
+                    <button
+                      key={hexId}
+                      onClick={() => setFarmSwapTargetHexId(hexId)}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: 8,
+                        border: farmSwapTargetHexId === hexId ? '2px solid var(--accent)' : '1px solid var(--muted)',
+                        background: farmSwapTargetHexId === hexId ? 'var(--accent)' : 'transparent',
+                        color: farmSwapTargetHexId === hexId ? '#fff' : 'var(--text)',
+                        cursor: 'pointer',
+                        fontSize: 13,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              {(!OMEN_CARDS_WITH_CHOICE.includes(omensCardDetailId as typeof OMEN_CARDS_WITH_CHOICE[number]) ||
-                (omensCardDetailId === 'reliable_harvest' && reliableHarvestHexOptions.length === 0)) && (
-                <button
-                  onClick={() => {
-                    if (canPlayOmenCard?.(omensCardDetailId)) {
-                      onPlayOmenCard?.(omensCardDetailId)
-                      setOmensCardDetailId(null)
-                    }
-                  }}
-                  disabled={!canPlayOmenCard?.(omensCardDetailId)}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: 8,
-                    background: canPlayOmenCard?.(omensCardDetailId) ? 'var(--accent)' : 'var(--muted)',
-                    border: 'none',
-                    color: '#fff',
-                    cursor: canPlayOmenCard?.(omensCardDetailId) ? 'pointer' : 'not-allowed',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    opacity: canPlayOmenCard?.(omensCardDetailId) ? 1 : 0.6,
-                  }}
-                >
-                  Play card
-                </button>
+              {omensCardDetailId === 'farm_swap' ? (
+                <>
+                  <button
+                    onClick={() => {
+                      if (farmSwapMyHexId && farmSwapTargetHexId) {
+                        onPlayOmenCard?.('farm_swap', { farmSwapMyHexId, farmSwapTargetHexId })
+                        setOmensCardDetailId(null)
+                      }
+                    }}
+                    disabled={!farmSwapMyHexId || !farmSwapTargetHexId}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 8,
+                      background: farmSwapMyHexId && farmSwapTargetHexId ? 'var(--accent)' : 'var(--muted)',
+                      border: 'none',
+                      color: '#fff',
+                      cursor: farmSwapMyHexId && farmSwapTargetHexId ? 'pointer' : 'not-allowed',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      opacity: farmSwapMyHexId && farmSwapTargetHexId ? 1 : 0.6,
+                    }}
+                  >
+                    Swap
+                  </button>
+                  <button
+                    onClick={() => setOmensCardDetailId(null)}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 8,
+                      border: '1px solid var(--muted)',
+                      background: 'transparent',
+                      color: 'var(--text)',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  {(!OMEN_CARDS_WITH_CHOICE.includes(omensCardDetailId as typeof OMEN_CARDS_WITH_CHOICE[number]) ||
+                    (omensCardDetailId === 'reliable_harvest' && reliableHarvestHexOptions.length === 0)) && (
+                    <button
+                      onClick={() => {
+                        if (canPlayOmenCard?.(omensCardDetailId)) {
+                          onPlayOmenCard?.(omensCardDetailId)
+                          setOmensCardDetailId(null)
+                        }
+                      }}
+                      disabled={!canPlayOmenCard?.(omensCardDetailId)}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: 8,
+                        background: canPlayOmenCard?.(omensCardDetailId) ? 'var(--accent)' : 'var(--muted)',
+                        border: 'none',
+                        color: '#fff',
+                        cursor: canPlayOmenCard?.(omensCardDetailId) ? 'pointer' : 'not-allowed',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        opacity: canPlayOmenCard?.(omensCardDetailId) ? 1 : 0.6,
+                      }}
+                    >
+                      Play card
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setOmensCardDetailId(null)}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 8,
+                      border: '1px solid var(--muted)',
+                      background: 'transparent',
+                      color: 'var(--text)',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                    }}
+                  >
+                    Close
+                  </button>
+                </>
               )}
-              <button
-                onClick={() => setOmensCardDetailId(null)}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: 8,
-                  border: '1px solid var(--muted)',
-                  background: 'transparent',
-                  color: 'var(--text)',
-                  cursor: 'pointer',
-                  fontSize: 13,
-                }}
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>

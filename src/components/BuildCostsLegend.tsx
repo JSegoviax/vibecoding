@@ -241,16 +241,10 @@ export function BuildCostsInline({
         <>
           <div style={sectionStyle}>
             <div style={titleStyle}>
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: 20,
-                  height: 28,
-                  borderRadius: 4,
-                  background: 'linear-gradient(135deg, #8B7355 0%, #6B5344 100%)',
-                  border: '1px solid rgba(0,0,0,0.2)',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
-                }}
+              <img
+                src="/omen-card-icon.png"
+                alt=""
+                style={{ width: 20, height: 28, objectFit: 'contain', flexShrink: 0, imageRendering: 'pixelated' }}
                 title="Omen card"
               />
               <span>Omen card</span>

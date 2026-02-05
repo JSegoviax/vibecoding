@@ -50,6 +50,7 @@ import {
   getEffectiveTradeRate,
   getActiveEffectsForPlayer,
   getActiveEffectDescription,
+  getHexesForFarmSwap,
   TOTAL_OMEN_DECK_SIZE,
 } from '../game/omens'
 import type { PlayOmenTargets } from '../game/omens'
@@ -131,22 +132,23 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     if (e.road) edgeStates[id] = e.road
   }
 
+  const inRobberFlow = robberMode.moving || robberMode.newHexId != null
   const placeableVertices = new Set(
-    !isMyTurn ? [] : game.phase === 'setup' && !isSetupRoad
+    !isMyTurn || inRobberFlow ? [] : game.phase === 'setup' && !isSetupRoad
       ? getPlaceableVertices(game, playerId)
       : buildMode === 'settlement'
         ? getPlaceableVertices(game, playerId)
         : []
   )
   const placeableEdges = new Set(
-    !isMyTurn ? [] : isSetupRoad && setupPendingVertexId
+    !isMyTurn || inRobberFlow ? [] : isSetupRoad && setupPendingVertexId
       ? getPlaceableRoadsForVertex(game, setupPendingVertexId, playerId)
       : buildMode === 'road'
         ? getPlaceableRoads(game, playerId, isOmensEnabled(game) && roadIgnoresAdjacencyThisTurn(game, playerId as PlayerId))
         : []
   )
   const placeableCityVertices = new Set(
-    !isMyTurn ? [] : buildMode === 'city'
+    !isMyTurn || inRobberFlow ? [] : buildMode === 'city'
       ? Object.keys(game.vertices).filter(id => canBuildCity(game, id, playerId))
       : []
   )
@@ -306,6 +308,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
       lastResourceFlash: null,
     }
     if (sum === 7) {
+      setBuildMode(null)
       setRobberMode({ moving: true, newHexId: null, playersToRob: new Set() })
       next.lastResourceHexIds = []
     } else {
@@ -355,6 +358,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
       setRobberMode({ moving: false, newHexId: hexId, playersToRob })
     } else {
       trackEvent('robber_moved', 'gameplay', 'multiplayer')
+      setBuildMode(null)
       const next: GameState = { ...game, robberHexId: hexId }
       sendStateUpdate(appendGameLog(next, { type: 'robbery', message: `Player ${playerId} moved the robber` }))
       setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
@@ -375,6 +379,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     next.lastRobbery = stolen ? { robbingPlayerId: playerId as PlayerId, targetPlayerId: targetPlayerId as PlayerId, resource: stolen } : null
     const msg = stolen ? `Player ${playerId} stole ${stolen} from Player ${targetPlayerId}` : `Player ${playerId} moved the robber (Player ${targetPlayerId} had nothing to steal)`
     sendStateUpdate(appendGameLog(next, { type: 'robbery', message: msg }))
+    setBuildMode(null)
     setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
     setErrorMessage(stolen ? null : 'Target player has no resources to steal')
   }
@@ -771,6 +776,28 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
                       }
                     }
                     return Array.from(seen.entries()).map(([hexId, label]) => ({ hexId, label }))
+                  })()
+                : undefined
+            }
+            farmSwapMyHexOptions={
+              isOmensEnabled(game) && isPlaying && isMyTurn
+                ? (() => {
+                    const { myHexIds } = getHexesForFarmSwap(game, playerId as PlayerId)
+                    return myHexIds.map(hexId => {
+                      const h = game.hexes.find(x => x.id === hexId)
+                      return { hexId, label: h ? `${TERRAIN_LABELS[h.terrain]} (${h.number})` : hexId }
+                    })
+                  })()
+                : undefined
+            }
+            farmSwapTargetHexOptions={
+              isOmensEnabled(game) && isPlaying && isMyTurn
+                ? (() => {
+                    const { targetHexIds } = getHexesForFarmSwap(game, playerId as PlayerId)
+                    return targetHexIds.map(hexId => {
+                      const h = game.hexes.find(x => x.id === hexId)
+                      return { hexId, label: h ? `${TERRAIN_LABELS[h.terrain]} (${h.number})` : hexId }
+                    })
                   })()
                 : undefined
             }
