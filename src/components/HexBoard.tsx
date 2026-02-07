@@ -485,7 +485,7 @@ export function HexBoard({
                 y={-dockH / 2}
                 width={dockW}
                 height={dockH}
-                preserveAspectRatio="none"
+                preserveAspectRatio="xMidYMid meet"
                 style={{ imageRendering: 'auto' }}
               />
             </g>
@@ -500,7 +500,7 @@ export function HexBoard({
                 y={-dockH / 2}
                 width={dockW}
                 height={dockH}
-                preserveAspectRatio="none"
+                preserveAspectRatio="xMidYMid meet"
                 style={{ imageRendering: 'auto' }}
               />
             </g>
