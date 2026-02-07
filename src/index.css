@@ -53,6 +53,16 @@ body.oregon-capitalist-active #root {
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* Potential settlement spots during initial setup: grow/shrink pulse */
+@keyframes settlement-spot-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+.settlement-spot-pulse {
+  animation: settlement-spot-pulse 1.2s ease-in-out infinite;
+  transform-origin: center;
+}
+
 html {
   overflow-x: hidden;
 }

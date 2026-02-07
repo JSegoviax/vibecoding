@@ -1045,6 +1045,7 @@ export function SettlersGamePage() {
             harbors={game.harbors}
             players={game.players.map(p => ({ colorImage: p.colorImage, color: p.color }))}
             activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
+            phase={game.phase === 'setup' ? 'setup' : 'playing'}
             resourceHighlightHexIds={game.lastResourceHexIds ? new Set(game.lastResourceHexIds) : undefined}
             robberBlockedHexIds={game.lastDice ? new Set(getHexIdsBlockedByRobber(game, game.lastDice[0] + game.lastDice[1])) : undefined}
           />

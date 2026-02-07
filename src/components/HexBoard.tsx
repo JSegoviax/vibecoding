@@ -39,6 +39,8 @@ interface HexBoardProps {
   hiddenHexCosts?: Record<string, string>
   /** When false, hide number tokens (2-12) on hexes. Default true for Catan-style games. */
   showNumberTokens?: boolean
+  /** When 'setup', potential settlement spot icons pulse to highlight placeable vertices. */
+  phase?: 'setup' | 'playing'
 }
 
 export function HexBoard({
@@ -60,6 +62,7 @@ export function HexBoard({
   hiddenHexIds,
   hiddenHexCosts,
   showNumberTokens = true,
+  phase,
 }: HexBoardProps) {
   const { vertices, edges } = useMemo(() => buildTopology(hexes), [hexes])
   const vById = useMemo(() => Object.fromEntries(vertices.map(v => [v.id, v])), [vertices])
@@ -614,21 +617,27 @@ export function HexBoard({
           ? (COLOR_TO_SPOT_IMAGE[activePlayer.colorImage] ?? DEFAULT_SPOT_IMAGE)
           : DEFAULT_SPOT_IMAGE
         const spotSize = 48
+        const pulse = phase === 'setup'
         return (
-          <g key={`spot-${v.id}`}>
-            <image
-              href={spotImage}
-              x={v.x - spotSize / 2}
-              y={v.y - spotSize / 2}
-              width={spotSize}
-              height={spotSize}
-              onClick={() => selectVertex?.(v.id)}
-              style={{
-                cursor: selectVertex ? 'pointer' : 'default',
-                imageRendering: 'pixelated',
-                pointerEvents: 'auto',
-              }}
-            />
+          <g key={`spot-${v.id}`} transform={`translate(${v.x}, ${v.y})`}>
+            <g
+              className={pulse ? 'settlement-spot-pulse' : undefined}
+              style={{ transformOrigin: 'center' }}
+            >
+              <image
+                href={spotImage}
+                x={-spotSize / 2}
+                y={-spotSize / 2}
+                width={spotSize}
+                height={spotSize}
+                onClick={() => selectVertex?.(v.id)}
+                style={{
+                  cursor: selectVertex ? 'pointer' : 'default',
+                  imageRendering: 'pixelated',
+                  pointerEvents: 'auto',
+                }}
+              />
+            </g>
           </g>
         )
       })}
