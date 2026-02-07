@@ -26,13 +26,23 @@ const COLOR_TO_CITY_INDICATOR: Record<string, number> = {
 }
 const DEFAULT_CITY_INDICATOR = 5
 
+// Map player color image to road segment image (by color)
+const COLOR_TO_ROAD_IMAGE: Record<string, string> = {
+  '/player-teal.png': '/road-teal.png',
+  '/player-pink.png': '/road-pink.png',
+  '/player-purple.png': '/road-purple.png',
+  '/player-green.png': '/road-green.png',
+  '/player-green2.png': '/road-green2.png',
+  '/player-white.png': '/road-white.png',
+}
+
 // Map player color image to city icon (built cities use these instead of the settlement/house image)
 const COLOR_TO_CITY_IMAGE: Record<string, string> = {
   '/player-teal.png': '/city-teal.png',
   '/player-pink.png': '/city-pink.png',
   '/player-purple.png': '/city-purple.png',
-  '/player-green.png': '/city-green.png',
-  '/player-green2.png': '/city-green2.png',
+  '/player-green.png': '/city-green2.png',   // Green (lighter) -> city-green2 asset
+  '/player-green2.png': '/city-green.png',    // Forest Green (dark) -> city-green asset
   '/player-white.png': '/city-white.png',
 }
 
@@ -414,6 +424,35 @@ export function HexBoard({
         if (!v1 || !v2) return null
         const pid = edgeStates[e.id]
         const hl = highlightedEdges?.has(e.id)
+        const dx = v2.x - v1.x
+        const dy = v2.y - v1.y
+        const len = Math.hypot(dx, dy) || 1
+        const roadWidth = 24
+        const midX = (v1.x + v2.x) / 2
+        const midY = (v1.y + v2.y) / 2
+        const player = pid ? players[pid - 1] : null
+        const roadImage = player?.colorImage ? COLOR_TO_ROAD_IMAGE[player.colorImage] : null
+        if (pid && roadImage) {
+          const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI - 90
+          return (
+            <g
+              key={e.id}
+              transform={`translate(${midX}, ${midY}) rotate(${angleDeg})`}
+              onClick={() => selectEdge?.(e.id)}
+              style={{ cursor: selectEdge ? 'pointer' : 'default' }}
+            >
+              <image
+                href={roadImage}
+                x={-roadWidth / 2}
+                y={-len / 2}
+                width={roadWidth}
+                height={len}
+                preserveAspectRatio="none"
+                style={{ imageRendering: 'auto', pointerEvents: 'auto' }}
+              />
+            </g>
+          )
+        }
         return (
           <line
             key={e.id}
@@ -581,7 +620,10 @@ export function HexBoard({
         
         const player = s ? players[s.player - 1] : null
         const isCity = s?.type === 'city'
-        const size = 54  // Same scale for settlement and city icons
+        // Settlement size; city scaled so the "settlement portion" of the city icon matches this size
+        const settlementSize = 54
+        const citySettlementRatio = 2 / 3  // settlement-like part is ~2/3 of city image height
+        const size = isCity ? Math.round(settlementSize / citySettlementRatio) : settlementSize  // city = 81
 
         // Potential settlement spot: rendered in separate block below so it sits above the port
         if (hl && !s) return null
@@ -599,6 +641,7 @@ export function HexBoard({
                 y={v.y - size / 2}
                 width={size}
                 height={size}
+                preserveAspectRatio="xMidYMid meet"
                 onClick={() => selectVertex?.(v.id)}
                 style={{ 
                   cursor: selectVertex ? 'pointer' : 'default',
@@ -609,15 +652,16 @@ export function HexBoard({
             </g>
           )
         } else {
-          // Fallback to colored shapes
+          // Fallback to colored shapes (same scale as image icons)
           const col = s ? (PLAYER_COLORS[s.player] ?? '#888') : '#64b5f6'
+          const r = size / 2
           return isCity ? (
             <rect
               key={v.id}
-              x={v.x - 30}
-              y={v.y - 30}
-              width={60}
-              height={60}
+              x={v.x - r}
+              y={v.y - r}
+              width={size}
+              height={size}
               fill={col}
               stroke={s ? '#1a1f2e' : '#64b5f6'}
               strokeWidth={6}
@@ -629,7 +673,7 @@ export function HexBoard({
               key={v.id}
               cx={v.x}
               cy={v.y}
-              r={24}
+              r={r}
               fill={col}
               stroke={s ? '#1a1f2e' : '#64b5f6'}
               strokeWidth={6}
