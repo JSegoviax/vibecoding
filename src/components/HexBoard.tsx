@@ -462,7 +462,8 @@ export function HexBoard({
         // Pier center: offset toward land so the pier sits on the coast (pull back from water)
         const halfW = dockW / 2
         const pullBack = 0.28 // center closer to vertex so pier overlaps land more
-        const offset = halfW * pullBack
+        const oceanOffset = 2 // nudge piers 2px toward ocean
+        const offset = halfW * pullBack + oceanOffset
         const dock1CenterX = v1.x + offset * u1x
         const dock1CenterY = v1.y + offset * u1y
         const dock2CenterX = v2.x + offset * u2x
