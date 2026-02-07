@@ -1033,6 +1033,7 @@ export function SettlersGamePage() {
             selectEdge={isAITurn ? undefined : handleSelectEdge}
             highlightedVertices={highlightedVertices}
             highlightedEdges={highlightedEdges}
+            upgradableToCityVertices={buildMode === 'city' && hasPlaceableCity ? placeableCityVertices : undefined}
             robberHexId={game.robberHexId}
             selectableRobberHexes={selectableRobberHexes}
             selectHex={

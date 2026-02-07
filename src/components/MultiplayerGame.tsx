@@ -629,6 +629,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
             selectEdge={isMyTurn ? handleSelectEdge : undefined}
             highlightedVertices={highlightedVertices}
             highlightedEdges={highlightedEdges}
+            upgradableToCityVertices={buildMode === 'city' && hasPlaceableCity ? placeableCityVertices : undefined}
             robberHexId={game.robberHexId}
             selectableRobberHexes={selectableRobberHexes}
             selectHex={

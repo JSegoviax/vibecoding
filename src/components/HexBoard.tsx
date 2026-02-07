@@ -15,6 +15,27 @@ const COLOR_TO_SPOT_IMAGE: Record<string, string> = {
 }
 const DEFAULT_SPOT_IMAGE = '/settlement-spot-gray.png'
 
+// Map player color image to city-upgrade indicator image (by color: teal, pink, purple, green, cyan, white)
+const COLOR_TO_CITY_INDICATOR: Record<string, number> = {
+  '/player-teal.png': 0,
+  '/player-pink.png': 1,
+  '/player-purple.png': 2,
+  '/player-green.png': 3,
+  '/player-green2.png': 4,
+  '/player-white.png': 5,
+}
+const DEFAULT_CITY_INDICATOR = 5
+
+// Map player color image to city icon (built cities use these instead of the settlement/house image)
+const COLOR_TO_CITY_IMAGE: Record<string, string> = {
+  '/player-teal.png': '/city-teal.png',
+  '/player-pink.png': '/city-pink.png',
+  '/player-purple.png': '/city-purple.png',
+  '/player-green.png': '/city-green.png',
+  '/player-green2.png': '/city-green2.png',
+  '/player-white.png': '/city-white.png',
+}
+
 interface HexBoardProps {
   hexes: Hex[]
   vertexStates?: Record<string, { player: number; type: 'settlement' | 'city' }>
@@ -41,6 +62,8 @@ interface HexBoardProps {
   showNumberTokens?: boolean
   /** When 'setup', potential settlement spot icons pulse to highlight placeable vertices. */
   phase?: 'setup' | 'playing'
+  /** Vertex IDs where the current player can upgrade a settlement to a city (show indicator when Cities selected and can afford). */
+  upgradableToCityVertices?: Set<string>
 }
 
 export function HexBoard({
@@ -63,6 +86,7 @@ export function HexBoard({
   hiddenHexCosts,
   showNumberTokens = true,
   phase,
+  upgradableToCityVertices,
 }: HexBoardProps) {
   const { vertices, edges } = useMemo(() => buildTopology(hexes), [hexes])
   const vById = useMemo(() => Object.fromEntries(vertices.map(v => [v.id, v])), [vertices])
@@ -560,11 +584,14 @@ export function HexBoard({
         if (hl && !s) return null
         
         if (player?.colorImage) {
-          // Use house image for built settlement/city
+          // Settlements use house image; cities use color-matched city icon
+          const imageHref = isCity
+            ? (COLOR_TO_CITY_IMAGE[player.colorImage] ?? player.colorImage)
+            : player.colorImage
           return (
             <g key={v.id}>
               <image
-                href={player.colorImage}
+                href={imageHref}
                 x={v.x - size / 2}
                 y={v.y - size / 2}
                 width={size}
@@ -651,6 +678,45 @@ export function HexBoard({
           </g>
         )
       })}
+
+      {/* City-upgrade indicators: downward triangle above settlements that can be upgraded (when Cities selected and can afford) */}
+      {upgradableToCityVertices?.size
+        ? vertices.map((v) => {
+            if (!upgradableToCityVertices.has(v.id)) return null
+            const activePlayer = players[activePlayerIndex]
+            const idx = activePlayer?.colorImage
+              ? (COLOR_TO_CITY_INDICATOR[activePlayer.colorImage] ?? DEFAULT_CITY_INDICATOR)
+              : DEFAULT_CITY_INDICATOR
+            const indicatorW = 26
+            const indicatorH = 26
+            const offsetY = 42
+            const centerX = v.x
+            const centerY = v.y - offsetY - indicatorH / 2
+            return (
+              <g key={`city-upgrade-${v.id}`} transform={`translate(${centerX}, ${centerY})`} style={{ pointerEvents: 'none' }}>
+                <g>
+                  <animateTransform
+                    attributeName="transform"
+                    type="translate"
+                    values="0 0; 0 -5; 0 0"
+                    dur="1.2s"
+                    repeatCount="indefinite"
+                    additive="replace"
+                  />
+                  <image
+                    href={`/city-upgrade-indicator-${idx}.png`}
+                    x={-indicatorW / 2}
+                    y={-indicatorH / 2}
+                    width={indicatorW}
+                    height={indicatorH}
+                    preserveAspectRatio="xMidYMid meet"
+                    style={{ imageRendering: 'pixelated' }}
+                  />
+                </g>
+              </g>
+            )
+          })
+        : null}
     </svg>
   )
 }
