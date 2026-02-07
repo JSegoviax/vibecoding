@@ -62,6 +62,8 @@ interface HexBoardProps {
   showNumberTokens?: boolean
   /** When 'setup', potential settlement spot icons pulse to highlight placeable vertices. */
   phase?: 'setup' | 'playing'
+  /** When true, potential settlement spot icons pulse (e.g. during setup or when buying a settlement). */
+  pulsePlaceableSpots?: boolean
   /** Vertex IDs where the current player can upgrade a settlement to a city (show indicator when Cities selected and can afford). */
   upgradableToCityVertices?: Set<string>
 }
@@ -86,6 +88,7 @@ export function HexBoard({
   hiddenHexCosts,
   showNumberTokens = true,
   phase,
+  pulsePlaceableSpots,
   upgradableToCityVertices,
 }: HexBoardProps) {
   const { vertices, edges } = useMemo(() => buildTopology(hexes), [hexes])
@@ -578,7 +581,7 @@ export function HexBoard({
         
         const player = s ? players[s.player - 1] : null
         const isCity = s?.type === 'city'
-        const size = isCity ? 72 : 54  // Increased by 50%: city was 48, settlement was 36
+        const size = 54  // Same scale for settlement and city icons
 
         // Potential settlement spot: rendered in separate block below so it sits above the port
         if (hl && !s) return null
@@ -647,7 +650,7 @@ export function HexBoard({
           ? (COLOR_TO_SPOT_IMAGE[activePlayer.colorImage] ?? DEFAULT_SPOT_IMAGE)
           : DEFAULT_SPOT_IMAGE
         const spotSize = 48
-        const pulse = phase === 'setup'
+        const pulse = pulsePlaceableSpots ?? (phase === 'setup')
         return (
           <g key={`spot-${v.id}`} transform={`translate(${v.x}, ${v.y})`}>
             <g>
@@ -683,9 +686,11 @@ export function HexBoard({
       {upgradableToCityVertices?.size
         ? vertices.map((v) => {
             if (!upgradableToCityVertices.has(v.id)) return null
-            const activePlayer = players[activePlayerIndex]
-            const idx = activePlayer?.colorImage
-              ? (COLOR_TO_CITY_INDICATOR[activePlayer.colorImage] ?? DEFAULT_CITY_INDICATOR)
+            // Use the vertex owner's color so the indicator matches the settlement/city below it
+            const s = vertexStates[v.id]
+            const owner = s ? players[s.player - 1] : null
+            const idx = owner?.colorImage
+              ? (COLOR_TO_CITY_INDICATOR[owner.colorImage] ?? DEFAULT_CITY_INDICATOR)
               : DEFAULT_CITY_INDICATOR
             const indicatorW = 26
             const indicatorH = 26
