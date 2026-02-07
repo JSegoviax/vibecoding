@@ -72,8 +72,10 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMod
         className="paper-section"
         style={{
           position: 'relative',
-          maxWidth: 600,
-          width: '100%',
+          width: 560,
+          height: 580,
+          flexShrink: 0,
+          boxSizing: 'border-box',
         }}
       >
         {onBack && (

@@ -35,6 +35,24 @@
   animation: resource-highlight-pulse 1.5s ease-in-out infinite;
 }
 
+/* Oregon Capitalist: disable highlight pulse to avoid Chrome scroll-triggered compositing bugs */
+.oregon-capitalist-page .resource-highlight-pulse {
+  animation: none;
+}
+
+/* Oregon Capitalist: promote #root to GPU layer to fix sidebar/edge corruption during scroll */
+body.oregon-capitalist-active #root {
+  transform: translateZ(0);
+  overflow-x: hidden;
+}
+
+
+@keyframes pulse {
+  0% { transform: scale(0.95); opacity: 0.7; }
+  50% { transform: scale(1.02); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 html {
   overflow-x: hidden;
 }
@@ -48,8 +66,9 @@ body {
   overflow-x: hidden;
 }
 
-/* Subtle grain overlay (optional, very low opacity) */
-body::before {
+/* Subtle grain overlay (optional, very low opacity).
+   Disabled on game pages (no-grain-overlay) to avoid Chrome scroll-triggered compositing bugs. */
+body:not(.no-grain-overlay)::before {
   content: "";
   position: fixed;
   top: 0;

@@ -182,7 +182,7 @@ export function HexBoard({
         const center = hexToPixel(h.q, h.r)
         const pts = [0, 1, 2, 3, 4, 5].map(i => hexCorner(center, i))
         const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z'
-        const fill = TERRAIN_COLORS[h.terrain]
+        const fill = (h.terrain && TERRAIN_COLORS[h.terrain as Terrain]) ?? '#6b6b6b'
         const isRobberHex = h.id === robberHexId
         const isSelectable = selectableRobberHexes?.has(h.id)
         const isHidden = hiddenHexIds?.has(h.id)
@@ -501,25 +501,25 @@ export function HexBoard({
                 style={{ imageRendering: 'auto' }}
               />
             </g>
-            {/* Harbor icon (ship) at center of water hex */}
+            {/* Harbor icon (ship) fills the water hex */}
             <image
               href="/harbor-ship.png"
-              x={harborX - 33}
-              y={harborY - 33}
-              width={66}
-              height={66}
+              x={harborX - HEX_R}
+              y={harborY - HEX_R}
+              width={HEX_R * 2}
+              height={HEX_R * 2}
               preserveAspectRatio="xMidYMid meet"
               style={{ pointerEvents: 'none', imageRendering: 'pixelated' }}
             />
             {harbor.type === 'generic' ? (
               <text
-                x={harborX - 8}
-                y={harborY - 4}
+                x={harborX - 19}
+                y={harborY - 9}
                 textAnchor="middle"
                 dominantBaseline="central"
                 fill="#8b4513"
                 fontWeight="bold"
-                fontSize={18}
+                fontSize={42}
                 style={{ pointerEvents: 'none' }}
               >
                 ?
@@ -527,10 +527,10 @@ export function HexBoard({
             ) : (
               <image
                 href={`/${harbor.type}-icon.png`}
-                x={harborX - 15}
-                y={harborY - 11}
-                width={12}
-                height={12}
+                x={harborX - 36}
+                y={harborY - 27}
+                width={30}
+                height={30}
                 preserveAspectRatio="xMidYMid meet"
                 style={{ pointerEvents: 'none', imageRendering: 'pixelated' }}
               />

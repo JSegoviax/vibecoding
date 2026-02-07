@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom'
 import { HomePage } from './pages/HomePage'
 import { GamesIndexPage } from './pages/GamesIndexPage'
@@ -47,9 +47,27 @@ function GameRoomWrapper() {
   return <GameRoom gameId={gameId} />
 }
 
+/** Disable body grain overlay on game pages to avoid Chrome scroll-triggered compositing bugs */
+function BodyClassEffect() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    const isGamePage =
+      pathname.startsWith('/games/oregon-capitalist') ||
+      pathname.startsWith('/games/settlers-of-oregon')
+    const isOregonCapitalist = pathname.startsWith('/games/oregon-capitalist')
+    document.body.classList.toggle('no-grain-overlay', isGamePage)
+    document.body.classList.toggle('oregon-capitalist-active', isOregonCapitalist)
+    return () => {
+      document.body.classList.remove('no-grain-overlay', 'oregon-capitalist-active')
+    }
+  }, [pathname])
+  return null
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <BodyClassEffect />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/games" element={<GamesIndexPage />} />

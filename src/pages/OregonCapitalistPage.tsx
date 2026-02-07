@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { HexBoard } from '../components/HexBoard'
 import { createBoard } from '../game/board'
@@ -6,22 +7,38 @@ import { TERRAIN_LABELS } from '../game/terrain'
 import { getBusinessName } from '../game/businessNames'
 import {
   tick,
+  applyAutoUpgrades,
+  applyAutoSpiritShop,
   produceFromClick,
   unlockHex,
   upgradeHex,
+  buyMaxUpgrades,
   hireManager,
   purchaseGlobalBuff,
+  prestige,
+  purchasePrestigeUpgrade,
   getUnlockRequirement,
   canAffordUnlock,
   getUpgradeCost,
+  calculateMaxAffordable,
   getHireCost,
   getProductionPerSecond,
+  getGlobalProgressMoneyMultiplier,
+  getTotalProductionPerSec,
+  getCycleTime,
+  getMilestonesReached,
 } from '../game/oregonCapitalist'
-import { getGlobalBuffsForState, getGlobalProductionMultiplier } from '../game/globalBuffs'
+import { getAdjacencyMultiplier } from '../game/adjacency'
+import { MILESTONES, GLOBAL_MILESTONES } from '../game/constants/progression'
+import { calculateClaimableSpirits, PRESTIGE_SHOP } from '../game/prestige'
+import { getGlobalBuffsForState, getGlobalProductionMultiplier, hasAutoUpgradeBuff, hasAutoSpiritShopBuff } from '../game/globalBuffs'
 import { getManagerName } from '../game/managerNames'
 import type { OregonCapitalistState } from '../game/oregonCapitalist'
+import type { ActiveEvent } from '../game/trailEvents'
 import type { Hex, Terrain } from '../game/types'
 import { formatNumber } from '../utils/formatNumber'
+import { getHexVisual } from '../game/visualTiers'
+import { isEventActive } from '../game/trailEvents'
 
 const STORAGE_KEY = 'oregon_capitalist_save'
 const TICK_MS = 100
@@ -53,6 +70,15 @@ function createInitialState(): OregonCapitalistState {
     hexTiers: starterHex ? { [starterHex.id]: 1 } : {},
     hexManagers: {},
     purchasedGlobalBuffs: [],
+    autoUpgradePaused: false,
+    autoSpiritShopPaused: false,
+    hexProgress: {},
+    lifetimeEarnings: 0,
+    pioneerSpirits: 0,
+    totalSpiritsEarned: 0,
+    prestigeUpgrades: {},
+    activeEvent: null,
+    lastSaveTimestamp: Date.now(),
     lastTickTimestamp: Date.now(),
   }
 }
@@ -70,6 +96,15 @@ function loadState(): OregonCapitalistState | null {
       hexTiers?: Record<string, number>
       hexManagers?: Record<string, number>
       purchasedGlobalBuffs?: string[]
+      autoUpgradePaused?: boolean
+      autoSpiritShopPaused?: boolean
+      hexProgress?: Record<string, number>
+      lifetimeEarnings?: number
+      pioneerSpirits?: number
+      totalSpiritsEarned?: number
+      prestigeUpgrades?: Record<string, number>
+      activeEvent?: ActiveEvent | null
+      lastSaveTimestamp?: number
       lastTickTimestamp: number
     }
     const hexTiers = parsed.hexTiers ?? {}
@@ -78,12 +113,42 @@ function loadState(): OregonCapitalistState | null {
     }
     const hexManagers = parsed.hexManagers ?? {}
     const purchasedGlobalBuffs = parsed.purchasedGlobalBuffs ?? []
+    const autoUpgradePaused = parsed.autoUpgradePaused ?? false
+    const autoSpiritShopPaused = parsed.autoSpiritShopPaused ?? false
+    const hexProgress = parsed.hexProgress ?? {}
+    const lifetimeEarnings = parsed.lifetimeEarnings ?? 0
+    const pioneerSpirits = parsed.pioneerSpirits ?? 0
+    const totalSpiritsEarned = parsed.totalSpiritsEarned ?? 0
+    const prestigeUpgrades = parsed.prestigeUpgrades ?? {}
+    const activeEvent = parsed.activeEvent ?? null
+    const lastSaveTimestamp = parsed.lastSaveTimestamp ?? parsed.lastTickTimestamp
+    const rawHexes = parsed.hexes
+    if (!Array.isArray(rawHexes) || rawHexes.length === 0) return null
+    const VALID_TERRAINS: Terrain[] = ['wood', 'brick', 'sheep', 'wheat', 'ore', 'desert']
+    const hexIds = new Set(rawHexes.map((h) => h.id))
+    const hexes = rawHexes.map((h) => ({
+      ...h,
+      terrain: VALID_TERRAINS.includes(h.terrain) ? h.terrain : 'wood',
+    }))
+    const ownedHexIds = new Set(
+      (parsed.ownedHexIds ?? []).filter((id) => hexIds.has(id))
+    )
     return {
       ...parsed,
-      ownedHexIds: new Set(parsed.ownedHexIds),
+      hexes,
+      ownedHexIds,
       hexTiers,
       hexManagers,
       purchasedGlobalBuffs,
+      autoUpgradePaused,
+      autoSpiritShopPaused,
+      hexProgress,
+      lifetimeEarnings,
+      pioneerSpirits,
+      totalSpiritsEarned,
+      prestigeUpgrades,
+      activeEvent,
+      lastSaveTimestamp,
     }
   } catch {
     return null
@@ -103,6 +168,15 @@ function saveState(state: OregonCapitalistState) {
         hexTiers: state.hexTiers ?? {},
         hexManagers: state.hexManagers ?? {},
         purchasedGlobalBuffs: state.purchasedGlobalBuffs ?? [],
+        autoUpgradePaused: state.autoUpgradePaused ?? false,
+        autoSpiritShopPaused: state.autoSpiritShopPaused ?? false,
+        hexProgress: state.hexProgress ?? {},
+        lifetimeEarnings: state.lifetimeEarnings ?? 0,
+        pioneerSpirits: state.pioneerSpirits ?? 0,
+        totalSpiritsEarned: state.totalSpiritsEarned ?? 0,
+        prestigeUpgrades: state.prestigeUpgrades ?? {},
+        activeEvent: state.activeEvent ?? null,
+        lastSaveTimestamp: Date.now(),
         lastTickTimestamp: state.lastTickTimestamp,
       })
     )
@@ -111,11 +185,81 @@ function saveState(state: OregonCapitalistState) {
   }
 }
 
+function getNextMilestone(level: number): number | null {
+  return MILESTONES.find((m) => m > level) ?? null
+}
+function getPrevMilestone(level: number): number {
+  const prev = MILESTONES.filter((m) => m <= level).pop()
+  return prev ?? 0
+}
+function progressToNextMilestone(level: number): { progress: number; next: number | null } {
+  const next = getNextMilestone(level)
+  const prev = getPrevMilestone(level)
+  if (next == null) return { progress: 1, next: null }
+  return { progress: (level - prev) / (next - prev), next }
+}
+
+function getPioneerHarmonyMultiplier(state: OregonCapitalistState): { multiplier: number; thresholds: number[] } {
+  const ownedNonDesert = Array.from(state.ownedHexIds).filter((id) => {
+    const hex = state.hexes.find((h) => h.id === id)
+    return hex && hex.terrain !== 'desert'
+  })
+  if (ownedNonDesert.length === 0) return { multiplier: 1, thresholds: [] }
+  
+  const metThresholds: number[] = []
+  for (const threshold of GLOBAL_MILESTONES) {
+    const allAtOrAbove = ownedNonDesert.every((id) => (state.hexLevels[id] ?? 1) >= threshold)
+    if (allAtOrAbove) {
+      metThresholds.push(threshold)
+    }
+  }
+  
+  const multiplier = Math.pow(2, metThresholds.length)
+  return { multiplier, thresholds: metThresholds }
+}
+
+function calculateOfflineEarnings(state: OregonCapitalistState): { earnings: number; timeAway: number } {
+  const now = Date.now()
+  const lastSave = state.lastSaveTimestamp ?? state.lastTickTimestamp
+  const timeDiff = now - lastSave
+  const MAX_OFFLINE_TIME = 24 * 60 * 60 * 1000 // 24 hours
+  const effectiveTime = Math.min(timeDiff, MAX_OFFLINE_TIME)
+
+  if (effectiveTime < 60_000) return { earnings: 0, timeAway: 0 } // Less than 1 minute
+
+  // Calculate production per millisecond (theoretical max from all managed hexes)
+  const productionPerMs = getTotalProductionPerSec(state) / 1000
+  const earnings = productionPerMs * effectiveTime * 0.5 // MONEY_PER_RESOURCE = 0.5
+
+  return { earnings, timeAway: effectiveTime }
+}
+
+function formatTimeAway(ms: number): string {
+  const seconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  if (hours > 0) return `${hours}h ${minutes % 60}m`
+  if (minutes > 0) return `${minutes}m ${seconds % 60}s`
+  return `${seconds}s`
+}
+
 export function OregonCapitalistPage() {
+  const [celebratingMilestoneHexId, setCelebratingMilestoneHexId] = useState<string | null>(null)
+  const [showOfflineModal, setShowOfflineModal] = useState(false)
+  const [offlineEarnings, setOfflineEarnings] = useState<{ earnings: number; timeAway: number } | null>(null)
+  const [showPrestigeModal, setShowPrestigeModal] = useState(false)
   const [state, setState] = useState<OregonCapitalistState>(() => {
     const saved = loadState()
     if (saved) {
-      return tick(saved, Date.now())
+      const ticked = tick(saved, Date.now())
+      // Check for offline earnings
+      const offline = calculateOfflineEarnings(ticked)
+      if (offline.earnings > 0) {
+        setOfflineEarnings(offline)
+        setShowOfflineModal(true)
+        return { ...ticked, money: ticked.money + offline.earnings }
+      }
+      return ticked
     }
     return createInitialState()
   })
@@ -125,7 +269,7 @@ export function OregonCapitalistPage() {
   const tickRef = useRef<number>()
   useEffect(() => {
     const run = () => {
-      setState((s) => tick(s, Date.now()))
+      setState((s) => applyAutoSpiritShop(applyAutoUpgrades(tick(s, Date.now()))))
       tickRef.current = window.setTimeout(run, TICK_MS)
     }
     tickRef.current = window.setTimeout(run, TICK_MS)
@@ -133,6 +277,12 @@ export function OregonCapitalistPage() {
       if (tickRef.current) clearTimeout(tickRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    if (celebratingMilestoneHexId == null) return
+    const t = setTimeout(() => setCelebratingMilestoneHexId(null), 2000)
+    return () => clearTimeout(t)
+  }, [celebratingMilestoneHexId])
 
   useEffect(() => {
     const id = setInterval(() => saveState(stateRef.current), 5000)
@@ -153,7 +303,24 @@ export function OregonCapitalistPage() {
   const handleUpgrade = useCallback((hexId: string) => {
     setState((s) => {
       const next = upgradeHex(s, hexId)
-      return next ?? s
+      if (next) {
+        const newLevel = next.hexLevels[hexId] ?? 1
+        if ((MILESTONES as readonly number[]).includes(newLevel)) setCelebratingMilestoneHexId(hexId)
+        return next
+      }
+      return s
+    })
+  }, [])
+
+  const handleBuyMax = useCallback((hexId: string) => {
+    setState((s) => {
+      const next = buyMaxUpgrades(s, hexId)
+      if (next) {
+        const newLevel = next.hexLevels[hexId] ?? 1
+        if ((MILESTONES as readonly number[]).includes(newLevel)) setCelebratingMilestoneHexId(hexId)
+        return next
+      }
+      return s
     })
   }, [])
 
@@ -171,11 +338,37 @@ export function OregonCapitalistPage() {
     })
   }, [])
 
+  const handleToggleAutoUpgrade = useCallback(() => {
+    setState((s) => ({ ...s, autoUpgradePaused: !(s.autoUpgradePaused ?? false) }))
+  }, [])
+
+  const handleToggleAutoSpiritShop = useCallback(() => {
+    setState((s) => ({ ...s, autoSpiritShopPaused: !(s.autoSpiritShopPaused ?? false) }))
+  }, [])
+
   const handleReset = useCallback(() => {
     if (window.confirm('Reset game? All progress will be lost.')) {
       localStorage.removeItem(STORAGE_KEY)
       setState(createInitialState())
     }
+  }, [])
+
+  const handlePrestige = useCallback(() => {
+    const claimable = calculateClaimableSpirits(state.lifetimeEarnings ?? 0)
+    if (claimable <= 0) {
+      alert('You need to earn at least $1M lifetime to prestige!')
+      return
+    }
+    setShowPrestigeModal(true)
+  }, [state.lifetimeEarnings])
+
+  const confirmPrestige = useCallback(() => {
+    setState((s) => prestige(s))
+    setShowPrestigeModal(false)
+  }, [])
+
+  const handlePurchasePrestigeUpgrade = useCallback((upgradeId: string) => {
+    setState((s) => purchasePrestigeUpgrade(s, upgradeId) ?? s)
   }, [])
 
   const unlockableHexes = useMemo(() => {
@@ -205,8 +398,7 @@ export function OregonCapitalistPage() {
       const hex = state.hexes.find((h) => h.id === hexId)
       if (hex && hex.terrain !== 'desert') {
         const level = state.hexLevels[hexId] ?? 1
-        const tier = state.hexTiers?.[hexId] ?? 1
-        total += getProductionPerSecond(tier, level)
+        total += getProductionPerSecond(hex.terrain, level)
       }
     }
     const mult = getGlobalProductionMultiplier(state.purchasedGlobalBuffs ?? [])
@@ -241,12 +433,14 @@ export function OregonCapitalistPage() {
 
   return (
     <div
-      className="parchment-page"
+      className="parchment-page oregon-capitalist-page"
       style={{
         minHeight: '100vh',
         padding: 24,
         background: 'var(--parchment-bg)',
         color: 'var(--ink)',
+        transform: 'translateZ(0)',
+        overflowX: 'hidden',
       }}
     >
       <Link
@@ -266,8 +460,31 @@ export function OregonCapitalistPage() {
         Click hexes to collect resources. Unlock adjacent hexes. Upgrade for more production.
       </p>
 
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 400px', minWidth: 300 }}>
+      <div
+        className="game-layout"
+        style={{
+          display: 'flex',
+          gap: 24,
+          alignItems: 'flex-start',
+          flexWrap: 'wrap',
+          transform: 'translateZ(0)',
+        }}
+      >
+        <div
+          className="game-board"
+          style={{
+            flex: '1 1 400px',
+            minWidth: 300,
+            overflow: 'hidden',
+            contain: 'layout paint',
+            transform: 'translateZ(0)',
+            borderRadius: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'var(--parchment-section, #EEE7D7)',
+          }}
+        >
           <HexBoard
             hexes={state.hexes}
             showNumberTokens={false}
@@ -287,6 +504,9 @@ export function OregonCapitalistPage() {
             borderRadius: 12,
             padding: 20,
             color: 'var(--text)',
+            transform: 'translateZ(0)',
+            isolation: 'isolate',
+            backfaceVisibility: 'hidden',
           }}
         >
           <button
@@ -297,23 +517,126 @@ export function OregonCapitalistPage() {
               marginBottom: 16,
               padding: '8px 12px',
               borderRadius: 8,
-              border: '1px solid rgba(185, 28, 28, 0.5)',
-              background: 'transparent',
-              color: '#f87171',
+              border: '1px solid rgba(185, 28, 28, 0.8)',
+              background: 'rgba(185, 28, 28, 0.15)',
+              color: '#fff',
               cursor: 'pointer',
               fontSize: 13,
-              fontWeight: 500,
+              fontWeight: 600,
             }}
           >
             Reset game
           </button>
+
+          {(state.pioneerSpirits ?? 0) > 0 && (
+            <div
+              style={{
+                marginBottom: 16,
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: 'rgba(139, 174, 155, 0.25)',
+                border: '1px solid rgba(139, 174, 155, 0.6)',
+                fontSize: 13,
+                color: '#fff',
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 4, color: '#fff' }}>Pioneer Spirits</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>{formatNumber(state.pioneerSpirits ?? 0)}</div>
+              <div style={{ fontSize: 11, opacity: 0.9, marginTop: 4, color: '#fff' }}>
+                +{((state.pioneerSpirits ?? 0) * 2).toFixed(0)}% production
+              </div>
+            </div>
+          )}
+
+          {(() => {
+            const claimable = calculateClaimableSpirits(state.lifetimeEarnings ?? 0)
+            if (claimable > 0) {
+              return (
+                <button
+                  type="button"
+                  onClick={handlePrestige}
+                  style={{
+                    width: '100%',
+                    marginBottom: 16,
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    border: '2px solid rgba(234, 179, 8, 0.8)',
+                    background: 'rgba(234, 179, 8, 0.4)',
+                    color: '#1a1a1a',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    boxShadow: '0 2px 4px rgba(234, 179, 8, 0.3)',
+                  }}
+                >
+                  <div>Prestige</div>
+                  <div style={{ fontSize: 12, opacity: 0.9, marginTop: 2 }}>
+                    +{formatNumber(claimable)} Spirits
+                  </div>
+                </button>
+              )
+            }
+            return null
+          })()}
+
+          {state.activeEvent && isEventActive(state.activeEvent, Date.now()) && (
+            <div
+              style={{
+                marginBottom: 16,
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: 'linear-gradient(90deg, rgba(234,179,8,0.3), rgba(234,179,8,0.15))',
+                border: '1px solid rgba(234,179,8,0.6)',
+                fontSize: 13,
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 2 }}>{state.activeEvent.name}</div>
+              <div style={{ fontSize: 12, opacity: 0.9 }}>{state.activeEvent.description}</div>
+              <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>
+                {Math.ceil((state.activeEvent.duration - (Date.now() - state.activeEvent.startTime)) / 1000)}s remaining
+              </div>
+            </div>
+          )}
+
           <h3 style={{ margin: '0 0 8px', fontSize: 18 }}>Money</h3>
           <p style={{ margin: '0 0 16px', fontSize: 24, fontWeight: 700 }}>
             {formatNumber(state.money)}
           </p>
           <p style={{ margin: '0 0 16px', fontSize: 12, opacity: 0.8 }}>
-            +{formatNumber(totalProductionPerSec * 0.5, 2)}/sec
+            +{formatNumber(totalProductionPerSec * 0.5 * getGlobalProgressMoneyMultiplier(state), 2)}/sec
           </p>
+
+          {(() => {
+            const harmony = getPioneerHarmonyMultiplier(state)
+            if (harmony.multiplier > 1) {
+              const thresholdText = harmony.thresholds.length === 1
+                ? `All hexes ≥ Lv.${harmony.thresholds[0]}`
+                : `All hexes ≥ Lv.${harmony.thresholds.join(', ')}`
+              return (
+                <div
+                  style={{
+                    marginBottom: 16,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    background: 'rgba(139, 174, 155, 0.2)',
+                    border: '1px solid rgba(139, 174, 155, 0.4)',
+                    fontSize: 13,
+                  }}
+                >
+                  <div style={{ fontWeight: 600, marginBottom: 2 }}>Pioneer Harmony</div>
+                  <div style={{ fontSize: 12, opacity: 0.9 }}>
+                    {thresholdText}: {harmony.multiplier}× money generation
+                  </div>
+                  {harmony.thresholds.length < GLOBAL_MILESTONES.length && (
+                    <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4 }}>
+                      Next: All hexes ≥ Lv.{GLOBAL_MILESTONES[harmony.thresholds.length]}
+                    </div>
+                  )}
+                </div>
+              )
+            }
+            return null
+          })()}
 
           <h3 style={{ margin: '0 0 12px', fontSize: 18 }}>Resources</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -325,7 +648,27 @@ export function OregonCapitalistPage() {
             ))}
           </div>
 
-          <h3 style={{ margin: '24px 0 12px', fontSize: 18 }}>Upgrade hex</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '24px 0 12px', flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0, fontSize: 18 }}>Upgrade hex</h3>
+            {hasAutoUpgradeBuff(state.purchasedGlobalBuffs ?? []) && (
+              <button
+                type="button"
+                onClick={handleToggleAutoUpgrade}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  border: '1px solid var(--paper-border)',
+                  background: state.autoUpgradePaused ? 'var(--cta)' : '#d9d0c4',
+                  color: state.autoUpgradePaused ? '#fff' : 'var(--muted)',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 500,
+                }}
+              >
+                {state.autoUpgradePaused ? 'Resume Auto Upgrade' : 'Pause Auto Upgrade'}
+              </button>
+            )}
+          </div>
           <p style={{ margin: '0 0 8px', fontSize: 13, opacity: 0.9 }}>
             Cost: money (increases per level)
           </p>
@@ -335,29 +678,156 @@ export function OregonCapitalistPage() {
               if (!hex || hex.terrain === 'desert') return null
               const level = state.hexLevels[hexId] ?? 1
               const tier = state.hexTiers?.[hexId] ?? 1
-              const cost = getUpgradeCost(level)
+              const { upgradeDiscount } = getAdjacencyMultiplier(hexId, state.hexes, state.ownedHexIds)
+              const cost = getUpgradeCost(level, upgradeDiscount)
               const canAfford = state.money >= cost
+              const { progress, next: nextMilestone } = progressToNextMilestone(level)
+              const { count: maxLevels, cost: totalCostMax } = calculateMaxAffordable(level, state.money, 50, upgradeDiscount)
+              const canBuyMax = maxLevels > 0
+              const isCelebrating = celebratingMilestoneHexId === hexId
+              const hasManager = !!state.hexManagers?.[hexId]
+              const cycleProgress = hasManager ? (state.hexProgress?.[hexId] ?? 0) : 0
+              const cycleTime = getCycleTime(hex.terrain, level)
               return (
-                <button
-                  key={hexId}
-                  onClick={() => handleUpgrade(hexId)}
-                  disabled={!canAfford}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 8,
-                    border: '1px solid var(--paper-border)',
-                    background: canAfford ? 'var(--cta)' : 'rgba(0,0,0,0.2)',
-                    color: canAfford ? '#fff' : 'var(--muted)',
-                    cursor: canAfford ? 'pointer' : 'not-allowed',
-                    fontSize: 13,
-                    textAlign: 'left',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <span>{getBusinessName(hex.terrain, tier)} Lv.{level}</span>
-                  <span>{canAfford ? formatNumber(cost) : `${formatNumber(state.money)}/${formatNumber(cost)}`}</span>
-                </button>
+                <div key={hexId} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {isCelebrating && (
+                    <div
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: 8,
+                        background: 'linear-gradient(90deg, rgba(234,179,8,0.3), rgba(234,179,8,0.15))',
+                        border: '1px solid rgba(234,179,8,0.6)',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: 'var(--ink)',
+                        textAlign: 'center',
+                        animation: 'pulse 0.5s ease-out',
+                      }}
+                    >
+                      Double Production!
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleUpgrade(hexId)}
+                      disabled={!canAfford}
+                      style={{
+                        flex: '1 1 0',
+                        minWidth: 0,
+                        padding: '8px 12px',
+                        borderRadius: 8,
+                        border: '1px solid var(--paper-border)',
+                        background: canAfford ? 'var(--cta)' : '#d9d0c4',
+                        color: canAfford ? '#fff' : 'var(--muted)',
+                        cursor: canAfford ? 'pointer' : 'not-allowed',
+                        fontSize: 13,
+                        textAlign: 'left',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <span>
+                        {(() => {
+                          const visual = getHexVisual(hex.terrain, level)
+                          return (
+                            <>
+                              {visual.name} Lv.{level}
+                              {nextMilestone != null && (
+                                <span style={{ fontSize: 11, opacity: 0.8, marginLeft: 6 }}>
+                                  → {nextMilestone}
+                                </span>
+                              )}
+                            </>
+                          )
+                        })()}
+                      </span>
+                      <span>{canAfford ? formatNumber(cost) : `${formatNumber(state.money)}/${formatNumber(cost)}`}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBuyMax(hexId)}
+                      disabled={!canBuyMax}
+                      title={`Buy up to ${maxLevels} level(s) for ${formatNumber(totalCostMax)}`}
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: 8,
+                        border: '1px solid var(--paper-border)',
+                        background: canBuyMax ? 'var(--accent-sage)' : '#d9d0c4',
+                        color: canBuyMax ? '#fff' : 'var(--muted)',
+                        cursor: canBuyMax ? 'pointer' : 'not-allowed',
+                        fontSize: 12,
+                        fontWeight: 600,
+                      }}
+                    >
+                      Buy Max
+                    </button>
+                  </div>
+                  {hasManager && (
+                    <div style={{ fontSize: 11, opacity: 0.85, marginTop: 2, contain: 'layout paint' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                        <span>Cycle progress</span>
+                        <span>{Math.round(cycleProgress * 100)}%</span>
+                      </div>
+                      <div
+                        className="progress-bar-track"
+                        style={{
+                          height: 4,
+                          borderRadius: 2,
+                          background: '#d9d0c4',
+                          overflow: 'hidden',
+                          position: 'relative',
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: '100%',
+                            transform: `scaleX(${Math.min(1, cycleProgress)})`,
+                            transformOrigin: 'left',
+                            background: 'var(--accent-sage)',
+                            borderRadius: 2,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {nextMilestone != null && (
+                    <div style={{ fontSize: 11, opacity: 0.85, marginTop: hasManager ? 4 : 0, contain: 'layout paint' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                        <span>Next milestone: Lv.{nextMilestone}</span>
+                        <span>{level} / {nextMilestone}</span>
+                      </div>
+                      <div
+                        className="progress-bar-track"
+                        style={{
+                          height: 4,
+                          borderRadius: 2,
+                          background: '#d9d0c4',
+                          overflow: 'hidden',
+                          position: 'relative',
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: '100%',
+                            transform: `scaleX(${Math.min(1, progress)})`,
+                            transformOrigin: 'left',
+                            background: 'var(--cta)',
+                            borderRadius: 2,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
@@ -373,7 +843,7 @@ export function OregonCapitalistPage() {
                 const hex = state.hexes.find((h) => h.id === hexId)
                 if (!hex || hex.terrain === 'desert') return null
                 const tier = state.hexTiers?.[hexId] ?? 1
-                const cost = getHireCost(tier)
+                const cost = getHireCost(tier, state.prestigeUpgrades, state.activeEvent)
                 const canAfford = state.money >= cost
                 const managerName = getManagerName(tier)
                 return (
@@ -385,7 +855,7 @@ export function OregonCapitalistPage() {
                       padding: '8px 12px',
                       borderRadius: 8,
                       border: '1px solid var(--paper-border)',
-                      background: canAfford ? 'var(--accent-sage)' : 'rgba(0,0,0,0.2)',
+                      background: canAfford ? 'var(--accent-sage)' : '#d9d0c4',
                       color: canAfford ? '#fff' : 'var(--muted)',
                       cursor: canAfford ? 'pointer' : 'not-allowed',
                       fontSize: 13,
@@ -437,7 +907,7 @@ export function OregonCapitalistPage() {
                     padding: '8px 12px',
                     borderRadius: 8,
                     border: '1px solid var(--paper-border)',
-                    background: canAfford ? 'var(--accent)' : 'rgba(0,0,0,0.2)',
+                    background: canAfford ? 'var(--accent)' : '#d9d0c4',
                     color: canAfford ? '#fff' : 'var(--muted)',
                     cursor: canAfford ? 'pointer' : 'not-allowed',
                     fontSize: 13,
@@ -457,6 +927,71 @@ export function OregonCapitalistPage() {
               </p>
             )}
           </div>
+
+          {(state.pioneerSpirits ?? 0) > 0 && (
+            <>
+              <h3 style={{ margin: '24px 0 12px', fontSize: 18 }}>Spirit Shop</h3>
+              <p style={{ margin: '0 0 8px', fontSize: 13, opacity: 0.9 }}>
+                Permanent upgrades that persist through prestige.
+              </p>
+              {hasAutoSpiritShopBuff(state.purchasedGlobalBuffs ?? []) && (
+                <button
+                  type="button"
+                  onClick={handleToggleAutoSpiritShop}
+                  style={{
+                    width: '100%',
+                    marginBottom: 8,
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    border: '1px solid var(--paper-border)',
+                    background: state.autoSpiritShopPaused ? 'var(--cta)' : '#d9d0c4',
+                    color: state.autoSpiritShopPaused ? '#fff' : 'var(--muted)',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 500,
+                  }}
+                >
+                  {state.autoSpiritShopPaused ? 'Resume Auto Spirit Shop' : 'Pause Auto Spirit Shop'}
+                </button>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {PRESTIGE_SHOP.map((upgrade) => {
+                  const currentLevel = state.prestigeUpgrades?.[upgrade.id] ?? 0
+                  const cost = upgrade.cost * (currentLevel + 1)
+                  const canAfford = (state.pioneerSpirits ?? 0) >= cost
+                  return (
+                    <button
+                      key={upgrade.id}
+                      onClick={() => handlePurchasePrestigeUpgrade(upgrade.id)}
+                      disabled={!canAfford}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: 8,
+                        border: '1px solid var(--paper-border)',
+                        background: canAfford ? '#e8d080' : '#d9d0c4',
+                        color: canAfford ? 'var(--ink)' : 'var(--muted)',
+                        cursor: canAfford ? 'pointer' : 'not-allowed',
+                        fontSize: 13,
+                        textAlign: 'left',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 2,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: 600 }}>
+                          {upgrade.name}
+                          {currentLevel > 0 && <span style={{ fontSize: 11, opacity: 0.8 }}> (Lv.{currentLevel})</span>}
+                        </span>
+                        <span>{canAfford ? formatNumber(cost) : `${formatNumber(state.pioneerSpirits ?? 0)}/${formatNumber(cost)}`}</span>
+                      </div>
+                      <div style={{ fontSize: 11, opacity: 0.85 }}>{upgrade.description}</div>
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
 
           <h3 style={{ margin: '24px 0 12px', fontSize: 18 }}>Unlock hex</h3>
           <p style={{ margin: '0 0 8px', fontSize: 13, opacity: 0.9 }}>
@@ -502,7 +1037,7 @@ export function OregonCapitalistPage() {
                     padding: '8px 12px',
                     borderRadius: 8,
                     border: '1px solid var(--paper-border)',
-                    background: canAfford ? 'var(--accent-sage)' : 'rgba(0,0,0,0.2)',
+                    background: canAfford ? 'var(--accent-sage)' : '#d9d0c4',
                     color: canAfford ? '#fff' : 'var(--muted)',
                     cursor: canAfford ? 'pointer' : 'not-allowed',
                     fontSize: 13,
@@ -524,6 +1059,165 @@ export function OregonCapitalistPage() {
           </div>
         </aside>
       </div>
+
+      {showOfflineModal && offlineEarnings && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => setShowOfflineModal(false)}
+        >
+          <div
+            style={{
+              background: 'var(--parchment-bg)',
+              borderRadius: 12,
+              padding: 24,
+              maxWidth: 400,
+              color: 'var(--ink)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ margin: '0 0 12px', fontSize: 22 }}>Welcome Back!</h2>
+            <p style={{ margin: '0 0 8px', fontSize: 14, opacity: 0.9 }}>
+              You were gone for {formatTimeAway(offlineEarnings.timeAway)}.
+            </p>
+            <p style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>
+              Your managers earned: {formatNumber(offlineEarnings.earnings)}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowOfflineModal(false)}
+              style={{
+                width: '100%',
+                padding: '10px 16px',
+                borderRadius: 8,
+                border: 'none',
+                background: 'var(--cta)',
+                color: '#fff',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showPrestigeModal &&
+        createPortal(
+          (() => {
+            const claimable = calculateClaimableSpirits(state.lifetimeEarnings ?? 0)
+            const newTotalSpirits = (state.pioneerSpirits ?? 0) + claimable
+            const productionBonus = newTotalSpirits * 2
+            return (
+              <div
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'rgba(0,0,0,0.7)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 10000,
+                  overflowY: 'auto',
+                  padding: '20px',
+                }}
+                onClick={() => setShowPrestigeModal(false)}
+              >
+            <div
+              style={{
+                background: 'var(--parchment-bg)',
+                borderRadius: 12,
+                padding: 24,
+                maxWidth: 480,
+                color: 'var(--ink)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 style={{ margin: '0 0 16px', fontSize: 24, fontWeight: 700 }}>Prestige?</h2>
+              
+              <div style={{ marginBottom: 16 }}>
+                <p style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600 }}>
+                  You will earn: <span style={{ color: 'var(--cta)' }}>{formatNumber(claimable)} Pioneer Spirits</span>
+                </p>
+                
+                <div style={{ marginBottom: 12, padding: '12px', background: 'rgba(139, 174, 155, 0.15)', borderRadius: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Benefits:</div>
+                  <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.6 }}>
+                    <li><strong>+{productionBonus}% production</strong> (2% per Spirit, stacks permanently)</li>
+                    <li>Spend Spirits in the <strong>Spirit Shop</strong> for permanent upgrades:</li>
+                    <ul style={{ marginTop: 4, paddingLeft: 16 }}>
+                      <li>Manifest Destiny: 5+ level hexes (max 19)</li>
+                      <li>Gold Rush Legacy: Keep 5+ level % money (max 50%)</li>
+                      <li>Industrialist: 10+ level % cheaper managers (max 50%)</li>
+                    </ul>
+                  </ul>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16, padding: '10px', background: 'rgba(185, 28, 28, 0.1)', borderRadius: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>⚠️ What resets:</div>
+                <div style={{ fontSize: 12, opacity: 0.9 }}>
+                  Money, resources, hex levels, managers, and owned hexes (except starter)
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowPrestigeModal(false)}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    borderRadius: 8,
+                    border: '1px solid var(--paper-border)',
+                    background: 'transparent',
+                    color: 'var(--ink)',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmPrestige}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: 'rgba(234, 179, 8, 0.6)',
+                    color: '#1a1a1a',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Prestige Now
+                </button>
+              </div>
+            </div>
+          </div>
+            )
+          })(),
+          document.body
+        )}
     </div>
   )
 }

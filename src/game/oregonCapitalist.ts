@@ -1,5 +1,12 @@
 import type { Hex, Terrain } from './types'
-import { getGlobalProductionMultiplier, GLOBAL_BUFFS } from './globalBuffs'
+import { getGlobalProductionMultiplier, GLOBAL_BUFFS, hasAutoUpgradeBuff, hasAutoSpiritShopBuff } from './globalBuffs'
+import { MILESTONES, COST_RATE, GLOBAL_MILESTONES, TERRAIN_CONFIG } from './constants/progression'
+import { calculateClaimableSpirits, getSpiritProductionMultiplier, PRESTIGE_SHOP } from './prestige'
+import { getAdjacencyMultiplier } from './adjacency'
+import type { ActiveEvent } from './trailEvents'
+import { checkEventTrigger, getRandomEvent, isEventActive } from './trailEvents'
+
+export type { ActiveEvent }
 
 export interface OregonCapitalistState {
   hexes: Hex[]
@@ -13,26 +20,57 @@ export interface OregonCapitalistState {
   hexManagers: Record<string, number>
   /** IDs of purchased global buffs (stack multiplicatively) */
   purchasedGlobalBuffs: string[]
+  /** When true, auto hex upgrader buff does not run (player paused it) */
+  autoUpgradePaused?: boolean
+  /** When true, auto Spirit Shop buff does not run (player paused it) */
+  autoSpiritShopPaused?: boolean
+  /** Cycle progress per hex (0 to 1). Only for hexes with managers. */
+  hexProgress?: Record<string, number>
+  /** Prestige system: Pioneer Spirits */
+  lifetimeEarnings?: number
+  pioneerSpirits?: number
+  totalSpiritsEarned?: number
+  prestigeUpgrades?: Record<string, number>
+  /** Trail Events: Active temporary buff */
+  activeEvent?: ActiveEvent | null
+  /** Timestamp of last save (for offline earnings) */
+  lastSaveTimestamp?: number
   lastTickTimestamp: number
 }
 
 const BASE_UNLOCK = 15
 const UNLOCK_MULTIPLIER = 1.15
 const BASE_UPGRADE_COST = 50
-const UPGRADE_MULTIPLIER = 1.07
 const BASE_HIRE_COST = 100
 const HIRE_MULTIPLIER = 2.5
 const MONEY_PER_RESOURCE = 0.5
+const MIN_CYCLE_TIME = 0.1 // Minimum cycle time before doubling payout instead
 
-/** Base production per second at level 1. Higher tier = higher base. */
-const BASE_PRODUCTION = 0.5
-const BASE_MULTIPLIER_PER_TIER = 1.4
+/** Number of milestones that are <= level. */
+export function getMilestonesReached(level: number): number {
+  return MILESTONES.filter((m) => m <= level).length
+}
 
-/** Curve exponent: tier 1 = 1.0 (linear), higher tiers scale better with level. */
-const CURVE_EXPONENT_BASE = 1.0
-const CURVE_EXPONENT_PER_TIER = 0.02
+/** Get cycle time for a hex based on terrain and milestones reached. */
+export function getCycleTime(terrain: Terrain, level: number): number {
+  if (terrain === 'desert') return 1.0
+  const config = TERRAIN_CONFIG[terrain as keyof typeof TERRAIN_CONFIG]
+  if (!config) return 1.0
+  const milestonesReached = getMilestonesReached(level)
+  const cycleTime = config.baseCycleTime / Math.pow(2, milestonesReached)
+  return Math.max(MIN_CYCLE_TIME, cycleTime)
+}
 
-const CLICK_PRODUCTION_BASE = 1
+/** Get payout amount for a hex cycle. If cycle time is at minimum, double the payout. */
+export function getCyclePayout(terrain: Terrain, level: number): { resources: number; multiplier: number } {
+  if (terrain === 'desert') return { resources: 0, multiplier: 1 }
+  const config = TERRAIN_CONFIG[terrain as keyof typeof TERRAIN_CONFIG]
+  if (!config) return { resources: 1, multiplier: 1 }
+  const milestonesReached = getMilestonesReached(level)
+  const cycleTime = config.baseCycleTime / Math.pow(2, milestonesReached)
+  const multiplier = cycleTime < MIN_CYCLE_TIME ? Math.pow(2, milestonesReached + 1) : Math.pow(2, milestonesReached)
+  return { resources: config.baseValue, multiplier }
+}
 
 /** Unlock cost scales with hex index AND total resource production per second. */
 export function getUnlockCost(hexIndex: number, totalProductionPerSec: number): number {
@@ -41,7 +79,7 @@ export function getUnlockCost(hexIndex: number, totalProductionPerSec: number): 
   return Math.floor(base * productionScale)
 }
 
-/** Helper to compute total resource production per second from state. */
+/** Helper to compute total resource production per second from state (cycle-based). */
 export function getTotalProductionPerSec(state: OregonCapitalistState): number {
   let total = 0
   for (const hexId of state.ownedHexIds) {
@@ -49,40 +87,98 @@ export function getTotalProductionPerSec(state: OregonCapitalistState): number {
     const hex = state.hexes.find((h) => h.id === hexId)
     if (hex && hex.terrain !== 'desert') {
       const level = state.hexLevels[hexId] ?? 1
-      const tier = state.hexTiers?.[hexId] ?? 1
-      total += getProductionPerSecond(tier, level)
+      const { productionMult, cycleTimeMult } = getAdjacencyMultiplier(
+        hexId,
+        state.hexes,
+        state.ownedHexIds
+      )
+      total += getProductionPerSecond(hex.terrain, level, productionMult, cycleTimeMult)
     }
   }
-  const mult = getGlobalProductionMultiplier(state.purchasedGlobalBuffs ?? [])
-  return total * mult
+  const buffMult = getGlobalProductionMultiplier(state.purchasedGlobalBuffs ?? [])
+  const spiritMult = getSpiritProductionMultiplier(state.pioneerSpirits ?? 0)
+  return total * buffMult * spiritMult
 }
 
-export function getUpgradeCost(level: number): number {
-  return Math.floor(BASE_UPGRADE_COST * Math.pow(UPGRADE_MULTIPLIER, level))
+/** When ALL owned non-desert hexes reach level >= threshold, money gen gets 2x. Stacks per GLOBAL_MILESTONES. */
+export function getGlobalProgressMoneyMultiplier(state: OregonCapitalistState): number {
+  const ownedNonDesert = Array.from(state.ownedHexIds).filter((id) => {
+    const hex = state.hexes.find((h) => h.id === id)
+    return hex && hex.terrain !== 'desert'
+  })
+  if (ownedNonDesert.length === 0) return 1
+  let mult = 1
+  for (const threshold of GLOBAL_MILESTONES) {
+    const allAtOrAbove = ownedNonDesert.every((id) => (state.hexLevels[id] ?? 1) >= threshold)
+    if (allAtOrAbove) mult *= 2
+  }
+  return mult
+}
+
+export function getUpgradeCost(level: number, upgradeDiscount: number = 0): number {
+  const base = Math.floor(BASE_UPGRADE_COST * Math.pow(COST_RATE, level))
+  return Math.floor(base * (1 - upgradeDiscount))
+}
+
+/** Calculate max affordable levels using the formula: n = log_r((Money * (r - 1) / currentPrice) + 1) */
+export function calculateMaxAffordable(
+  currentLevel: number,
+  money: number,
+  baseCost = BASE_UPGRADE_COST,
+  upgradeDiscount = 0
+): { count: number; cost: number } {
+  const r = COST_RATE
+  const basePrice = baseCost * Math.pow(r, currentLevel)
+  const currentPrice = Math.floor(basePrice * (1 - upgradeDiscount))
+  if (money < currentPrice) return { count: 0, cost: 0 }
+  const n = Math.floor(Math.log((money * (r - 1) / currentPrice) + 1) / Math.log(r))
+  const totalCost = currentPrice * (Math.pow(r, n) - 1) / (r - 1)
+  return { count: Math.max(0, n), cost: Math.floor(totalCost) }
 }
 
 /** Cost to hire a tier N manager (enables passive production for that hex). */
-export function getHireCost(tier: number): number {
-  return Math.floor(BASE_HIRE_COST * Math.pow(HIRE_MULTIPLIER, tier - 1))
+export function getHireCost(
+  tier: number,
+  prestigeUpgrades?: Record<string, number>,
+  activeEvent?: ActiveEvent | null
+): number {
+  let cost = Math.floor(BASE_HIRE_COST * Math.pow(HIRE_MULTIPLIER, tier - 1))
+  // Industrialist: 10 + level % discount, capped at 50%
+  const industrialistLevel = prestigeUpgrades?.industrialist ?? 0
+  if (industrialistLevel > 0) {
+    const discount = Math.min(50, 10 + industrialistLevel) / 100
+    cost = Math.floor(cost * (1 - discount))
+  }
+  // Traveling Bard event: 50% cheaper managers
+  if (activeEvent && activeEvent.effectType === 'manager_cost_reduction') {
+    cost = Math.floor(cost * activeEvent.multiplier)
+  }
+  return cost
 }
 
-/** Production per second. Tier sets base and curve; level scales within that curve. */
-export function getProductionPerSecond(tier: number, level: number): number {
-  const base = BASE_PRODUCTION * Math.pow(BASE_MULTIPLIER_PER_TIER, tier - 1)
-  const exponent = CURVE_EXPONENT_BASE + (tier - 1) * CURVE_EXPONENT_PER_TIER
-  return base * Math.pow(level, exponent)
+/** Average production per second (for display). Uses cycle-based calculation. */
+export function getProductionPerSecond(
+  terrain: Terrain,
+  level: number,
+  adjacencyMult: number = 1,
+  adjacencyCycleMult: number = 1
+): number {
+  const baseCycleTime = getCycleTime(terrain, level)
+  const cycleTime = baseCycleTime * adjacencyCycleMult
+  const { resources, multiplier } = getCyclePayout(terrain, level)
+  return (resources * multiplier * adjacencyMult) / cycleTime
 }
 
-/** Click production. Same tier/level logic. */
-export function getClickProduction(tier: number, level: number): number {
-  const base = CLICK_PRODUCTION_BASE * Math.pow(BASE_MULTIPLIER_PER_TIER, tier - 1)
-  const exponent = CURVE_EXPONENT_BASE + (tier - 1) * CURVE_EXPONENT_PER_TIER
-  return base * Math.pow(level, exponent)
+/** Click production: instant cycle completion. */
+export function getClickProduction(terrain: Terrain, level: number): number {
+  const { resources, multiplier } = getCyclePayout(terrain, level)
+  return resources * multiplier
 }
 
 /**
- * Tick applies passive production only for hexes that have a manager hired.
- * Hexes without a manager require clicks to produce.
+ * Tick applies cycle-based production only for hexes that have a manager hired.
+ * Each hex has a progress (0-1) that fills based on cycle time.
+ * When progress >= 1, payout resources/money and reset progress.
  */
 export function tick(state: OregonCapitalistState, now: number): OregonCapitalistState {
   const elapsed = Math.min((now - state.lastTickTimestamp) / 1000, 60 * 60 * 24)
@@ -90,6 +186,27 @@ export function tick(state: OregonCapitalistState, now: number): OregonCapitalis
 
   const resources = { ...state.resources }
   let money = state.money
+  let lifetimeEarnings = state.lifetimeEarnings ?? 0
+  const hexProgress = { ...(state.hexProgress ?? {}) }
+  const globalMult = getGlobalProductionMultiplier(state.purchasedGlobalBuffs ?? [])
+  const spiritMult = getSpiritProductionMultiplier(state.pioneerSpirits ?? 0)
+  const moneyMult = getGlobalProgressMoneyMultiplier(state)
+
+  // Check for trail events
+  let activeEvent = state.activeEvent ?? null
+  if (!isEventActive(activeEvent, now)) {
+    activeEvent = null
+    if (checkEventTrigger()) {
+      const event = getRandomEvent()
+      activeEvent = { ...event, startTime: now }
+    }
+  }
+
+  // Apply event multipliers
+  let eventGlobalMult = 1
+  if (activeEvent && activeEvent.effectType === 'global_production') {
+    eventGlobalMult = activeEvent.multiplier
+  }
 
   for (const hexId of state.ownedHexIds) {
     const managerTier = state.hexManagers?.[hexId]
@@ -97,15 +214,85 @@ export function tick(state: OregonCapitalistState, now: number): OregonCapitalis
     const hex = state.hexes.find((h) => h.id === hexId)
     if (!hex || hex.terrain === 'desert') continue
     const level = state.hexLevels[hexId] ?? 1
-    const tier = state.hexTiers?.[hexId] ?? 1
-    const baseProduced = getProductionPerSecond(tier, level) * elapsed
-    const mult = getGlobalProductionMultiplier(state.purchasedGlobalBuffs ?? [])
-    const produced = baseProduced * mult
-    resources[hex.terrain] = (resources[hex.terrain] ?? 0) + produced
-    money += produced * MONEY_PER_RESOURCE
+    const { productionMult, cycleTimeMult } = getAdjacencyMultiplier(
+      hexId,
+      state.hexes,
+      state.ownedHexIds
+    )
+    const baseCycleTime = getCycleTime(hex.terrain, level)
+    const cycleTime = baseCycleTime * cycleTimeMult
+    const currentProgress = hexProgress[hexId] ?? 0
+    const newProgress = currentProgress + elapsed / cycleTime
+
+    // Process complete cycles
+    const cyclesCompleted = Math.floor(newProgress)
+    if (cyclesCompleted > 0) {
+      const { resources: payoutAmount, multiplier } = getCyclePayout(hex.terrain, level)
+      const produced = payoutAmount * multiplier * productionMult * globalMult * spiritMult * eventGlobalMult * cyclesCompleted
+      resources[hex.terrain] = (resources[hex.terrain] ?? 0) + produced
+      const moneyEarned = produced * MONEY_PER_RESOURCE * moneyMult
+      money += moneyEarned
+      lifetimeEarnings += moneyEarned
+    }
+
+    // Store remaining progress (0 to 1)
+    hexProgress[hexId] = newProgress - cyclesCompleted
   }
 
-  return { ...state, resources, money, lastTickTimestamp: now }
+  return { ...state, resources, money, lifetimeEarnings, hexProgress, activeEvent, lastTickTimestamp: now }
+}
+
+/**
+ * When Auto Hex Upgrader buff is purchased and not paused, automatically upgrade
+ * hexes that the player can afford. Runs after tick. Upgrades cheapest first.
+ */
+export function applyAutoUpgrades(state: OregonCapitalistState): OregonCapitalistState {
+  if (!hasAutoUpgradeBuff(state.purchasedGlobalBuffs ?? [])) return state
+  if (state.autoUpgradePaused) return state
+
+  let s = state
+  let changed = true
+  while (changed) {
+    changed = false
+    const candidates = Array.from(s.ownedHexIds)
+      .map((hexId) => {
+        const hex = s.hexes.find((h) => h.id === hexId)
+        if (!hex || hex.terrain === 'desert') return null
+        const level = s.hexLevels[hexId] ?? 1
+        const cost = getUpgradeCost(level)
+        return { hexId, cost }
+      })
+      .filter((x): x is { hexId: string; cost: number } => x !== null && s.money >= x.cost)
+      .sort((a, b) => a.cost - b.cost)
+
+    const next = candidates[0] ? upgradeHex(s, candidates[0].hexId) : null
+    if (next) {
+      s = next
+      changed = true
+    }
+  }
+  return s
+}
+
+/**
+ * When Auto Spirit Shop buff is purchased and not paused, automatically purchase
+ * cheapest affordable prestige upgrade. Runs after tick.
+ */
+export function applyAutoSpiritShop(state: OregonCapitalistState): OregonCapitalistState {
+  if (!hasAutoSpiritShopBuff(state.purchasedGlobalBuffs ?? [])) return state
+  if (state.autoSpiritShopPaused) return state
+  const spirits = state.pioneerSpirits ?? 0
+  if (spirits <= 0) return state
+
+  const candidates = PRESTIGE_SHOP.map((upgrade) => {
+    const currentLevel = state.prestigeUpgrades?.[upgrade.id] ?? 0
+    const cost = upgrade.cost * (currentLevel + 1)
+    return { upgradeId: upgrade.id, cost }
+  }).filter((c) => spirits >= c.cost).sort((a, b) => a.cost - b.cost)
+
+  const cheapest = candidates[0]
+  if (!cheapest) return state
+  return purchasePrestigeUpgrade(state, cheapest.upgradeId) ?? state
 }
 
 export function produceFromClick(
@@ -117,10 +304,20 @@ export function produceFromClick(
   if (!hex || hex.terrain === 'desert') return null
 
   const level = state.hexLevels[hexId] ?? 1
-  const tier = state.hexTiers?.[hexId] ?? 1
-  const baseProduced = getClickProduction(tier, level)
-  const mult = getGlobalProductionMultiplier(state.purchasedGlobalBuffs ?? [])
-  const produced = baseProduced * mult
+  const { productionMult } = getAdjacencyMultiplier(hexId, state.hexes, state.ownedHexIds)
+  const { resources: payoutAmount, multiplier } = getCyclePayout(hex.terrain, level)
+  const buffMult = getGlobalProductionMultiplier(state.purchasedGlobalBuffs ?? [])
+  const spiritMult = getSpiritProductionMultiplier(state.pioneerSpirits ?? 0)
+  // Apply click production event multiplier
+  let clickMult = 1
+  if (state.activeEvent && state.activeEvent.effectType === 'click_production') {
+    clickMult = state.activeEvent.multiplier
+  }
+  const produced = payoutAmount * multiplier * productionMult * buffMult * spiritMult * clickMult
+  const moneyMult = getGlobalProgressMoneyMultiplier(state)
+  const hexProgress = { ...(state.hexProgress ?? {}) }
+  hexProgress[hexId] = 0 // Reset progress on click
+  const moneyEarned = produced * MONEY_PER_RESOURCE * moneyMult
 
   return {
     ...state,
@@ -128,7 +325,9 @@ export function produceFromClick(
       ...state.resources,
       [hex.terrain]: (state.resources[hex.terrain] ?? 0) + produced,
     },
-    money: state.money + produced * MONEY_PER_RESOURCE,
+    money: state.money + moneyEarned,
+    lifetimeEarnings: (state.lifetimeEarnings ?? 0) + moneyEarned,
+    hexProgress,
   }
 }
 
@@ -326,7 +525,8 @@ export function unlockHex(
 export function upgradeHex(state: OregonCapitalistState, hexId: string): OregonCapitalistState | null {
   if (!state.ownedHexIds.has(hexId)) return null
   const level = state.hexLevels[hexId] ?? 1
-  const cost = getUpgradeCost(level)
+  const { upgradeDiscount } = getAdjacencyMultiplier(hexId, state.hexes, state.ownedHexIds)
+  const cost = getUpgradeCost(level, upgradeDiscount)
   if (state.money < cost) return null
 
   return {
@@ -336,18 +536,121 @@ export function upgradeHex(state: OregonCapitalistState, hexId: string): OregonC
   }
 }
 
+/** Buy as many levels as possible for this hex with current money. Returns new state. */
+export function buyMaxUpgrades(state: OregonCapitalistState, hexId: string): OregonCapitalistState | null {
+  if (!state.ownedHexIds.has(hexId)) return null
+  const level = state.hexLevels[hexId] ?? 1
+  const { upgradeDiscount } = getAdjacencyMultiplier(hexId, state.hexes, state.ownedHexIds)
+  const { count, cost } = calculateMaxAffordable(level, state.money, BASE_UPGRADE_COST, upgradeDiscount)
+  if (count <= 0 || cost > state.money) return null
+  return {
+    ...state,
+    money: state.money - cost,
+    hexLevels: { ...state.hexLevels, [hexId]: level + count },
+  }
+}
+
 /** Hire a manager for a hex. Manager tier must match hex tier. Enables passive production. */
 export function hireManager(state: OregonCapitalistState, hexId: string): OregonCapitalistState | null {
   if (!state.ownedHexIds.has(hexId)) return null
   if (state.hexManagers?.[hexId]) return null
   const tier = state.hexTiers?.[hexId] ?? 1
-  const cost = getHireCost(tier)
+  const cost = getHireCost(tier, state.prestigeUpgrades, state.activeEvent)
   if (state.money < cost) return null
 
   return {
     ...state,
     money: state.money - cost,
     hexManagers: { ...state.hexManagers, [hexId]: tier },
+  }
+}
+
+/**
+ * Prestige: Reset game progress in exchange for Pioneer Spirits.
+ * Resets: money, resources, hexLevels, hexManagers, ownedHexIds (except starter)
+ * Keeps: pioneerSpirits, lifetimeEarnings, prestigeUpgrades, totalSpiritsEarned
+ */
+export function prestige(state: OregonCapitalistState): OregonCapitalistState {
+  const claimableSpirits = calculateClaimableSpirits(state.lifetimeEarnings ?? 0)
+  if (claimableSpirits <= 0) return state // Can't prestige without earning spirits
+
+  const newSpirits = (state.pioneerSpirits ?? 0) + claimableSpirits
+  const totalSpirits = (state.totalSpiritsEarned ?? 0) + claimableSpirits
+
+  // Find starter hex (first non-desert hex)
+  const starterHex = state.hexes.find((h) => h.terrain !== 'desert') ?? state.hexes[0]
+  const starterHexId = starterHex?.id
+
+  // Apply manifest_destiny: start with 5 free hexes unlocked
+  let initialOwnedHexIds = new Set<string>()
+  let initialHexLevels: Record<string, number> = {}
+  let initialHexTiers: Record<string, number> = {}
+
+  if (starterHexId) {
+    initialOwnedHexIds.add(starterHexId)
+    initialHexLevels[starterHexId] = 1
+    initialHexTiers[starterHexId] = 1
+
+    // Manifest Destiny: 5 + level free hexes, capped at 19 (BFS from starter)
+    const manifestLevel = state.prestigeUpgrades?.manifest_destiny ?? 0
+    if (manifestLevel > 0) {
+      const hexesToUnlock = Math.min(19, 5 + manifestLevel) - 1 // -1 for starter
+      if (hexesToUnlock > 0) {
+        const NEIGHBORS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]] as const
+        const match = starterHexId.match(/^h(-?\d+),(-?\d+)$/)
+        if (match) {
+          const byId = new Map(state.hexes.map((h) => [h.id, h]))
+          const queue: [number, number][] = [[parseInt(match[1], 10), parseInt(match[2], 10)]]
+          const visited = new Set<string>([starterHexId])
+          let unlocked = 0
+          while (queue.length > 0 && unlocked < hexesToUnlock) {
+            const [q, r] = queue.shift()!
+            for (const [dq, dr] of NEIGHBORS) {
+              const nq = q + dq
+              const nr = r + dr
+              const nid = `h${nq},${nr}`
+              if (visited.has(nid)) continue
+              visited.add(nid)
+              const neighbor = byId.get(nid)
+              if (neighbor && neighbor.terrain !== 'desert') {
+                initialOwnedHexIds.add(nid)
+                initialHexLevels[nid] = 1
+                const sameTerrainCount = Array.from(initialOwnedHexIds).filter(
+                  (id) => state.hexes.find((h) => h.id === id)?.terrain === neighbor.terrain
+                ).length
+                initialHexTiers[nid] = sameTerrainCount
+                unlocked++
+                queue.push([nq, nr])
+                if (unlocked >= hexesToUnlock) break
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Gold Rush Legacy: keep 5 + level % of money, capped at 50%
+  const goldRushLevel = state.prestigeUpgrades?.gold_rush_legacy ?? 0
+  const keptMoney =
+    goldRushLevel > 0
+      ? Math.floor(state.money * (Math.min(50, 5 + goldRushLevel) / 100))
+      : 0
+
+  return {
+    ...state,
+    money: keptMoney,
+    resources: { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0, desert: 0 },
+    hexLevels: initialHexLevels,
+    hexTiers: initialHexTiers,
+    hexManagers: {},
+    ownedHexIds: initialOwnedHexIds,
+    purchasedGlobalBuffs: [],
+    autoUpgradePaused: false,
+    hexProgress: {},
+    pioneerSpirits: newSpirits,
+    totalSpiritsEarned: totalSpirits,
+    // lifetimeEarnings is kept (not reset)
   }
 }
 
@@ -365,5 +668,26 @@ export function purchaseGlobalBuff(state: OregonCapitalistState, buffId: string)
     ...state,
     money: state.money - buff.cost,
     purchasedGlobalBuffs: [...(state.purchasedGlobalBuffs ?? []), buffId],
+  }
+}
+
+/** Purchase a prestige upgrade using Pioneer Spirits. */
+export function purchasePrestigeUpgrade(
+  state: OregonCapitalistState,
+  upgradeId: string
+): OregonCapitalistState | null {
+  const upgrade = PRESTIGE_SHOP.find((u) => u.id === upgradeId)
+  if (!upgrade) return null
+  const currentLevel = state.prestigeUpgrades?.[upgradeId] ?? 0
+  const cost = upgrade.cost * (currentLevel + 1) // Cost increases per level
+  if ((state.pioneerSpirits ?? 0) < cost) return null
+
+  return {
+    ...state,
+    pioneerSpirits: (state.pioneerSpirits ?? 0) - cost,
+    prestigeUpgrades: {
+      ...(state.prestigeUpgrades ?? {}),
+      [upgradeId]: currentLevel + 1,
+    },
   }
 }
