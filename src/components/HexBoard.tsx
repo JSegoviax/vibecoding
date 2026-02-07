@@ -459,12 +459,14 @@ export function HexBoard({
         const u2x = v2ToCircleX / len2
         const u2y = v2ToCircleY / len2
         
-        // Pier center = vertex + half length toward circle so the back of the pier sits on land
+        // Pier center: offset toward land so the pier sits on the coast (pull back from water)
         const halfW = dockW / 2
-        const dock1CenterX = v1.x + halfW * u1x
-        const dock1CenterY = v1.y + halfW * u1y
-        const dock2CenterX = v2.x + halfW * u2x
-        const dock2CenterY = v2.y + halfW * u2y
+        const pullBack = 0.28 // center closer to vertex so pier overlaps land more
+        const offset = halfW * pullBack
+        const dock1CenterX = v1.x + offset * u1x
+        const dock1CenterY = v1.y + offset * u1y
+        const dock2CenterX = v2.x + offset * u2x
+        const dock2CenterY = v2.y + offset * u2y
         
         const angleDeg1 = (Math.atan2(v1ToCircleY, v1ToCircleX) * 180) / Math.PI
         const angleDeg2 = (Math.atan2(v2ToCircleY, v2ToCircleX) * 180) / Math.PI
