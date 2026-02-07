@@ -620,10 +620,17 @@ export function HexBoard({
         const pulse = phase === 'setup'
         return (
           <g key={`spot-${v.id}`} transform={`translate(${v.x}, ${v.y})`}>
-            <g
-              className={pulse ? 'settlement-spot-pulse' : undefined}
-              style={{ transformOrigin: 'center' }}
-            >
+            <g>
+              {pulse && (
+                <animateTransform
+                  attributeName="transform"
+                  type="scale"
+                  values="1;1.2;1"
+                  dur="1.2s"
+                  repeatCount="indefinite"
+                  additive="replace"
+                />
+              )}
               <image
                 href={spotImage}
                 x={-spotSize / 2}
