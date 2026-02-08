@@ -177,6 +177,13 @@ body:not(.no-grain-overlay)::before {
   border: 1px solid var(--paper-border);
 }
 
+/* Sidebar title: ensure visible and not collapsed */
+.game-sidebar .game-sidebar-title {
+  display: block;
+  flex-shrink: 0;
+  color: var(--ink, var(--text));
+}
+
 #root {
   min-height: 100vh;
   padding: 1rem;

@@ -464,7 +464,6 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
   return (
     <div className="game-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
       <GameGuide />
-      <h1 className="game-title" style={{ textAlign: 'center', marginBottom: '0.5rem' }}>Settlers of Oregon (Multiplayer)</h1>
       <p className="game-subtitle" style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 0 }}>
         {game.phase === 'setup' && !isSetupRoad && `Place a settlement`}
         {game.phase === 'setup' && isSetupRoad && `Place a road next to it`}
@@ -700,6 +699,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
         </div>
 
         <aside className="game-sidebar" style={{ flex: '0 0 280px', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <h1 className="game-title game-sidebar-title" style={{ margin: '0 0 8px', fontSize: '1.25rem', fontWeight: 700, flexShrink: 0, lineHeight: 1.3, color: 'var(--ink, var(--text))' }}>Settlers of Oregon (Multiplayer)</h1>
           <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
             <button
               type="button"
