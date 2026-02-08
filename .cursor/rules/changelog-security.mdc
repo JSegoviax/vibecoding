@@ -1,0 +1,16 @@
+# Changelog: Security and Content Rules
+
+When editing `src/data/changelog.ts` or adding changelog entries from git history:
+
+## Never add to the changelog
+
+- **Security-sensitive details:** How host/lobby identity is determined (e.g. URL params like `?host=1`, sessionStorage, cookies), auth flows, API keys, or backend validation.
+- **Implementation details that could enable abuse:** Anything that tells a user exactly how to mimic the host, bypass checks, or exploit the game.
+- **Internal jargon:** Variable names, function names, file names, or tech stack (Vercel, Supabase, etc.). Use plain, player-facing language instead.
+
+## Do use
+
+- **Outcome-only descriptions:** e.g. "Fixed a bug where the second player was incorrectly identified as the Host" instead of explaining how host detection works.
+- **Generic stability lines:** e.g. "Stability: Fixed a rare crash during …" without mentioning build systems or internal types.
+
+When in doubt, describe *what changed for the player*, not *how it was implemented*.

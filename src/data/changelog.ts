@@ -1,7 +1,12 @@
 /**
  * Changelog / patch notes for SEO and transparency.
  * When you add new entries (new text), update the sitemap lastmod for /changelog.
- * Keep wording player-facing: no internal jargon, variable names, or security-sensitive details.
+ *
+ * SAFETY RULES (do not break):
+ * - Keep wording player-facing only. No internal jargon, variable names, or tech stack (e.g. Vercel, Supabase).
+ * - NEVER add security-sensitive details: no auth logic, host/lobby implementation, URL params (e.g. ?host=1),
+ *   sessionStorage/localStorage keys, or anything that could help someone exploit the game or backend.
+ * - Prefer "Fixed a bug where …" over "Fixed ?host=1 and sessionStorage so …".
  */
 
 export interface ChangelogEntry {
