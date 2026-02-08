@@ -35,8 +35,9 @@ const COLOR_TO_ROAD_IMAGE: Record<string, string> = {
   '/player-green2.png': '/road-green.png',   // Dark green player
   '/player-white.png': '/road-white.png',
 }
-/** Display width for road assets - kept as-is per asset proportions */
+/** Road asset display size - preserve width and height (no scaling) */
 const ROAD_ASSET_WIDTH = 16
+const ROAD_ASSET_HEIGHT = 64
 
 // Map player color image to city icon (built cities use these instead of the settlement/house image)
 const COLOR_TO_CITY_IMAGE: Record<string, string> = {
@@ -448,7 +449,7 @@ export function HexBoard({
                 y={-len / 2}
                 width={ROAD_ASSET_WIDTH}
                 height={len}
-                preserveAspectRatio="xMidYMid meet"
+                preserveAspectRatio="none"
                 style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
               />
               <rect
@@ -465,6 +466,7 @@ export function HexBoard({
         if (hl && !pid) {
           const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI - 90
           const clipId = `clip-placeable-road-${e.id}`
+          const scrollExtra = 32
           return (
             <g
               key={e.id}
@@ -482,10 +484,10 @@ export function HexBoard({
                 <image
                   href="/road-placeable.png"
                   x={-ROAD_ASSET_WIDTH / 2}
-                  y={-len / 2 - 32}
+                  y={-len / 2 - scrollExtra}
                   width={ROAD_ASSET_WIDTH}
-                  height={len + 64}
-                  preserveAspectRatio="xMidYMid meet"
+                  height={len + scrollExtra * 2}
+                  preserveAspectRatio="xMidYMid slice"
                   style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
                 />
                 <rect
