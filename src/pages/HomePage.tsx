@@ -62,10 +62,10 @@ export function HomePage() {
             <Link
               key={game.slug}
               to={game.path}
+              className="home-cta"
               style={{
                 display: 'block',
                 padding: '16px 24px',
-                background: 'var(--cta)',
                 color: '#fff',
                 fontWeight: 600,
                 borderRadius: 12,

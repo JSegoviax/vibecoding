@@ -30,7 +30,17 @@
     <!-- Theme / PWA -->
     <meta name="theme-color" content="#1a1f2e" />
     <meta name="apple-mobile-web-app-title" content="Hexhobbyist" />
-    <!-- JSON-LD for search engines: VideoGame (Catan-style browser game) -->
+    <!-- JSON-LD: WebSite (site-level, eligible for sitelinks) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Settlers of Oregon",
+        "url": "https://hexhobbyist.com/",
+        "description": "Play Settlers of Oregon, a free Catan-style strategy game. Build settlements, trade resources, and win. No ads, no download, play instantly in your browser."
+      }
+    </script>
+    <!-- JSON-LD: VideoGame (Catan-style browser game) -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -62,9 +72,9 @@
     <div id="root"></div>
     <noscript>
       <main style="max-width:600px;margin:2rem auto;padding:1rem;font-family:system-ui,sans-serif;">
-        <h1>Hexhobbyist</h1>
-        <p>Hex-based board games: Settlers of Oregon (Catan-style), Oregon Capitalist (idle). Free to play in your browser.</p>
-        <p>This game requires JavaScript. Please enable it and <a href="https://hexhobbyist.com/">reload the page</a>.</p>
+        <h1>Play Settlers of Oregon</h1>
+        <p>Free Catan-style strategy board game. Build settlements, trade resources, and win. No ads, no download—play instantly in your browser.</p>
+        <p>This site requires JavaScript. Please enable it and <a href="https://hexhobbyist.com/">reload the page</a>.</p>
       </main>
     </noscript>
     <script type="module" src="/src/main.tsx"></script>
