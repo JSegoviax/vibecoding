@@ -53,6 +53,31 @@ body.oregon-capitalist-active #root {
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* Game toasts: modals above board, fade in and fade out */
+@keyframes game-toast-fade-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes game-toast-fade-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-8px); }
+}
+.game-toast-enter {
+  animation: game-toast-fade-in 0.3s ease-out forwards;
+}
+.game-toast-exit {
+  animation: game-toast-fade-out 0.25s ease-in forwards;
+}
+
+/* Placeable road: stripes scroll along the road axis (barber-pole) */
+@keyframes road-placeable-scroll {
+  from { transform: translate(0, 0); }
+  to { transform: translate(0, -32px); }
+}
+.road-placeable-spin {
+  animation: road-placeable-scroll 2s linear infinite alternate;
+}
+
 html {
   overflow-x: hidden;
 }

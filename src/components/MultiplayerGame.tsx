@@ -377,7 +377,8 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     }
     const stolen = stealResource(next, playerId, targetPlayerId) as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore' | null
     next.lastRobbery = stolen ? { robbingPlayerId: playerId as PlayerId, targetPlayerId: targetPlayerId as PlayerId, resource: stolen } : null
-    const msg = stolen ? `Player ${playerId} stole ${stolen} from Player ${targetPlayerId}` : `Player ${playerId} moved the robber (Player ${targetPlayerId} had nothing to steal)`
+    const resourceLabel = stolen ? TERRAIN_LABELS[stolen] : ''
+    const msg = stolen ? `Player ${playerId} stole ${resourceLabel} from Player ${targetPlayerId}` : `Player ${playerId} moved the robber (Player ${targetPlayerId} had nothing to steal)`
     sendStateUpdate(appendGameLog(next, { type: 'robbery', message: msg }))
     setBuildMode(null)
     setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
@@ -437,6 +438,29 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     }
   }, [winner])
 
+  // Auto-dismiss game toasts after 5s so they fade away
+  const toastAutoDismissMs = 5000
+  useEffect(() => {
+    if (!game) return
+    const hasToast = (game.lastOmenDebuffDrawn && game.lastOmenDebuffDrawn.playerId === playerId) ||
+      (game.lastOmenBuffPlayed && game.lastOmenBuffPlayed.playerId === playerId) ||
+      (game.lastPantryNegation && game.lastPantryNegation.playerId === playerId) ||
+      game.lastRobbery ||
+      !!errorMessage
+    if (!hasToast) return
+    const t = setTimeout(() => {
+      const next = { ...game }
+      let changed = false
+      if (game.lastOmenDebuffDrawn && game.lastOmenDebuffDrawn.playerId === playerId) { next.lastOmenDebuffDrawn = null; changed = true }
+      if (game.lastOmenBuffPlayed && game.lastOmenBuffPlayed.playerId === playerId) { next.lastOmenBuffPlayed = null; changed = true }
+      if (game.lastPantryNegation && game.lastPantryNegation.playerId === playerId) { next.lastPantryNegation = null; changed = true }
+      if (game.lastRobbery) { next.lastRobbery = null; changed = true }
+      if (changed) sendStateUpdate(next)
+      setErrorMessage(null)
+    }, toastAutoDismissMs)
+    return () => clearTimeout(t)
+  }, [game?.lastOmenDebuffDrawn, game?.lastOmenBuffPlayed, game?.lastPantryNegation, game?.lastRobbery, errorMessage, playerId])
+
   return (
     <div className="game-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
       <GameGuide />
@@ -481,145 +505,163 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
         </div>
       )}
 
-      {game.lastOmenDebuffDrawn && game.lastOmenDebuffDrawn.playerId === playerId && (
+      <div style={{ position: 'relative' }}>
+        {/* Game toasts: modals above board, fade in and auto fade away */}
         <div
-          role="alert"
           style={{
-            margin: '0 auto 16px',
-            maxWidth: 500,
-            padding: '10px 14px',
-            borderRadius: 8,
-            background: 'rgba(254, 226, 226, 0.95)',
-            border: '1px solid rgba(185, 28, 28, 0.6)',
-            color: '#7f1d1d',
-            fontSize: 14,
+            position: 'absolute',
+            top: 12,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1000,
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
+            gap: 8,
+            width: '100%',
+            maxWidth: 500,
+            pointerEvents: 'none',
           }}
         >
-          <span>
-            You drew a debuff: <strong>{getOmenCardName(game.lastOmenDebuffDrawn.cardId)}</strong> — {getOmenCardEffectText(game.lastOmenDebuffDrawn.cardId)}
-            {game.lastOmenDebuffDrawn.lostResources?.length ? (
-              <> You lost: {(() => {
-                const counts: Record<string, number> = {}
-                for (const t of game.lastOmenDebuffDrawn.lostResources!) {
-                  counts[t] = (counts[t] ?? 0) + 1
-                }
-                return Object.entries(counts)
-                  .map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`)
-                  .join(', ')
-              })()}</>
-            ) : null}
-          </span>
-          <button onClick={() => sendStateUpdate({ ...game, lastOmenDebuffDrawn: null })} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+          <div style={{ pointerEvents: 'auto', width: '100%' }}>
+            {game.lastOmenDebuffDrawn && game.lastOmenDebuffDrawn.playerId === playerId && (
+              <div
+                role="alert"
+                className="game-toast-enter"
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  background: 'rgba(254, 226, 226, 0.98)',
+                  border: '1px solid rgba(185, 28, 28, 0.6)',
+                  color: '#7f1d1d',
+                  fontSize: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                }}
+              >
+                <span>
+                  You drew a debuff: <strong>{getOmenCardName(game.lastOmenDebuffDrawn.cardId)}</strong> — {getOmenCardEffectText(game.lastOmenDebuffDrawn.cardId)}
+                  {game.lastOmenDebuffDrawn.lostResources?.length ? (
+                    <> You lost: {(() => {
+                      const counts: Record<string, number> = {}
+                      for (const t of game.lastOmenDebuffDrawn.lostResources!) {
+                        counts[t] = (counts[t] ?? 0) + 1
+                      }
+                      return Object.entries(counts)
+                        .map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`)
+                        .join(', ')
+                    })()}</>
+                  ) : null}
+                </span>
+                <button onClick={() => sendStateUpdate({ ...game, lastOmenDebuffDrawn: null })} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+              </div>
+            )}
+            {game.lastOmenBuffPlayed && game.lastOmenBuffPlayed.playerId === playerId && (
+              <div
+                role="alert"
+                className="game-toast-enter"
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  background: 'rgba(220, 252, 231, 0.98)',
+                  border: '1px solid rgba(22, 163, 74, 0.6)',
+                  color: '#14532d',
+                  fontSize: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                }}
+              >
+                <span>
+                  <strong>{getOmenCardName(game.lastOmenBuffPlayed.cardId)}:</strong> you collected{' '}
+                  {(() => {
+                    const counts: Record<string, number> = {}
+                    for (const t of game.lastOmenBuffPlayed.resourcesGained) {
+                      counts[t] = (counts[t] ?? 0) + 1
+                    }
+                    return Object.entries(counts)
+                      .map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`)
+                      .join(', ')
+                  })()}
+                </span>
+                <button onClick={() => sendStateUpdate({ ...game, lastOmenBuffPlayed: null })} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+              </div>
+            )}
+            {game.lastPantryNegation && game.lastPantryNegation.playerId === playerId && (
+              <div
+                role="alert"
+                className="game-toast-enter"
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  background: 'rgba(220, 252, 231, 0.98)',
+                  border: '1px solid rgba(22, 163, 74, 0.6)',
+                  color: '#14532d',
+                  fontSize: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                }}
+              >
+                <span>
+                  <strong>Well-Stocked Pantry</strong> negated <strong>{getOmenCardName(game.lastPantryNegation.negatedCardId)}</strong> — no resources lost.
+                </span>
+                <button onClick={() => sendStateUpdate({ ...game, lastPantryNegation: null })} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+              </div>
+            )}
+            {(game.lastRobbery || errorMessage) && (
+              <div
+                role="alert"
+                className="game-toast-enter"
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  ...(game.lastRobbery
+                    ? (() => {
+                        const r = game.lastRobbery!
+                        const viewerId = (game.players[myPlayerIndex]?.id ?? (myPlayerIndex + 1)) as PlayerId
+                        const isRobber = r.robbingPlayerId === viewerId
+                        const isVictim = r.targetPlayerId === viewerId
+                        const resourceLabel = r.resource ? TERRAIN_LABELS[r.resource] : ''
+                        if (isRobber) return { background: 'rgba(220, 252, 231, 0.98)', border: '1px solid rgba(22, 163, 74, 0.6)', color: '#14532d' }
+                        if (isVictim) return { background: 'rgba(254, 226, 226, 0.98)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }
+                        return { background: 'rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.12)', color: 'var(--text)' }
+                      })()
+                    : { background: 'rgba(254, 226, 226, 0.98)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }),
+                  fontSize: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                }}
+              >
+                <span>
+                  {game.lastRobbery
+                    ? (() => {
+                        const r = game.lastRobbery!
+                        const viewerId = (game.players[myPlayerIndex]?.id ?? (myPlayerIndex + 1)) as PlayerId
+                        const isRobber = r.robbingPlayerId === viewerId
+                        const isVictim = r.targetPlayerId === viewerId
+                        const resourceLabel = r.resource ? TERRAIN_LABELS[r.resource] : ''
+                        return isRobber ? `You stole ${resourceLabel}` : isVictim ? `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole your ${resourceLabel}` : `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole ${resourceLabel} from ${game.players[r.targetPlayerId - 1]?.name || `Player ${r.targetPlayerId}`}`
+                      })()
+                    : errorMessage}
+                </span>
+                <button onClick={() => { setErrorMessage(null); sendStateUpdate({ ...game, lastRobbery: null }) }} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+              </div>
+            )}
+          </div>
         </div>
-      )}
 
-      {game.lastOmenBuffPlayed && game.lastOmenBuffPlayed.playerId === playerId && (
-        <div
-          role="alert"
-          style={{
-            margin: '0 auto 16px',
-            maxWidth: 500,
-            padding: '10px 14px',
-            borderRadius: 8,
-            background: 'rgba(220, 252, 231, 0.95)',
-            border: '1px solid rgba(22, 163, 74, 0.6)',
-            color: '#14532d',
-            fontSize: 14,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-          }}
-        >
-          <span>
-            <strong>{getOmenCardName(game.lastOmenBuffPlayed.cardId)}:</strong> you collected{' '}
-            {(() => {
-              const counts: Record<string, number> = {}
-              for (const t of game.lastOmenBuffPlayed.resourcesGained) {
-                counts[t] = (counts[t] ?? 0) + 1
-              }
-              return Object.entries(counts)
-                .map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`)
-                .join(', ')
-            })()}
-          </span>
-          <button onClick={() => sendStateUpdate({ ...game, lastOmenBuffPlayed: null })} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
-        </div>
-      )}
-
-      {game.lastPantryNegation && game.lastPantryNegation.playerId === playerId && (
-        <div
-          role="alert"
-          style={{
-            margin: '0 auto 16px',
-            maxWidth: 500,
-            padding: '10px 14px',
-            borderRadius: 8,
-            background: 'rgba(220, 252, 231, 0.95)',
-            border: '1px solid rgba(22, 163, 74, 0.6)',
-            color: '#14532d',
-            fontSize: 14,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-          }}
-        >
-          <span>
-            <strong>Well-Stocked Pantry</strong> negated <strong>{getOmenCardName(game.lastPantryNegation.negatedCardId)}</strong> — no resources lost.
-          </span>
-          <button onClick={() => sendStateUpdate({ ...game, lastPantryNegation: null })} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
-        </div>
-      )}
-
-      {(game.lastRobbery || errorMessage) && (
-        <div
-          role="alert"
-          style={{
-            margin: '0 auto 16px',
-            maxWidth: 500,
-            padding: '10px 14px',
-            borderRadius: 8,
-            ...(game.lastRobbery
-              ? (() => {
-                  const r = game.lastRobbery!
-                  const viewerId = (game.players[myPlayerIndex]?.id ?? (myPlayerIndex + 1)) as PlayerId
-                  const isRobber = r.robbingPlayerId === viewerId
-                  const isVictim = r.targetPlayerId === viewerId
-                  const resourceLabel = r.resource ? TERRAIN_LABELS[r.resource] : ''
-                  if (isRobber) return { background: 'rgba(220, 252, 231, 0.95)', border: '1px solid rgba(22, 163, 74, 0.6)', color: '#14532d' }
-                  if (isVictim) return { background: 'rgba(254, 226, 226, 0.95)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }
-                  return { background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.12)', color: 'var(--text)' }
-                })()
-              : { background: 'rgba(254, 226, 226, 0.95)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }),
-            fontSize: 14,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-          }}
-        >
-          <span>
-            {game.lastRobbery
-              ? (() => {
-                  const r = game.lastRobbery!
-                  const viewerId = (game.players[myPlayerIndex]?.id ?? (myPlayerIndex + 1)) as PlayerId
-                  const isRobber = r.robbingPlayerId === viewerId
-                  const isVictim = r.targetPlayerId === viewerId
-                  const resourceLabel = r.resource ? TERRAIN_LABELS[r.resource] : ''
-                  return isRobber ? `You stole ${resourceLabel}` : isVictim ? `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole your ${resourceLabel}` : `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole ${resourceLabel} from ${game.players[r.targetPlayerId - 1]?.name || `Player ${r.targetPlayerId}`}`
-                })()
-              : errorMessage}
-          </span>
-          <button onClick={() => { setErrorMessage(null); sendStateUpdate({ ...game, lastRobbery: null }) }} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18 }} aria-label="Dismiss">×</button>
-        </div>
-      )}
-
-      <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+        <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
         <div className="game-board" style={{ flex: '1 1 auto', minWidth: 600, borderRadius: 12, overflow: 'visible', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
           <HexBoard
             hexes={game.hexes}
@@ -814,6 +856,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
           {isPlaying && !isMyTurn && <p style={{ fontSize: 14, color: 'var(--muted)' }}>Waiting for Player {game.currentPlayerIndex + 1}…</p>}
           {winner && <a href="/" style={{ padding: '10px 20px', background: 'var(--accent)', color: '#fff', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer', marginTop: 8, textAlign: 'center', textDecoration: 'none' }}>Back to home</a>}
         </aside>
+        </div>
       </div>
     </div>
   )

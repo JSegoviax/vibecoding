@@ -17,11 +17,11 @@ const DEFAULT_SPOT_IMAGE = '/settlement-spot-gray.png'
 
 // Map player color image to city-upgrade indicator image (by color: teal, pink, purple, green, cyan, white)
 const COLOR_TO_CITY_INDICATOR: Record<string, number> = {
-  '/player-teal.png': 0,
+  '/player-teal.png': 4,   // teal/cyan indicator (asset 4)
   '/player-pink.png': 1,
   '/player-purple.png': 2,
   '/player-green.png': 3,
-  '/player-green2.png': 4,
+  '/player-green2.png': 0, // dark green indicator (asset 0)
   '/player-white.png': 5,
 }
 const DEFAULT_CITY_INDICATOR = 5
@@ -31,8 +31,8 @@ const COLOR_TO_ROAD_IMAGE: Record<string, string> = {
   '/player-teal.png': '/road-teal.png',
   '/player-pink.png': '/road-pink.png',
   '/player-purple.png': '/road-purple.png',
-  '/player-green.png': '/road-green.png',
-  '/player-green2.png': '/road-green2.png',
+  '/player-green.png': '/road-green2.png',   // Light green player -> road-green2 asset
+  '/player-green2.png': '/road-green.png',   // Dark green player -> road-green asset
   '/player-white.png': '/road-white.png',
 }
 
@@ -453,6 +453,36 @@ export function HexBoard({
             </g>
           )
         }
+        if (hl && !pid) {
+          const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI - 90
+          const clipId = `clip-placeable-road-${e.id}`
+          return (
+            <g
+              key={e.id}
+              transform={`translate(${midX}, ${midY}) rotate(${angleDeg})`}
+              clipPath={`url(#${clipId})`}
+              onClick={() => selectEdge?.(e.id)}
+              style={{ cursor: selectEdge ? 'pointer' : 'default' }}
+            >
+              <defs>
+                <clipPath id={clipId}>
+                  <rect x={-roadWidth / 2} y={-len / 2} width={roadWidth} height={len} />
+                </clipPath>
+              </defs>
+              <g className="road-placeable-spin">
+                <image
+                  href="/road-placeable.png"
+                  x={-roadWidth / 2}
+                  y={-len / 2 - 32}
+                  width={roadWidth}
+                  height={len + 64}
+                  preserveAspectRatio="none"
+                  style={{ imageRendering: 'auto', pointerEvents: 'auto' }}
+                />
+              </g>
+            </g>
+          )
+        }
         return (
           <line
             key={e.id}
@@ -460,8 +490,8 @@ export function HexBoard({
             y1={v1.y}
             x2={v2.x}
             y2={v2.y}
-            stroke={pid ? getPlayerColor(pid) : hl ? '#64b5f6' : 'transparent'}
-            strokeWidth={pid || hl ? 24 : 0}
+            stroke={pid ? getPlayerColor(pid) : 'transparent'}
+            strokeWidth={pid ? 24 : 0}
             strokeLinecap="round"
             onClick={() => selectEdge?.(e.id)}
             style={{ cursor: selectEdge ? 'pointer' : 'default' }}

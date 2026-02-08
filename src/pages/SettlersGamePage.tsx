@@ -240,6 +240,32 @@ export function SettlersGamePage() {
     }
   }, [winner, game])
 
+  // Auto-dismiss game toasts after 5s so they fade away
+  const toastAutoDismissMs = 5000
+  useEffect(() => {
+    if (!game) return
+    const hasToast = (game.lastOmenDebuffDrawn && game.lastOmenDebuffDrawn.playerId === 1) ||
+      (game.lastOmenBuffPlayed && game.lastOmenBuffPlayed.playerId === 1) ||
+      (game.lastPantryNegation && game.lastPantryNegation.playerId === 1) ||
+      game.lastRobbery ||
+      !!errorMessage
+    if (!hasToast) return
+    const t = setTimeout(() => {
+      setGame(g => {
+        if (!g) return g
+        const next = { ...g }
+        let changed = false
+        if (g.lastOmenDebuffDrawn && g.lastOmenDebuffDrawn.playerId === 1) { next.lastOmenDebuffDrawn = null; changed = true }
+        if (g.lastOmenBuffPlayed && g.lastOmenBuffPlayed.playerId === 1) { next.lastOmenBuffPlayed = null; changed = true }
+        if (g.lastPantryNegation && g.lastPantryNegation.playerId === 1) { next.lastPantryNegation = null; changed = true }
+        if (g.lastRobbery) { next.lastRobbery = null; changed = true }
+        return changed ? next : g
+      })
+      setErrorMessage(null)
+    }, toastAutoDismissMs)
+    return () => clearTimeout(t)
+  }, [game?.lastOmenDebuffDrawn, game?.lastOmenBuffPlayed, game?.lastPantryNegation, game?.lastRobbery, errorMessage])
+
   useEffect(() => {
     if (!buildMode || !aiBuildTarget.current || !game) return
     const target = aiBuildTarget.current
@@ -747,8 +773,9 @@ export function SettlersGamePage() {
           : null,
       }))
       if (!next) return g
+      const resourceLabel = stolen ? TERRAIN_LABELS[stolen] : ''
       const msg = stolen
-        ? `Player ${actualPlayerId} stole ${stolen} from Player ${targetPlayerId}`
+        ? `Player ${actualPlayerId} stole ${resourceLabel} from Player ${targetPlayerId}`
         : `Player ${actualPlayerId} moved the robber (Player ${targetPlayerId} had nothing to steal)`
       return appendGameLog(next, { type: 'robbery', message: msg })
     })
@@ -873,145 +900,159 @@ export function SettlersGamePage() {
         </div>
       )}
 
-      {/* Oregon's Omens: debuff feedback (red banner when you drew a debuff) */}
-      {game.lastOmenDebuffDrawn && game.lastOmenDebuffDrawn.playerId === 1 && (
+      <div style={{ position: 'relative' }}>
+        {/* Game toasts: modals above board, fade in and auto fade away */}
         <div
-          role="alert"
           style={{
-            margin: '0 auto 16px',
-            maxWidth: 500,
-            padding: '10px 14px',
-            borderRadius: 8,
-            background: 'rgba(254, 226, 226, 0.95)',
-            border: '1px solid rgba(185, 28, 28, 0.6)',
-            color: '#7f1d1d',
-            fontSize: 14,
+            position: 'absolute',
+            top: 12,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1000,
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
+            gap: 8,
+            width: '100%',
+            maxWidth: 500,
+            pointerEvents: 'none',
           }}
         >
-          <span>
-            You drew a debuff: <strong>{getOmenCardName(game.lastOmenDebuffDrawn.cardId)}</strong> — {getOmenCardEffectText(game.lastOmenDebuffDrawn.cardId)}
-            {game.lastOmenDebuffDrawn.lostResources?.length ? (
-              <> You lost: {(() => {
-                const counts: Record<string, number> = {}
-                for (const t of game.lastOmenDebuffDrawn.lostResources!) {
-                  counts[t] = (counts[t] ?? 0) + 1
-                }
-                return Object.entries(counts)
-                  .map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`)
-                  .join(', ')
-              })()}</>
-            ) : null}
-          </span>
-          <button onClick={() => setGame(g => g ? { ...g, lastOmenDebuffDrawn: null } : g)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
-        </div>
-      )}
-
-      {/* Oregon's Omens: buff feedback (e.g. Hidden Cache — resources collected) */}
-      {game.lastOmenBuffPlayed && game.lastOmenBuffPlayed.playerId === 1 && (
-        <div
-          role="alert"
-          style={{
-            margin: '0 auto 16px',
-            maxWidth: 500,
-            padding: '10px 14px',
-            borderRadius: 8,
-            background: 'rgba(220, 252, 231, 0.95)',
-            border: '1px solid rgba(22, 163, 74, 0.6)',
-            color: '#14532d',
-            fontSize: 14,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-          }}
-        >
-          <span>
-            <strong>{getOmenCardName(game.lastOmenBuffPlayed.cardId)}:</strong> you collected{' '}
-            {(() => {
-              const counts: Record<string, number> = {}
-              for (const t of game.lastOmenBuffPlayed.resourcesGained) {
-                counts[t] = (counts[t] ?? 0) + 1
-              }
-              return Object.entries(counts)
-                .map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`)
-                .join(', ')
-            })()}
-          </span>
-          <button onClick={() => setGame(g => g ? { ...g, lastOmenBuffPlayed: null } : g)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
-        </div>
-      )}
-
-      {/* Well-Stocked Pantry negated a debuff */}
-      {game.lastPantryNegation && game.lastPantryNegation.playerId === 1 && (
-        <div
-          role="alert"
-          style={{
-            margin: '0 auto 16px',
-            maxWidth: 500,
-            padding: '10px 14px',
-            borderRadius: 8,
-            background: 'rgba(220, 252, 231, 0.95)',
-            border: '1px solid rgba(22, 163, 74, 0.6)',
-            color: '#14532d',
-            fontSize: 14,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-          }}
-        >
-          <span>
-            <strong>Well-Stocked Pantry</strong> negated <strong>{getOmenCardName(game.lastPantryNegation.negatedCardId)}</strong> — no resources lost.
-          </span>
-          <button onClick={() => setGame(g => g ? { ...g, lastPantryNegation: null } : g)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
-        </div>
-      )}
-
-      {(game.lastRobbery || errorMessage) && (
-        <div
-          role="alert"
-          style={{
-            margin: '0 auto 16px',
-            maxWidth: 500,
-            padding: '10px 14px',
-            borderRadius: 8,
-            ...(game.lastRobbery
-              ? (() => {
+          <div style={{ pointerEvents: 'auto', width: '100%' }}>
+            {game.lastOmenDebuffDrawn && game.lastOmenDebuffDrawn.playerId === 1 && (
+              <div
+                role="alert"
+                className="game-toast-enter"
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  background: 'rgba(254, 226, 226, 0.98)',
+                  border: '1px solid rgba(185, 28, 28, 0.6)',
+                  color: '#7f1d1d',
+                  fontSize: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                }}
+              >
+                <span>
+                  You drew a debuff: <strong>{getOmenCardName(game.lastOmenDebuffDrawn.cardId)}</strong> — {getOmenCardEffectText(game.lastOmenDebuffDrawn.cardId)}
+                  {game.lastOmenDebuffDrawn.lostResources?.length ? (
+                    <> You lost: {(() => {
+                      const counts: Record<string, number> = {}
+                      for (const t of game.lastOmenDebuffDrawn.lostResources!) {
+                        counts[t] = (counts[t] ?? 0) + 1
+                      }
+                      return Object.entries(counts)
+                        .map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`)
+                        .join(', ')
+                    })()}</>
+                  ) : null}
+                </span>
+                <button onClick={() => setGame(g => g ? { ...g, lastOmenDebuffDrawn: null } : g)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+              </div>
+            )}
+            {game.lastOmenBuffPlayed && game.lastOmenBuffPlayed.playerId === 1 && (
+              <div
+                role="alert"
+                className="game-toast-enter"
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  background: 'rgba(220, 252, 231, 0.98)',
+                  border: '1px solid rgba(22, 163, 74, 0.6)',
+                  color: '#14532d',
+                  fontSize: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                }}
+              >
+                <span>
+                  <strong>{getOmenCardName(game.lastOmenBuffPlayed.cardId)}:</strong> you collected{' '}
+                  {(() => {
+                    const counts: Record<string, number> = {}
+                    for (const t of game.lastOmenBuffPlayed.resourcesGained) {
+                      counts[t] = (counts[t] ?? 0) + 1
+                    }
+                    return Object.entries(counts)
+                      .map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`)
+                      .join(', ')
+                  })()}
+                </span>
+                <button onClick={() => setGame(g => g ? { ...g, lastOmenBuffPlayed: null } : g)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+              </div>
+            )}
+            {game.lastPantryNegation && game.lastPantryNegation.playerId === 1 && (
+              <div
+                role="alert"
+                className="game-toast-enter"
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  background: 'rgba(220, 252, 231, 0.98)',
+                  border: '1px solid rgba(22, 163, 74, 0.6)',
+                  color: '#14532d',
+                  fontSize: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                }}
+              >
+                <span>
+                  <strong>Well-Stocked Pantry</strong> negated <strong>{getOmenCardName(game.lastPantryNegation.negatedCardId)}</strong> — no resources lost.
+                </span>
+                <button onClick={() => setGame(g => g ? { ...g, lastPantryNegation: null } : g)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+              </div>
+            )}
+            {(game.lastRobbery || errorMessage) && (
+              <div
+                role="alert"
+                className="game-toast-enter"
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  ...(game.lastRobbery
+                    ? (() => {
+                        const r = game.lastRobbery!
+                        const viewerId = 1 as PlayerId
+                        const isRobber = r.robbingPlayerId === viewerId
+                        const isVictim = r.targetPlayerId === viewerId
+                        const resourceLabel = r.resource ? TERRAIN_LABELS[r.resource] : ''
+                        if (isRobber) return { background: 'rgba(220, 252, 231, 0.98)', border: '1px solid rgba(22, 163, 74, 0.6)', color: '#14532d' }
+                        if (isVictim) return { background: 'rgba(254, 226, 226, 0.98)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }
+                        return { background: 'rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.12)', color: 'var(--text)' }
+                      })()
+                    : { background: 'rgba(254, 226, 226, 0.98)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }),
+                  fontSize: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                }}
+              >
+                <span>{game.lastRobbery ? (() => {
                   const r = game.lastRobbery!
                   const viewerId = 1 as PlayerId
                   const isRobber = r.robbingPlayerId === viewerId
                   const isVictim = r.targetPlayerId === viewerId
                   const resourceLabel = r.resource ? TERRAIN_LABELS[r.resource] : ''
-                  const msg = isRobber ? `You stole ${resourceLabel}` : isVictim ? `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole your ${resourceLabel}` : `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole ${resourceLabel} from ${game.players[r.targetPlayerId - 1]?.name || `Player ${r.targetPlayerId}`}`
-                  if (isRobber) return { background: 'rgba(220, 252, 231, 0.95)', border: '1px solid rgba(22, 163, 74, 0.6)', color: '#14532d' }
-                  if (isVictim) return { background: 'rgba(254, 226, 226, 0.95)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }
-                  return { background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.12)', color: 'var(--text)' }
-                })()
-              : { background: 'rgba(254, 226, 226, 0.95)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }),
-            fontSize: 14,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-          }}
-        >
-          <span>{game.lastRobbery ? (() => {
-            const r = game.lastRobbery!
-            const viewerId = 1 as PlayerId
-            const isRobber = r.robbingPlayerId === viewerId
-            const isVictim = r.targetPlayerId === viewerId
-            const resourceLabel = r.resource ? TERRAIN_LABELS[r.resource] : ''
-            return isRobber ? `You stole ${resourceLabel}` : isVictim ? `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole your ${resourceLabel}` : `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole ${resourceLabel} from ${game.players[r.targetPlayerId - 1]?.name || `Player ${r.targetPlayerId}`}`
-          })() : errorMessage}</span>
-          <button onClick={() => { setErrorMessage(null); setGame(g => g ? { ...g, lastRobbery: null } : g) }} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+                  return isRobber ? `You stole ${resourceLabel}` : isVictim ? `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole your ${resourceLabel}` : `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole ${resourceLabel} from ${game.players[r.targetPlayerId - 1]?.name || `Player ${r.targetPlayerId}`}`
+                })() : errorMessage}</span>
+                <button onClick={() => { setErrorMessage(null); setGame(g => g ? { ...g, lastRobbery: null } : g) }} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+              </div>
+            )}
+          </div>
         </div>
-      )}
 
-      <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+        <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
         <div
           className="game-board"
           style={{
@@ -1260,6 +1301,7 @@ export function SettlersGamePage() {
           )}
 
         </aside>
+        </div>
       </div>
     </div>
   )
