@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getVisibleGames, GAMES, SITE_NAME } from '../config/games'
+import { getVisibleGames, SITE_NAME } from '../config/games'
+import { LATEST_CHANGELOG_LABEL } from '../data/changelog'
 
 const SECRET_CLICKS = 5
 
@@ -104,6 +105,10 @@ export function HomePage() {
           {' · '}
           <Link to="/about" style={{ color: 'var(--cta)', textDecoration: 'none' }}>
             About
+          </Link>
+          {' · '}
+          <Link to="/changelog" style={{ color: 'var(--cta)', textDecoration: 'none' }}>
+            Latest update: {LATEST_CHANGELOG_LABEL}
           </Link>
         </p>
       </main>

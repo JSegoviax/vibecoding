@@ -18,6 +18,9 @@ const HowToPlayPage = lazy(() =>
 const AboutPage = lazy(() =>
   import('./pages/AboutPage').then((m) => ({ default: m.AboutPage }))
 )
+const ChangelogPage = lazy(() =>
+  import('./pages/ChangelogPage').then((m) => ({ default: m.ChangelogPage }))
+)
 
 const fallback = (
   <div
@@ -102,6 +105,14 @@ export default function App() {
           element={
             <Suspense fallback={fallback}>
               <FAQPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/changelog"
+          element={
+            <Suspense fallback={fallback}>
+              <ChangelogPage />
             </Suspense>
           }
         />

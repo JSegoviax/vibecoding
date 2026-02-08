@@ -31,6 +31,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://hexhobbyist.com/changelog</loc>
+    <lastmod>2026-02-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://hexhobbyist.com/about</loc>
     <lastmod>2025-02-01</lastmod>
     <changefreq>monthly</changefreq>
