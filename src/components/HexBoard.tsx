@@ -26,15 +26,17 @@ const COLOR_TO_CITY_INDICATOR: Record<string, number> = {
 }
 const DEFAULT_CITY_INDICATOR = 5
 
-// Map player color image to road segment image (by color)
+// Map player color image to road segment image (by color). One road asset per road; width preserved.
 const COLOR_TO_ROAD_IMAGE: Record<string, string> = {
   '/player-teal.png': '/road-teal.png',
   '/player-pink.png': '/road-pink.png',
   '/player-purple.png': '/road-purple.png',
-  '/player-green.png': '/road-green2.png',   // Light green player -> road-green2 asset
-  '/player-green2.png': '/road-green.png',   // Dark green player -> road-green asset
+  '/player-green.png': '/road-green2.png',   // Light green player
+  '/player-green2.png': '/road-green.png',   // Dark green player
   '/player-white.png': '/road-white.png',
 }
+/** Display width for road assets - kept as-is per asset proportions */
+const ROAD_ASSET_WIDTH = 16
 
 // Map player color image to city icon (built cities use these instead of the settlement/house image)
 const COLOR_TO_CITY_IMAGE: Record<string, string> = {
@@ -427,7 +429,6 @@ export function HexBoard({
         const dx = v2.x - v1.x
         const dy = v2.y - v1.y
         const len = Math.hypot(dx, dy) || 1
-        const roadWidth = 24
         const midX = (v1.x + v2.x) / 2
         const midY = (v1.y + v2.y) / 2
         const player = pid ? players[pid - 1] : null
@@ -443,12 +444,20 @@ export function HexBoard({
             >
               <image
                 href={roadImage}
-                x={-roadWidth / 2}
+                x={-ROAD_ASSET_WIDTH / 2}
                 y={-len / 2}
-                width={roadWidth}
+                width={ROAD_ASSET_WIDTH}
                 height={len}
-                preserveAspectRatio="none"
-                style={{ imageRendering: 'auto', pointerEvents: 'auto' }}
+                preserveAspectRatio="xMidYMid meet"
+                style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
+              />
+              <rect
+                x={-ROAD_ASSET_WIDTH / 2}
+                y={-len / 2}
+                width={ROAD_ASSET_WIDTH}
+                height={len}
+                fill="transparent"
+                style={{ pointerEvents: 'auto' }}
               />
             </g>
           )
@@ -466,18 +475,26 @@ export function HexBoard({
             >
               <defs>
                 <clipPath id={clipId}>
-                  <rect x={-roadWidth / 2} y={-len / 2} width={roadWidth} height={len} />
+                  <rect x={-ROAD_ASSET_WIDTH / 2} y={-len / 2} width={ROAD_ASSET_WIDTH} height={len} />
                 </clipPath>
               </defs>
               <g className="road-placeable-spin">
                 <image
                   href="/road-placeable.png"
-                  x={-roadWidth / 2}
+                  x={-ROAD_ASSET_WIDTH / 2}
                   y={-len / 2 - 32}
-                  width={roadWidth}
+                  width={ROAD_ASSET_WIDTH}
                   height={len + 64}
-                  preserveAspectRatio="none"
-                  style={{ imageRendering: 'auto', pointerEvents: 'auto' }}
+                  preserveAspectRatio="xMidYMid meet"
+                  style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
+                />
+                <rect
+                  x={-ROAD_ASSET_WIDTH / 2}
+                  y={-len / 2}
+                  width={ROAD_ASSET_WIDTH}
+                  height={len}
+                  fill="transparent"
+                  style={{ pointerEvents: 'auto' }}
                 />
               </g>
             </g>
@@ -491,7 +508,7 @@ export function HexBoard({
             x2={v2.x}
             y2={v2.y}
             stroke={pid ? getPlayerColor(pid) : 'transparent'}
-            strokeWidth={pid ? 24 : 0}
+            strokeWidth={pid ? ROAD_ASSET_WIDTH : 0}
             strokeLinecap="round"
             onClick={() => selectEdge?.(e.id)}
             style={{ cursor: selectEdge ? 'pointer' : 'default' }}
