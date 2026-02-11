@@ -48,7 +48,7 @@ const COLOR_TO_ROAD_BUILD: Record<string, { folder: string; prefix: string }> = 
   '/player-purple.png': { folder: 'purple', prefix: 'road_purple' },
   '/player-white.png': { folder: 'white', prefix: 'road_white' },
 }
-const PLACEABLE_ROAD_FRAME_MS = 100
+const PLACEABLE_ROAD_FRAME_MS = 110
 
 // Map player color image to city icon (built cities use these instead of the settlement/house image)
 const COLOR_TO_CITY_IMAGE: Record<string, string> = {
@@ -488,10 +488,18 @@ export function HexBoard({
         if (hl && !pid) {
           const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI - 90
           const activePlayerId = activePlayerIndex + 1
-          const settlementAtV1 = vertexStates[e.v1]?.player === activePlayerId
-          const settlementAtV2 = vertexStates[e.v2]?.player === activePlayerId
-          // Frame 0 at settlement, frame 9 at far end. Coords: v1 at -len/2, v2 at +len/2.
-          const settlementAtMinus = settlementAtV1 || !settlementAtV2
+          // Animation starts at the vertex connected to the player's settlement or existing road; builds away.
+          const hasStructureAtV1 = vertexStates[e.v1]?.player === activePlayerId
+          const hasStructureAtV2 = vertexStates[e.v2]?.player === activePlayerId
+          const hasRoadAtV1 = edges.some(
+            (ed) => ed.id !== e.id && edgeStates[ed.id] === activePlayerId && (ed.v1 === e.v1 || ed.v2 === e.v1)
+          )
+          const hasRoadAtV2 = edges.some(
+            (ed) => ed.id !== e.id && edgeStates[ed.id] === activePlayerId && (ed.v1 === e.v2 || ed.v2 === e.v2)
+          )
+          const connectedAtV1 = hasStructureAtV1 || hasRoadAtV1
+          const connectedAtV2 = hasStructureAtV2 || hasRoadAtV2
+          const startAtMinus = connectedAtV1 || !connectedAtV2
           const activePlayer = players[activePlayerIndex]
           const buildInfo = activePlayer?.colorImage ? COLOR_TO_ROAD_BUILD[activePlayer.colorImage] : COLOR_TO_ROAD_BUILD['/player-teal.png']
           const { folder, prefix } = buildInfo ?? { folder: 'teal', prefix: 'road_teal' }
@@ -499,6 +507,9 @@ export function HexBoard({
           const frameStr = String(placeableRoadFrame).padStart(2, '0')
           const placeableRoadSrc = `/road-build/${folder}/${prefix}${frameStr}.png`
           const clipId = `clip-placeable-road-${e.id}`
+          // Center animation on the edge line (vertex-to-vertex); nudge if asset content is off-center.
+          const placeableRoadOffsetX = 0
+          const imgX = -ROAD_ASSET_WIDTH / 2 + placeableRoadOffsetX
           return (
             <g
               key={e.id}
@@ -512,12 +523,12 @@ export function HexBoard({
                   <rect x={-ROAD_ASSET_WIDTH / 2} y={-len / 2} width={ROAD_ASSET_WIDTH} height={len} />
                 </clipPath>
               </defs>
-              {/* Flip so road builds away from settlement: asset "start" (frame 0) at settlement end */}
-              {settlementAtMinus ? (
+              {/* Flip so road builds away from connected vertex (settlement or player's road) */}
+              {startAtMinus ? (
                 <g transform="scale(1, -1)">
                   <image
                     href={placeableRoadSrc}
-                    x={-ROAD_ASSET_WIDTH / 2}
+                    x={imgX}
                     y={-len / 2}
                     width={ROAD_ASSET_WIDTH}
                     height={len}
@@ -528,7 +539,7 @@ export function HexBoard({
               ) : (
                 <image
                   href={placeableRoadSrc}
-                  x={-ROAD_ASSET_WIDTH / 2}
+                  x={imgX}
                   y={-len / 2}
                   width={ROAD_ASSET_WIDTH}
                   height={len}

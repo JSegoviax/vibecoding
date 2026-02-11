@@ -1,0 +1,15 @@
+# Image Preservation
+
+When adding, replacing, or rendering images or assets (e.g. in `public/`, or via `<img>`, `<image>`, CSS `background-image`):
+
+## Default behavior
+
+- **Display images at their actual size.** Use the asset’s intrinsic width and height. Do not scale up or down unless the user explicitly asks for it.
+- **Never stretch images** (e.g. `preserveAspectRatio="none"`, or forcing width/height that distorts aspect ratio) unless the user explicitly requests stretching or “fill this area.”
+
+## When scaling is requested
+
+- If the user explicitly asks to “stretch,” “fill,” “cover,” or “fit to [dimensions],” then scaling is allowed as specified.
+- Prefer aspect-ratio-preserving options (e.g. `meet`, `slice`, `contain`, `cover` with correct aspect) over stretching unless stretch is explicitly requested.
+
+When in doubt, use the image’s natural dimensions and preserve aspect ratio.

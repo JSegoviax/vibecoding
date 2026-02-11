@@ -1,0 +1,175 @@
+# Oregon Capitalist: Advanced Mechanics Specification
+
+This document outlines the requirements for five core systems: **Prestige (Pioneer Spirits)**, **Supply Chain (Adjacency)**, **Trail Events**, **Visual Tiers**, and **Offline Earnings**.
+
+---
+
+## 1. Prestige System: "The Pioneer Spirits"
+
+**Goal:** Allow players to reset progress in exchange for a permanent production multiplier and a currency for meta-upgrades.
+
+### 1.1 Data Structure Updates
+
+```typescript
+interface PlayerState {
+  // New properties
+  lifetimeEarnings: number;      // Cumulative money earned across all runs (for Spirit calculation)
+  pioneerSpirits: number;        // The prestige currency (unspent)
+  totalSpiritsEarned: number;    // Lifetime spirits (for achievements)
+  prestigeUpgrades: Record<string, number>; // IDs of purchased Spirit Shop upgrades
+}
+
+// Config constant
+const PRESTIGE_CONFIG = {
+  DIVISOR: 1_000_000,            // $1M earned = 1 Spirit (base)
+  BONUS_PER_SPIRIT: 0.02,        // +2% production per Spirit
+};
+```
+
+### 1.2 The Math
+
+* **Spirit Formula:** `ClaimableSpirits = floor(lifetimeEarnings / PRESTIGE_CONFIG.DIVISOR)`
+* **Production Multiplier:** `(1 + pioneerSpirits * PRESTIGE_CONFIG.BONUS_PER_SPIRIT)`
+
+### 1.3 The Reset Logic (`prestige()`)
+
+When triggered:
+
+1. Add `ClaimableSpirits` to `pioneerSpirits` and `totalSpiritsEarned`.
+2. **RESET:** `money` = 0, `resources` = {0}, `hexLevels` = {1}, `hexManagers` = {}, `ownedHexIds` = [StartHex].
+3. **KEEP:** `pioneerSpirits`, `lifetimeEarnings`, `prestigeUpgrades`, `achievements`.
+4. **Save** immediately.
+
+### 1.4 Spirit Shop (Meta-Upgrades)
+
+Define a `PrestigeShop` with these initial upgrades:
+
+* `"manifest_destiny"`: Start with 5 free hexes unlocked. (Cost: 10 Spirits)
+* `"gold_rush_legacy"`: Keep 5% of money after reset. (Cost: 50 Spirits)
+* `"industrialist"`: Managers are 10% cheaper. (Cost: 100 Spirits)
+
+---
+
+## 2. Resource Interdependency: "The Supply Chain"
+
+**Goal:** Make hex placement strategic by providing bonuses based on neighbors.
+
+### 2.1 The Rules
+
+* **Buffs are directional** (e.g., Wheat buffs Sheep, but Sheep might not buff Wheat).
+* **Buffs stack additively** (2 adjacent Wheat = 2x bonus).
+
+### 2.2 Matrix Logic
+
+Create a lookup table `ADJACENCY_BONUSES`:
+
+| Neighbor Type | Target Type | Effect | Value |
+| --- | --- | --- | --- |
+| **Wheat** | **Sheep** | Production Multiplier | `+0.25x` |
+| **Ore** | **Brick** | Production Speed (Cycle Time) | `-10%` |
+| **Water** (River) | **All** | Production Multiplier | `+0.50x` |
+| **Forest** (Wood) | **Ore** | Upgrade Cost Discount | `-5%` |
+
+### 2.3 Implementation Details
+
+* Create function `getAdjacencyMultiplier(hexId, state)`:
+1. Get neighbors of `hexId`.
+2. Iterate through neighbors.
+3. Lookup neighbor's `TerrainType` in `ADJACENCY_BONUSES`.
+4. Sum the bonuses.
+
+* **Optimization:** Cache this value. Only recalculate when a new hex is unlocked (neighborhood changes).
+
+---
+
+## 3. Trail Events: "Dynamic Disruptions"
+
+**Goal:** Keep the game interactive with random temporary buffs.
+
+### 3.1 Event Engine
+
+* **Trigger:** Use a `checkEventTrigger` function in the main tick loop.
+* Probability: `1 / 3000` per tick (approx once every 5 mins at 10 ticks/sec).
+
+* **State:**
+```typescript
+interface ActiveEvent {
+  id: string;
+  startTime: number;
+  duration: number; // in ms
+  multiplier: number;
+}
+state.activeEvent = ActiveEvent | null;
+```
+
+### 3.2 Event Types
+
+1. **Buffalo Migration:** Click production x10 for 30 seconds.
+2. **Gold Rush:** Global production x5 for 20 seconds.
+3. **Traveling Bard:** Manager costs -50% for 60 seconds.
+
+### 3.3 Visuals
+
+* When active, render a "Weather Overlay" (e.g., gold particle rain for Gold Rush).
+* Show a countdown timer in the HUD.
+
+---
+
+## 4. Visual Upgrade Tiers
+
+**Goal:** Provide visual feedback of growth beyond just numbers.
+
+### 4.1 Asset Mapping
+
+Create a `HexVisualConfig` that maps `Terrain` + `Level` to a specific generic name and icon key.
+
+**Example (Wood):**
+
+* **Lvl 1-24:** "Logging Camp" (Icon: `axe_stump`)
+* **Lvl 25-99:** "Sawmill" (Icon: `water_wheel`)
+* **Lvl 100-249:** "Lumber Yard" (Icon: `stacked_timber`)
+* **Lvl 250-499:** "Timber Corp" (Icon: `factory_wood`)
+* **Lvl 500+:** "Paper Empire" (Icon: `skyscraper_wood`)
+
+### 4.2 Implementation
+
+* In `HexComponent`:
+```typescript
+const currentVisual = getVisualForLevel(terrain, level);
+return (
+  <div className={`hex-skin ${currentVisual.cssClass}`}>
+    <Icon name={currentVisual.icon} />
+    <span className="hex-title">{currentVisual.name}</span>
+  </div>
+);
+```
+
+---
+
+## 5. Offline Earnings: "Welcome Back"
+
+**Goal:** Reward players for time spent away.
+
+### 5.1 The Algorithm
+
+1. **Timestamping:** Ensure `state.lastSaveTime` is updated every auto-save (5s).
+2. **Load Routine:**
+```typescript
+const now = Date.now();
+const timeDiff = now - state.lastSaveTime;
+const MAX_OFFLINE_TIME = 24 * 60 * 60 * 1000; // 24 hours
+
+const effectiveTime = Math.min(timeDiff, MAX_OFFLINE_TIME);
+
+if (effectiveTime > 60_000) { // Only trigger if away > 1 min
+  const offlineProduction = calculateGlobalProductionPerMs(state) * effectiveTime;
+
+  // Apply "Manager Efficiency" penalty? (Optional: 50% efficiency offline)
+  const adjustedEarnings = offlineProduction * 1.0; 
+
+  state.money += adjustedEarnings;
+  showWelcomeBackModal(formatMoney(adjustedEarnings), formatTime(effectiveTime));
+}
+```
+
+3. **Critical Dependency:** This requires `calculateGlobalProductionPerMs` to be a pure function that does *not* rely on the tick loop (i.e., it must sum up the theoretical max of all managed hexes).
