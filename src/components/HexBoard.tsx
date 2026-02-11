@@ -495,14 +495,10 @@ export function HexBoard({
           const activePlayer = players[activePlayerIndex]
           const buildInfo = activePlayer?.colorImage ? COLOR_TO_ROAD_BUILD[activePlayer.colorImage] : COLOR_TO_ROAD_BUILD['/player-teal.png']
           const { folder, prefix } = buildInfo ?? { folder: 'teal', prefix: 'road_teal' }
-          // Single image for current frame; clip reveals from settlement outward. At frame 9 show full edge.
-          const revealFraction = placeableRoadFrame >= 9 ? 1 : (placeableRoadFrame + 1) / 10
-          const revealLen = len * revealFraction
-          const clipY = settlementAtMinus ? -len / 2 : len / 2 - revealLen
+          // Each frame (00–09) is drawn to span the full edge; assets are designed to extend vertex-to-vertex.
           const frameStr = String(placeableRoadFrame).padStart(2, '0')
           const placeableRoadSrc = `/road-build/${folder}/${prefix}${frameStr}.png`
           const clipId = `clip-placeable-road-${e.id}`
-          const clipRevealId = `clip-placeable-road-reveal-${e.id}`
           return (
             <g
               key={e.id}
@@ -515,12 +511,19 @@ export function HexBoard({
                 <clipPath id={clipId}>
                   <rect x={-ROAD_ASSET_WIDTH / 2} y={-len / 2} width={ROAD_ASSET_WIDTH} height={len} />
                 </clipPath>
-                <clipPath id={clipRevealId}>
-                  <rect x={-ROAD_ASSET_WIDTH / 2} y={clipY} width={ROAD_ASSET_WIDTH} height={revealLen} />
-                </clipPath>
               </defs>
-              <g clipPath={`url(#${clipRevealId})`}>
-                {settlementAtMinus ? (
+              {settlementAtMinus ? (
+                <image
+                  href={placeableRoadSrc}
+                  x={-ROAD_ASSET_WIDTH / 2}
+                  y={-len / 2}
+                  width={ROAD_ASSET_WIDTH}
+                  height={len}
+                  preserveAspectRatio="none"
+                  style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
+                />
+              ) : (
+                <g transform="scale(1, -1)">
                   <image
                     href={placeableRoadSrc}
                     x={-ROAD_ASSET_WIDTH / 2}
@@ -530,20 +533,8 @@ export function HexBoard({
                     preserveAspectRatio="none"
                     style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
                   />
-                ) : (
-                  <g transform="scale(1, -1)">
-                    <image
-                      href={placeableRoadSrc}
-                      x={-ROAD_ASSET_WIDTH / 2}
-                      y={-len / 2}
-                      width={ROAD_ASSET_WIDTH}
-                      height={len}
-                      preserveAspectRatio="none"
-                      style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
-                    />
-                  </g>
-                )}
-              </g>
+                </g>
+              )}
               <rect
                 x={-ROAD_ASSET_WIDTH / 2}
                 y={-len / 2}
