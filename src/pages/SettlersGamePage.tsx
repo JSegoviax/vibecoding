@@ -115,6 +115,13 @@ export function SettlersGamePage() {
     document.title = titles[startScreen] ?? titles.mode
   }, [startScreen])
 
+  // Force light parchment theme when showing mode, AI count, or color picker so color/text are never inherited from dark theme
+  useEffect(() => {
+    const active = startScreen === 'mode' || startScreen === 'ai-count' || startScreen === 'colors'
+    document.body.classList.toggle('mode-select-view', active)
+    return () => document.body.classList.remove('mode-select-view')
+  }, [startScreen])
+
   const handleColorsSelected = (colors: string[], options?: { oregonsOmens?: boolean }) => {
     setSelectedColors(colors)
     setGame(createInitialState(numPlayers, colors, { oregonsOmens: options?.oregonsOmens }))
@@ -331,7 +338,8 @@ export function SettlersGamePage() {
             {([1, 2, 3] as const).map(count => (
               <button
                 key={count}
-                className="mode-btn"
+                type="button"
+                className={`mode-btn ${count === 1 ? 'mode-btn-cta' : 'mode-btn-sage'}`}
                 onClick={() => {
                   trackEvent('play_vs_ai_clicked', 'navigation', 'ai_count', count)
                   setNumPlayers((count + 1) as 2 | 3 | 4)
@@ -341,7 +349,7 @@ export function SettlersGamePage() {
                   padding: '16px 32px',
                   fontSize: 18,
                   fontWeight: 'bold',
-                  background: count === 1 ? 'var(--cta)' : 'var(--accent-sage)',
+                  background: count === 1 ? 'var(--cta, #C17D5B)' : 'var(--accent-sage, #8BAE9B)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: 12,
@@ -370,7 +378,7 @@ export function SettlersGamePage() {
   if (startScreen === 'mode') {
     return (
       <div
-        className="mode-select home-page"
+        className="mode-select home-page parchment-page"
         style={{
           minHeight: '100vh',
           display: 'flex',
@@ -379,8 +387,8 @@ export function SettlersGamePage() {
           justifyContent: 'center',
           gap: 24,
           padding: 24,
-          background: 'var(--parchment-bg)',
-          color: 'var(--ink)',
+          background: 'var(--parchment-bg, #F6EEE3)',
+          color: 'var(--ink, #2A1A0A)',
         }}
       >
         <GameGuide />
@@ -398,7 +406,8 @@ export function SettlersGamePage() {
           <p style={{ color: 'var(--ink)', opacity: 0.85, margin: 0 }}>Choose game mode</p>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', marginTop: 28 }}>
           <button
-            className="mode-btn"
+            type="button"
+            className="mode-btn mode-btn-cta"
             onClick={() => {
               trackEvent('play_vs_ai_clicked', 'navigation', 'mode_select')
               setStartScreen('ai-count')
@@ -407,7 +416,7 @@ export function SettlersGamePage() {
               padding: '16px 32px',
               fontSize: 18,
               fontWeight: 'bold',
-              background: 'var(--cta)',
+              background: 'var(--cta, #C17D5B)',
               color: '#fff',
               border: 'none',
               borderRadius: 12,
@@ -418,7 +427,8 @@ export function SettlersGamePage() {
             Play vs AI
           </button>
           <button
-            className="mode-btn"
+            type="button"
+            className="mode-btn mode-btn-sage"
             onClick={() => {
               trackEvent('multiplayer_clicked', 'navigation', 'mode_select')
               setStartScreen('multiplayer')
@@ -427,7 +437,7 @@ export function SettlersGamePage() {
               padding: '16px 32px',
               fontSize: 18,
               fontWeight: 'bold',
-              background: 'var(--accent-sage)',
+              background: 'var(--accent-sage, #8BAE9B)',
               color: '#fff',
               border: 'none',
               borderRadius: 12,

@@ -52,63 +52,81 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMod
 
   return (
     <div
-      className="parchment-page"
+      className="parchment-page color-picker-screen"
       style={{
         position: 'fixed',
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        background: 'var(--parchment-bg)',
+        background: 'var(--parchment-bg, #F6EEE3)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 10000,
         padding: 20,
+        overflow: 'auto',
       }}
     >
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back to previous step"
+          className="color-picker-back-btn"
+          style={{
+            position: 'fixed',
+            top: 20,
+            left: 20,
+            zIndex: 10002,
+            padding: '8px 16px',
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--ink, #2A1A0A)',
+            background: 'var(--parchment-section, #EEE7D7)',
+            border: '1px solid var(--paper-border, #D9BDA5)',
+            borderRadius: 8,
+            cursor: 'pointer',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+          }}
+        >
+          ← Back
+        </button>
+      )}
       <div
-        className="paper-section"
+        className="paper-section color-picker-card"
         style={{
           position: 'relative',
-          width: 560,
-          height: 580,
+          width: '100%',
+          maxWidth: 560,
+          minHeight: 400,
           flexShrink: 0,
           boxSizing: 'border-box',
+          overflow: 'visible',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          paddingTop: 16,
+          marginLeft: 'auto',
+          marginRight: 'auto',
         }}
       >
-        {onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to homepage"
-            style={{
-              position: 'absolute',
-              top: 20,
-              left: 20,
-              padding: '8px 16px',
-              fontSize: 14,
-              fontWeight: 600,
-              color: 'var(--ink)',
-              background: 'transparent',
-              border: '1px solid var(--paper-border)',
-              borderRadius: 8,
-              cursor: 'pointer',
-            }}
-          >
-            ← Back
-          </button>
-        )}
+        <div className="color-picker-content" style={{ width: '100%', maxWidth: 320, marginLeft: 'auto', marginRight: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <h1 style={{
-          fontSize: 28,
+          fontSize: 'clamp(1.25rem, 5vw, 28px)',
           fontWeight: 'bold',
-          color: 'var(--ink)',
+          color: 'var(--ink, #2A1A0A)',
           marginBottom: 8,
+          marginTop: 0,
           textAlign: 'center',
           fontFamily: '"Old Standard TT", Georgia, "Times New Roman", serif',
           textTransform: 'uppercase',
           letterSpacing: '2px',
+          wordWrap: 'break-word',
+          overflowWrap: 'break-word',
+          paddingLeft: 24,
+          paddingRight: 24,
         }}>
           {isVsAIMode && currentPlayerIndex >= 1
             ? `Choose Player ${currentPlayerIndex + 1}'s Color`
@@ -116,7 +134,7 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMod
         </h1>
         <p style={{
           fontSize: 16,
-          color: 'var(--ink)',
+          color: 'var(--ink, #2A1A0A)',
           opacity: 0.85,
           marginBottom: 24,
           textAlign: 'center',
@@ -129,11 +147,12 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMod
         <label style={{
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'center',
           gap: 10,
           marginBottom: 20,
           cursor: 'pointer',
           fontSize: 14,
-          color: 'var(--ink)',
+          color: 'var(--ink, #2A1A0A)',
           opacity: 0.9,
         }}>
           <input
@@ -150,14 +169,17 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMod
           gridTemplateColumns: 'repeat(3, 1fr)',
           gap: 16,
           marginBottom: 24,
+          width: '100%',
+          maxWidth: 320,
         }}>
           {availableColors.map(color => (
             <button
               key={color.id}
+              type="button"
               onClick={() => handleColorSelect(color.id)}
               style={{
-                background: 'var(--parchment-section)',
-                border: '2px solid var(--paper-border)',
+                background: 'var(--parchment-section, #EEE7D7)',
+                border: '2px solid var(--paper-border, #D9BDA5)',
                 borderRadius: 12,
                 padding: 16,
                 cursor: 'pointer',
@@ -166,13 +188,14 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMod
                 alignItems: 'center',
                 gap: 8,
                 transition: 'all 0.2s',
+                color: 'var(--ink, #2A1A0A)',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'var(--cta)'
+                e.currentTarget.style.borderColor = 'var(--cta, #C17D5B)'
                 e.currentTarget.style.transform = 'scale(1.05)'
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'var(--paper-border)'
+                e.currentTarget.style.borderColor = 'var(--paper-border, #D9BDA5)'
                 e.currentTarget.style.transform = 'scale(1)'
               }}
             >
@@ -202,16 +225,19 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMod
             marginTop: 24,
             padding: 16,
             background: 'rgba(42, 26, 10, 0.08)',
-            border: '1px solid var(--paper-border)',
+            border: '1px solid var(--paper-border, #D9BDA5)',
             borderRadius: 8,
+            width: '100%',
+            boxSizing: 'border-box',
           }}>
             <div style={{
               fontSize: 12,
-              color: 'var(--ink)',
+              color: 'var(--ink, #2A1A0A)',
               opacity: 0.8,
               marginBottom: 8,
               textTransform: 'uppercase',
               letterSpacing: '0.06em',
+              textAlign: 'center',
             }}>
               Selected Colors:
             </div>
@@ -232,7 +258,7 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMod
                       padding: '4px 8px',
                       background: 'rgba(42, 26, 10, 0.06)',
                       borderRadius: 6,
-                      border: '1px solid var(--paper-border)',
+                      border: '1px solid var(--paper-border, #D9BDA5)',
                     }}
                   >
                     <img
@@ -247,7 +273,7 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMod
                     />
                     <span style={{
                       fontSize: 12,
-                      color: 'var(--ink)',
+                      color: 'var(--ink, #2A1A0A)',
                       opacity: 0.9,
                     }}>
                       Player {idx + 1}: {color.name}
@@ -258,6 +284,7 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMod
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   )

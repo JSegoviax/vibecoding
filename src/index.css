@@ -1,4 +1,4 @@
-:root {
+image.png:root {
   --bg: #1a1f2e;
   --surface: #252b3b;
   --text: #e8e6e3;
@@ -219,7 +219,7 @@ body:not(.no-grain-overlay)::before {
 /* Mobile-friendly layout and touch targets */
 @media (max-width: 768px) {
   #root {
-    padding: 8px;
+    padding: 6px 2px;
   }
 
   body {
@@ -227,7 +227,8 @@ body:not(.no-grain-overlay)::before {
   }
 
   .game-page {
-    padding: 0 8px !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
     max-width: 100% !important;
     width: 100% !important;
     overflow-x: hidden;
@@ -236,7 +237,7 @@ body:not(.no-grain-overlay)::before {
   .game-layout {
     flex-direction: column !important;
     flex-wrap: nowrap !important;
-    gap: 16px !important;
+    gap: 10px !important;
     align-items: stretch !important;
     width: 100% !important;
     max-width: 100% !important;
@@ -299,13 +300,13 @@ body:not(.no-grain-overlay)::before {
 
 @media (max-width: 480px) {
   .game-board {
-    min-height: 200px;
-    max-height: 38vh;
+    min-height: 260px;
+    max-height: 64vh;
   }
 
   .game-board svg {
-    min-height: 180px !important;
-    max-height: 36vh !important;
+    min-height: 220px !important;
+    max-height: 62vh !important;
   }
 }
 
@@ -326,8 +327,8 @@ body:not(.no-grain-overlay)::before {
 
   @media (max-width: 768px) {
     #root {
-      padding-left: max(8px, env(safe-area-inset-left));
-      padding-right: max(8px, env(safe-area-inset-right));
+      padding-left: max(2px, env(safe-area-inset-left));
+      padding-right: max(2px, env(safe-area-inset-right));
       padding-bottom: env(safe-area-inset-bottom);
     }
 
@@ -384,6 +385,106 @@ body:not(.no-grain-overlay)::before {
     min-height: 44px !important;
     padding: 12px !important;
   }
+}
+
+/* When mode or AI-count screen is visible: force light viewport so nothing inherits dark theme */
+body.mode-select-view {
+  background: #FDF6E3 !important;
+  color: #2A1A0A !important;
+}
+
+body.mode-select-view #root {
+  color: inherit;
+}
+
+/* Color picker: responsive card so title never truncates */
+/* Keep card and content centered; override .paper-section margin */
+.color-picker-screen .color-picker-card {
+  padding-left: 24px;
+  padding-right: 24px;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* Mobile (iPhone SE 375px and similar): symmetric padding; card stays full width, content column centered inside */
+@media (max-width: 430px) {
+  .color-picker-screen {
+    padding-left: max(16px, env(safe-area-inset-left)) !important;
+    padding-right: max(16px, env(safe-area-inset-right)) !important;
+  }
+
+  .color-picker-screen .color-picker-card {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .color-picker-screen .color-picker-card h1 {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  /* Content column centered in card; card is full width so grid isn't pushed to one side */
+  .color-picker-content {
+    max-width: min(320px, 100%) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .color-picker-screen .color-picker-card {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .color-picker-screen .color-picker-card h1 {
+    padding-left: 24px !important;
+    padding-right: 24px !important;
+  }
+}
+
+/* Back button: fixed to viewport top-left, respect safe area on notched devices */
+.color-picker-back-btn {
+  top: max(20px, env(safe-area-inset-top, 20px)) !important;
+  left: max(20px, env(safe-area-inset-left, 20px)) !important;
+}
+
+/* Mode select + Play vs AI: buttons use hex so they always show (no var dependency) */
+.mode-select .mode-btn {
+  color: #ffffff !important;
+  font-weight: 700;
+  -webkit-font-smoothing: antialiased;
+  border: none !important;
+}
+.mode-select .mode-btn-cta {
+  background: #C17D5B !important;
+  background-color: #C17D5B !important;
+}
+.mode-select .mode-btn-sage {
+  background: #8BAE9B !important;
+  background-color: #8BAE9B !important;
+}
+.mode-select .paper-section .mode-btn {
+  background-color: #C17D5B !important;
+  color: #ffffff !important;
+}
+.mode-select .paper-section .mode-btn-sage {
+  background-color: #8BAE9B !important;
+}
+.mode-select .paper-section a {
+  color: #C17D5B !important;
+}
+
+.mode-select .paper-section button:not(.mode-btn) {
+  color: #C17D5B !important;
+  background: transparent !important;
+}
+
+/* Game Guide on mode/AI screens: CTA color and white text */
+body.mode-select-view .game-guide-btn {
+  background: #C17D5B !important;
+  background-color: #C17D5B !important;
+  color: #ffffff !important;
 }
 
 /* Mode select: comfortable on small screens */

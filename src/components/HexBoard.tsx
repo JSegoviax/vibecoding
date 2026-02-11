@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { hexToPixel, hexCorner, HEX_R, getWaterHexPositions } from '../game/board'
 import { buildTopology } from '../game/topology'
 import { TERRAIN_COLORS } from '../game/terrain'
@@ -38,6 +38,17 @@ const COLOR_TO_ROAD_IMAGE: Record<string, string> = {
 /** Road asset display size - preserve width and height (no scaling) */
 const ROAD_ASSET_WIDTH = 16
 const ROAD_ASSET_HEIGHT = 64
+
+/** Map player color to road-build animation folder and file prefix (frames 00–09) */
+const COLOR_TO_ROAD_BUILD: Record<string, { folder: string; prefix: string }> = {
+  '/player-teal.png': { folder: 'teal', prefix: 'road_teal' },
+  '/player-green.png': { folder: 'green', prefix: 'road_green' },
+  '/player-green2.png': { folder: 'dk_green2', prefix: 'road_dk_green' },
+  '/player-pink.png': { folder: 'pink', prefix: 'road_pink' },
+  '/player-purple.png': { folder: 'purple', prefix: 'road_purple' },
+  '/player-white.png': { folder: 'white', prefix: 'road_white' },
+}
+const PLACEABLE_ROAD_FRAME_MS = 100
 
 // Map player color image to city icon (built cities use these instead of the settlement/house image)
 const COLOR_TO_CITY_IMAGE: Record<string, string> = {
@@ -108,6 +119,17 @@ export function HexBoard({
   const vById = useMemo(() => Object.fromEntries(vertices.map(v => [v.id, v])), [vertices])
   const eById = useMemo(() => Object.fromEntries(edges.map(e => [e.id, e])), [edges])
 
+  // Placeable road build animation: cycle 00→09 and repeat while any placeable road is shown
+  const [placeableRoadFrame, setPlaceableRoadFrame] = useState(0)
+  const hasPlaceableRoads = highlightedEdges && edges.some(e => highlightedEdges.has(e.id) && !edgeStates?.[e.id])
+  useEffect(() => {
+    if (!hasPlaceableRoads) return
+    const t = setInterval(() => {
+      setPlaceableRoadFrame(f => (f + 1) % 10)
+    }, PLACEABLE_ROAD_FRAME_MS)
+    return () => clearInterval(t)
+  }, [hasPlaceableRoads])
+
   const waterPositions = useMemo(() => getWaterHexPositions(), [])
 
   // Calculate actual bounds including both land and water hexes
@@ -128,8 +150,8 @@ export function HexBoard({
   const cx = useMemo(() => (bounds.minX + bounds.maxX) / 2, [bounds])
   const cy = useMemo(() => (bounds.minY + bounds.maxY) / 2, [bounds])
   
-  // Padding around board
-  const padding = HEX_R * 0.3
+  // Padding around board (minimal so map uses more of the viewport, especially on mobile)
+  const padding = HEX_R * 0.12
   const w = useMemo(() => (bounds.maxX - bounds.minX) + padding * 2, [bounds, padding])
   const h = useMemo(() => (bounds.maxY - bounds.minY) + padding * 2, [bounds, padding])
 
@@ -465,8 +487,22 @@ export function HexBoard({
         }
         if (hl && !pid) {
           const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI - 90
+          const activePlayerId = activePlayerIndex + 1
+          const settlementAtV1 = vertexStates[e.v1]?.player === activePlayerId
+          const settlementAtV2 = vertexStates[e.v2]?.player === activePlayerId
+          // Frame 0 at settlement, frame 9 at far end. Coords: v1 at -len/2, v2 at +len/2.
+          const settlementAtMinus = settlementAtV1 || !settlementAtV2
+          const activePlayer = players[activePlayerIndex]
+          const buildInfo = activePlayer?.colorImage ? COLOR_TO_ROAD_BUILD[activePlayer.colorImage] : COLOR_TO_ROAD_BUILD['/player-teal.png']
+          const { folder, prefix } = buildInfo ?? { folder: 'teal', prefix: 'road_teal' }
+          // Single image for current frame; clip reveals from settlement outward. At frame 9 show full edge.
+          const revealFraction = placeableRoadFrame >= 9 ? 1 : (placeableRoadFrame + 1) / 10
+          const revealLen = len * revealFraction
+          const clipY = settlementAtMinus ? -len / 2 : len / 2 - revealLen
+          const frameStr = String(placeableRoadFrame).padStart(2, '0')
+          const placeableRoadSrc = `/road-build/${folder}/${prefix}${frameStr}.png`
           const clipId = `clip-placeable-road-${e.id}`
-          const scrollExtra = 32
+          const clipRevealId = `clip-placeable-road-reveal-${e.id}`
           return (
             <g
               key={e.id}
@@ -479,26 +515,43 @@ export function HexBoard({
                 <clipPath id={clipId}>
                   <rect x={-ROAD_ASSET_WIDTH / 2} y={-len / 2} width={ROAD_ASSET_WIDTH} height={len} />
                 </clipPath>
+                <clipPath id={clipRevealId}>
+                  <rect x={-ROAD_ASSET_WIDTH / 2} y={clipY} width={ROAD_ASSET_WIDTH} height={revealLen} />
+                </clipPath>
               </defs>
-              <g className="road-placeable-spin">
-                <image
-                  href="/road-placeable.png"
-                  x={-ROAD_ASSET_WIDTH / 2}
-                  y={-len / 2 - scrollExtra}
-                  width={ROAD_ASSET_WIDTH}
-                  height={len + scrollExtra * 2}
-                  preserveAspectRatio="xMidYMid slice"
-                  style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
-                />
-                <rect
-                  x={-ROAD_ASSET_WIDTH / 2}
-                  y={-len / 2}
-                  width={ROAD_ASSET_WIDTH}
-                  height={len}
-                  fill="transparent"
-                  style={{ pointerEvents: 'auto' }}
-                />
+              <g clipPath={`url(#${clipRevealId})`}>
+                {settlementAtMinus ? (
+                  <image
+                    href={placeableRoadSrc}
+                    x={-ROAD_ASSET_WIDTH / 2}
+                    y={-len / 2}
+                    width={ROAD_ASSET_WIDTH}
+                    height={len}
+                    preserveAspectRatio="none"
+                    style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
+                  />
+                ) : (
+                  <g transform="scale(1, -1)">
+                    <image
+                      href={placeableRoadSrc}
+                      x={-ROAD_ASSET_WIDTH / 2}
+                      y={-len / 2}
+                      width={ROAD_ASSET_WIDTH}
+                      height={len}
+                      preserveAspectRatio="none"
+                      style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
+                    />
+                  </g>
+                )}
               </g>
+              <rect
+                x={-ROAD_ASSET_WIDTH / 2}
+                y={-len / 2}
+                width={ROAD_ASSET_WIDTH}
+                height={len}
+                fill="transparent"
+                style={{ pointerEvents: 'auto' }}
+              />
             </g>
           )
         }
