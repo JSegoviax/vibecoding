@@ -703,14 +703,12 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
           <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
             <button
               type="button"
+              className={`game-sidebar-tab ${sidebarTab === 'resources' ? 'game-sidebar-tab--active' : ''}`}
               onClick={() => setSidebarTab('resources')}
               style={{
                 flex: 1,
                 padding: '8px 12px',
-                border: sidebarTab === 'resources' ? 'none' : '1px solid var(--paper-border, rgba(0, 0, 0, 0.15))',
                 borderRadius: 8,
-                background: sidebarTab === 'resources' ? 'var(--accent)' : 'rgba(255, 255, 255, 0.15)',
-                color: sidebarTab === 'resources' ? '#fff' : 'var(--text)',
                 fontWeight: 600,
                 cursor: 'pointer',
                 fontSize: 13,
@@ -720,14 +718,12 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
             </button>
             <button
               type="button"
+              className={`game-sidebar-tab ${sidebarTab === 'history' ? 'game-sidebar-tab--active' : ''}`}
               onClick={() => setSidebarTab('history')}
               style={{
                 flex: 1,
                 padding: '8px 12px',
-                border: sidebarTab === 'history' ? 'none' : '1px solid var(--paper-border, rgba(0, 0, 0, 0.15))',
                 borderRadius: 8,
-                background: sidebarTab === 'history' ? 'var(--accent)' : 'rgba(255, 255, 255, 0.15)',
-                color: sidebarTab === 'history' ? '#fff' : 'var(--text)',
                 fontWeight: 600,
                 cursor: 'pointer',
                 fontSize: 13,

@@ -232,7 +232,7 @@ export function PlayerResources({
   }, [omensCardDetailId])
   return (
     <div>
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+      <div className="player-resources-section-label" style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         Resources
       </div>
       {players.map((p, i) => {
@@ -287,9 +287,11 @@ export function PlayerResources({
             </div>
             {showControls && lastDice == null && (
               <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                <button 
-                  onClick={onRollDice} 
-                  style={{ padding: '6px 12px', background: 'var(--accent)', border: 'none', borderRadius: 6, color: '#fff', fontWeight: 'bold', cursor: 'pointer', fontSize: 12 }}
+                <button
+                  type="button"
+                  className="roll-dice-btn"
+                  onClick={onRollDice}
+                  style={{ padding: '8px 16px', border: 'none', borderRadius: 6, color: '#fff', fontWeight: 'bold', cursor: 'pointer', fontSize: 13 }}
                 >
                   Roll dice
                 </button>

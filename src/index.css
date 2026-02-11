@@ -196,12 +196,46 @@ body:not(.no-grain-overlay)::before {
   text-transform: uppercase;
   letter-spacing: 2px;
 }
+/* Game Guide: high contrast on parchment so it doesn’t blend into the background */
 .game-page.parchment-page .game-guide-btn {
-  background: var(--cta) !important;
+  background: #B86A45 !important;
+  background-color: #B86A45 !important;
   color: #fff !important;
+  border: 1px solid rgba(0, 0, 0, 0.2) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
 }
 .game-page.parchment-page .game-sidebar {
   border: 1px solid var(--paper-border);
+}
+
+/* Sidebar tabs (Resources / History): always readable; inactive = dark text + visible border */
+.game-sidebar .game-sidebar-tab {
+  color: #2A1A0A;
+  border: 1px solid #B89B7E;
+  background: rgba(42, 26, 10, 0.06);
+}
+.game-sidebar .game-sidebar-tab--active {
+  background: #C17D5B !important;
+  color: #fff !important;
+  border-color: #A86A45 !important;
+}
+
+/* Roll dice: always high-contrast so it’s obvious as the primary action */
+.roll-dice-btn {
+  background: var(--accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+.game-page.parchment-page .roll-dice-btn {
+  background: #C17D5B !important;
+  background-color: #C17D5B !important;
+  color: #fff !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Resources section label inside sidebar: ensure it’s readable on parchment */
+.game-sidebar .player-resources-section-label {
+  color: #2A1A0A !important;
+  opacity: 0.9;
 }
 
 /* Sidebar title: ensure visible and not collapsed */
