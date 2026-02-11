@@ -512,17 +512,8 @@ export function HexBoard({
                   <rect x={-ROAD_ASSET_WIDTH / 2} y={-len / 2} width={ROAD_ASSET_WIDTH} height={len} />
                 </clipPath>
               </defs>
+              {/* Flip so road builds away from settlement: asset "start" (frame 0) at settlement end */}
               {settlementAtMinus ? (
-                <image
-                  href={placeableRoadSrc}
-                  x={-ROAD_ASSET_WIDTH / 2}
-                  y={-len / 2}
-                  width={ROAD_ASSET_WIDTH}
-                  height={len}
-                  preserveAspectRatio="none"
-                  style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
-                />
-              ) : (
                 <g transform="scale(1, -1)">
                   <image
                     href={placeableRoadSrc}
@@ -534,6 +525,16 @@ export function HexBoard({
                     style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
                   />
                 </g>
+              ) : (
+                <image
+                  href={placeableRoadSrc}
+                  x={-ROAD_ASSET_WIDTH / 2}
+                  y={-len / 2}
+                  width={ROAD_ASSET_WIDTH}
+                  height={len}
+                  preserveAspectRatio="none"
+                  style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
+                />
               )}
               <rect
                 x={-ROAD_ASSET_WIDTH / 2}
