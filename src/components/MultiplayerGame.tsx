@@ -464,7 +464,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
   return (
     <div className="game-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
       <GameGuide />
-      <p className="game-subtitle" style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 0 }}>
+      <p className="game-subtitle" style={{ textAlign: 'center', color: 'var(--text)', marginTop: 0, padding: '8px 12px', borderRadius: 8, background: 'rgba(44,26,10,0.08)', border: '1px solid rgba(44,26,10,0.15)', display: 'inline-block', minWidth: 200 }}>
         {game.phase === 'setup' && !isSetupRoad && `Place a settlement`}
         {game.phase === 'setup' && isSetupRoad && `Place a road next to it`}
         {isPlaying && robberMode.moving && !omenRobberMode && `Rolled 7! Click a hex to move the robber`}
@@ -698,9 +698,9 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
           )}
         </div>
 
-        <aside className="game-sidebar" style={{ flex: '0 0 280px', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <aside className="game-sidebar" style={{ flex: '0 0 280px', minHeight: 0, maxHeight: 'calc(100vh - 24px)', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h1 className="game-title game-sidebar-title" style={{ margin: '0 0 8px', fontSize: '1.25rem', fontWeight: 700, flexShrink: 0, lineHeight: 1.3, color: 'var(--ink, var(--text))' }}>Settlers of Oregon (Multiplayer)</h1>
-          <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+          <div style={{ display: 'flex', gap: 4, marginBottom: 4, flexShrink: 0 }}>
             <button
               type="button"
               className={`game-sidebar-tab ${sidebarTab === 'resources' ? 'game-sidebar-tab--active' : ''}`}
@@ -837,7 +837,16 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
                     const { targetHexIds } = getHexesForFarmSwap(game, playerId as PlayerId)
                     return targetHexIds.map(hexId => {
                       const h = game.hexes.find(x => x.id === hexId)
-                      return { hexId, label: h ? `${TERRAIN_LABELS[h.terrain]} (${h.number})` : hexId }
+                      const playersOnHex = getPlayersOnHex(game, hexId)
+                      const ownerIds = Array.from(playersOnHex).filter(pid => pid !== playerId)
+                      const ownerNames = ownerIds.map(pid => game.players[pid - 1]?.name ?? `Player ${pid}`)
+                      const ownerName = ownerNames.length ? ownerNames.join(', ') : 'Other player(s)'
+                      return {
+                        hexId,
+                        label: h ? `${TERRAIN_LABELS[h.terrain]} (${h.number})` : hexId,
+                        ownerId: ownerIds[0],
+                        ownerName,
+                      }
                     })
                   })()
                 : undefined
@@ -848,9 +857,10 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
           {sidebarTab === 'history' && (
             <GameHistory gameLog={game.gameLog ?? []} maxHeight={420} />
           )}
-          {game.phase === 'setup' && <p style={{ fontSize: 14, color: 'var(--muted)' }}>{isMyTurn ? (!isSetupRoad ? 'Click an empty spot to place a settlement.' : 'Click an edge connected to your settlement to place a road.') : `Waiting for Player ${setupPlayerIndex + 1}…`}</p>}
-          {isPlaying && !isMyTurn && <p style={{ fontSize: 14, color: 'var(--muted)' }}>Waiting for Player {game.currentPlayerIndex + 1}…</p>}
+          {game.phase === 'setup' && <p style={{ fontSize: 14, color: 'var(--text)', padding: '8px 10px', borderRadius: 8, background: 'rgba(44,26,10,0.08)', border: '1px solid rgba(44,26,10,0.15)' }}>{isMyTurn ? (!isSetupRoad ? 'Click an empty spot to place a settlement.' : 'Click an edge connected to your settlement to place a road.') : `Waiting for Player ${setupPlayerIndex + 1}…`}</p>}
+          {isPlaying && !isMyTurn && <p style={{ fontSize: 14, color: 'var(--text)', padding: '8px 10px', borderRadius: 8, background: 'rgba(44,26,10,0.08)', border: '1px solid rgba(44,26,10,0.15)' }}>Waiting for Player {game.currentPlayerIndex + 1}…</p>}
           {winner && <a href="/" style={{ padding: '10px 20px', background: 'var(--accent)', color: '#fff', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer', marginTop: 8, textAlign: 'center', textDecoration: 'none' }}>Back to home</a>}
+          </div>
         </aside>
         </div>
       </div>

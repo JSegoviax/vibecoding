@@ -386,7 +386,7 @@ export function OregonCapitalistPage() {
   const hiddenHexIds = useMemo(() => {
     const hidden = new Set<string>()
     for (const h of state.hexes) {
-      if (!state.ownedHexIds.has(h.id)) hidden.add(h.id)
+      if (!state.ownedHexIds.has(h.id) && h.terrain !== 'desert') hidden.add(h.id)
     }
     return hidden
   }, [state.hexes, state.ownedHexIds])
@@ -500,10 +500,11 @@ export function OregonCapitalistPage() {
         <aside
           style={{
             flex: '0 0 280px',
-            background: 'var(--surface)',
+            background: '#FFFBF0',
+            border: '1px solid #D9BDA5',
             borderRadius: 12,
             padding: 20,
-            color: 'var(--text)',
+            color: '#2A1A0A',
             transform: 'translateZ(0)',
             isolation: 'isolate',
             backfaceVisibility: 'hidden',
@@ -515,14 +516,15 @@ export function OregonCapitalistPage() {
             style={{
               width: '100%',
               marginBottom: 16,
-              padding: '8px 12px',
+              padding: '10px 14px',
               borderRadius: 8,
-              border: '1px solid rgba(185, 28, 28, 0.8)',
-              background: 'rgba(185, 28, 28, 0.15)',
+              border: 'none',
+              background: '#991B1B',
               color: '#fff',
               cursor: 'pointer',
-              fontSize: 13,
-              fontWeight: 600,
+              fontSize: 14,
+              fontWeight: 700,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
             }}
           >
             Reset game
@@ -532,17 +534,18 @@ export function OregonCapitalistPage() {
             <div
               style={{
                 marginBottom: 16,
-                padding: '10px 12px',
+                padding: '12px 14px',
                 borderRadius: 8,
-                background: 'rgba(139, 174, 155, 0.25)',
-                border: '1px solid rgba(139, 174, 155, 0.6)',
+                background: '#4A6B5A',
+                border: '1px solid #3D5A4A',
                 fontSize: 13,
                 color: '#fff',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
               }}
             >
-              <div style={{ fontWeight: 600, marginBottom: 4, color: '#fff' }}>Pioneer Spirits</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>{formatNumber(state.pioneerSpirits ?? 0)}</div>
-              <div style={{ fontSize: 11, opacity: 0.9, marginTop: 4, color: '#fff' }}>
+              <div style={{ fontWeight: 700, marginBottom: 4, color: '#fff' }}>Pioneer Spirits</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#fff' }}>{formatNumber(state.pioneerSpirits ?? 0)}</div>
+              <div style={{ fontSize: 12, opacity: 0.95, marginTop: 4, color: '#fff' }}>
                 +{((state.pioneerSpirits ?? 0) * 2).toFixed(0)}% production
               </div>
             </div>
@@ -585,24 +588,25 @@ export function OregonCapitalistPage() {
                 marginBottom: 16,
                 padding: '10px 12px',
                 borderRadius: 8,
-                background: 'linear-gradient(90deg, rgba(234,179,8,0.3), rgba(234,179,8,0.15))',
-                border: '1px solid rgba(234,179,8,0.6)',
+                background: 'linear-gradient(90deg, rgba(234,179,8,0.35), rgba(234,179,8,0.2))',
+                border: '1px solid #C9A227',
                 fontSize: 13,
+                color: '#2A1A0A',
               }}
             >
-              <div style={{ fontWeight: 700, marginBottom: 2 }}>{state.activeEvent.name}</div>
-              <div style={{ fontSize: 12, opacity: 0.9 }}>{state.activeEvent.description}</div>
-              <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>
+              <div style={{ fontWeight: 700, marginBottom: 2, color: '#2A1A0A' }}>{state.activeEvent.name}</div>
+              <div style={{ fontSize: 12, color: '#2A1A0A', opacity: 0.95 }}>{state.activeEvent.description}</div>
+              <div style={{ fontSize: 11, color: '#2A1A0A', opacity: 0.9, marginTop: 4 }}>
                 {Math.ceil((state.activeEvent.duration - (Date.now() - state.activeEvent.startTime)) / 1000)}s remaining
               </div>
             </div>
           )}
 
-          <h3 style={{ margin: '0 0 8px', fontSize: 18 }}>Money</h3>
-          <p style={{ margin: '0 0 16px', fontSize: 24, fontWeight: 700 }}>
+          <h3 style={{ margin: '0 0 8px', fontSize: 18, color: '#2A1A0A' }}>Money</h3>
+          <p style={{ margin: '0 0 16px', fontSize: 24, fontWeight: 700, color: '#2A1A0A' }}>
             {formatNumber(state.money)}
           </p>
-          <p style={{ margin: '0 0 16px', fontSize: 12, opacity: 0.8 }}>
+          <p style={{ margin: '0 0 16px', fontSize: 12, color: '#2A1A0A', opacity: 0.9 }}>
             +{formatNumber(totalProductionPerSec * 0.5 * getGlobalProgressMoneyMultiplier(state), 2)}/sec
           </p>
 
@@ -619,16 +623,17 @@ export function OregonCapitalistPage() {
                     padding: '8px 12px',
                     borderRadius: 8,
                     background: 'rgba(139, 174, 155, 0.2)',
-                    border: '1px solid rgba(139, 174, 155, 0.4)',
+                    border: '1px solid #6B8E7A',
                     fontSize: 13,
+                    color: '#2A1A0A',
                   }}
                 >
-                  <div style={{ fontWeight: 600, marginBottom: 2 }}>Pioneer Harmony</div>
-                  <div style={{ fontSize: 12, opacity: 0.9 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 2, color: '#2A1A0A' }}>Pioneer Harmony</div>
+                  <div style={{ fontSize: 12, color: '#2A1A0A', opacity: 0.95 }}>
                     {thresholdText}: {harmony.multiplier}× money generation
                   </div>
                   {harmony.thresholds.length < GLOBAL_MILESTONES.length && (
-                    <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4 }}>
+                    <div style={{ fontSize: 11, color: '#2A1A0A', opacity: 0.85, marginTop: 4 }}>
                       Next: All hexes ≥ Lv.{GLOBAL_MILESTONES[harmony.thresholds.length]}
                     </div>
                   )}
@@ -638,10 +643,10 @@ export function OregonCapitalistPage() {
             return null
           })()}
 
-          <h3 style={{ margin: '0 0 12px', fontSize: 18 }}>Resources</h3>
+          <h3 style={{ margin: '0 0 12px', fontSize: 18, color: '#2A1A0A' }}>Resources</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {(['wood', 'brick', 'sheep', 'wheat', 'ore'] as Terrain[]).map((t) => (
-              <div key={t} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+              <div key={t} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#2A1A0A' }}>
                 <span>{TERRAIN_LABELS[t]}</span>
                 <span style={{ fontWeight: 600 }}>{formatNumber(state.resources[t])}</span>
               </div>
@@ -649,27 +654,28 @@ export function OregonCapitalistPage() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '24px 0 12px', flexWrap: 'wrap' }}>
-            <h3 style={{ margin: 0, fontSize: 18 }}>Upgrade hex</h3>
+            <h3 style={{ margin: 0, fontSize: 18, color: '#2A1A0A' }}>Upgrade hex</h3>
             {hasAutoUpgradeBuff(state.purchasedGlobalBuffs ?? []) && (
               <button
                 type="button"
                 onClick={handleToggleAutoUpgrade}
                 style={{
-                  padding: '4px 10px',
-                  borderRadius: 6,
-                  border: '1px solid var(--paper-border)',
-                  background: state.autoUpgradePaused ? 'var(--cta)' : '#d9d0c4',
-                  color: state.autoUpgradePaused ? '#fff' : 'var(--muted)',
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  border: state.autoUpgradePaused ? '1px solid #A86A45' : '1px solid #6B8E7A',
+                  background: state.autoUpgradePaused ? '#C17D5B' : '#8BAE9B',
+                  color: '#fff',
                   cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 500,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
                 }}
               >
                 {state.autoUpgradePaused ? 'Resume Auto Upgrade' : 'Pause Auto Upgrade'}
               </button>
             )}
           </div>
-          <p style={{ margin: '0 0 8px', fontSize: 13, opacity: 0.9 }}>
+          <p style={{ margin: '0 0 8px', fontSize: 13, color: '#2A1A0A', opacity: 0.95 }}>
             Cost: money (increases per level)
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -695,11 +701,11 @@ export function OregonCapitalistPage() {
                       style={{
                         padding: '6px 10px',
                         borderRadius: 8,
-                        background: 'linear-gradient(90deg, rgba(234,179,8,0.3), rgba(234,179,8,0.15))',
-                        border: '1px solid rgba(234,179,8,0.6)',
+                        background: 'linear-gradient(90deg, rgba(234,179,8,0.35), rgba(234,179,8,0.2))',
+                        border: '1px solid #C9A227',
                         fontSize: 13,
                         fontWeight: 700,
-                        color: 'var(--ink)',
+                        color: '#2A1A0A',
                         textAlign: 'center',
                         animation: 'pulse 0.5s ease-out',
                       }}
@@ -717,11 +723,12 @@ export function OregonCapitalistPage() {
                         minWidth: 0,
                         padding: '8px 12px',
                         borderRadius: 8,
-                        border: '1px solid var(--paper-border)',
-                        background: canAfford ? 'var(--cta)' : '#d9d0c4',
-                        color: canAfford ? '#fff' : 'var(--muted)',
+                        border: canAfford ? '1px solid #A86A45' : '1px solid #D9BDA5',
+                        background: canAfford ? '#C17D5B' : '#E8E0D5',
+                        color: canAfford ? '#fff' : '#5C5348',
                         cursor: canAfford ? 'pointer' : 'not-allowed',
                         fontSize: 13,
+                        fontWeight: 600,
                         textAlign: 'left',
                         display: 'flex',
                         justifyContent: 'space-between',
@@ -752,9 +759,9 @@ export function OregonCapitalistPage() {
                       style={{
                         padding: '8px 10px',
                         borderRadius: 8,
-                        border: '1px solid var(--paper-border)',
-                        background: canBuyMax ? 'var(--accent-sage)' : '#d9d0c4',
-                        color: canBuyMax ? '#fff' : 'var(--muted)',
+                        border: canBuyMax ? '1px solid #5A7A6A' : '1px solid #D9BDA5',
+                        background: canBuyMax ? '#8BAE9B' : '#E8E0D5',
+                        color: canBuyMax ? '#fff' : '#5C5348',
                         cursor: canBuyMax ? 'pointer' : 'not-allowed',
                         fontSize: 12,
                         fontWeight: 600,
@@ -764,7 +771,7 @@ export function OregonCapitalistPage() {
                     </button>
                   </div>
                   {hasManager && (
-                    <div style={{ fontSize: 11, opacity: 0.85, marginTop: 2, contain: 'layout paint' }}>
+                    <div style={{ fontSize: 11, color: '#2A1A0A', opacity: 0.9, marginTop: 2, contain: 'layout paint' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                         <span>Cycle progress</span>
                         <span>{Math.round(cycleProgress * 100)}%</span>
@@ -796,7 +803,7 @@ export function OregonCapitalistPage() {
                     </div>
                   )}
                   {nextMilestone != null && (
-                    <div style={{ fontSize: 11, opacity: 0.85, marginTop: hasManager ? 4 : 0, contain: 'layout paint' }}>
+                    <div style={{ fontSize: 11, color: '#2A1A0A', opacity: 0.9, marginTop: hasManager ? 4 : 0, contain: 'layout paint' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                         <span>Next milestone: Lv.{nextMilestone}</span>
                         <span>{level} / {nextMilestone}</span>
@@ -832,8 +839,8 @@ export function OregonCapitalistPage() {
             })}
           </div>
 
-          <h3 style={{ margin: '24px 0 12px', fontSize: 18 }}>Hire manager</h3>
-          <p style={{ margin: '0 0 8px', fontSize: 13, opacity: 0.9 }}>
+          <h3 style={{ margin: '24px 0 12px', fontSize: 18, color: '#2A1A0A' }}>Hire manager</h3>
+          <p style={{ margin: '0 0 8px', fontSize: 13, color: '#2A1A0A', opacity: 0.95 }}>
             Managers enable passive production. Tier must match hex.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -854,11 +861,12 @@ export function OregonCapitalistPage() {
                     style={{
                       padding: '8px 12px',
                       borderRadius: 8,
-                      border: '1px solid var(--paper-border)',
-                      background: canAfford ? 'var(--accent-sage)' : '#d9d0c4',
-                      color: canAfford ? '#fff' : 'var(--muted)',
+                      border: canAfford ? '1px solid #5A7A6A' : '1px solid #D9BDA5',
+                      background: canAfford ? '#8BAE9B' : '#E8E0D5',
+                      color: canAfford ? '#fff' : '#5C5348',
                       cursor: canAfford ? 'pointer' : 'not-allowed',
                       fontSize: 13,
+                      fontWeight: 600,
                       textAlign: 'left',
                       display: 'flex',
                       justifyContent: 'space-between',
@@ -876,8 +884,8 @@ export function OregonCapitalistPage() {
             )}
           </div>
 
-          <h3 style={{ margin: '24px 0 12px', fontSize: 18 }}>Global buffs</h3>
-          <p style={{ margin: '0 0 8px', fontSize: 13, opacity: 0.9 }}>
+          <h3 style={{ margin: '24px 0 12px', fontSize: 18, color: '#2A1A0A' }}>Global buffs</h3>
+          <p style={{ margin: '0 0 8px', fontSize: 13, color: '#2A1A0A', opacity: 0.95 }}>
             Boost all production. Unlocks with managers + hexes.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
@@ -885,12 +893,13 @@ export function OregonCapitalistPage() {
               <div
                 key={b.id}
                 style={{
-                  padding: '6px 10px',
+                  padding: '8px 12px',
                   borderRadius: 8,
-                  background: 'rgba(34, 197, 94, 0.15)',
-                  border: '1px solid rgba(34, 197, 94, 0.4)',
+                  background: 'rgba(34, 197, 94, 0.2)',
+                  border: '1px solid #22C55E',
                   fontSize: 13,
-                  color: 'var(--text)',
+                  color: '#2A1A0A',
+                  fontWeight: 500,
                 }}
               >
                 ✓ {b.name} — {b.description}
@@ -906,23 +915,25 @@ export function OregonCapitalistPage() {
                   style={{
                     padding: '8px 12px',
                     borderRadius: 8,
-                    border: '1px solid var(--paper-border)',
-                    background: canAfford ? 'var(--accent)' : '#d9d0c4',
-                    color: canAfford ? '#fff' : 'var(--muted)',
+                    border: canAfford ? '1px solid #4A5AB8' : '1px solid #D9BDA5',
+                    background: canAfford ? '#5C6BC0' : '#E8E0D5',
+                    color: canAfford ? '#fff' : '#2A1A0A',
                     cursor: canAfford ? 'pointer' : 'not-allowed',
                     fontSize: 13,
+                    fontWeight: 600,
                     textAlign: 'left',
                     display: 'flex',
                     justifyContent: 'space-between',
+                    alignItems: 'center',
                   }}
                 >
-                  <span>{buff.name} — {buff.description}</span>
-                  <span>{canAfford ? formatNumber(buff.cost) : `${formatNumber(state.money)}/${formatNumber(buff.cost)}`}</span>
+                  <span style={{ color: 'inherit' }}>{buff.name} — {buff.description}</span>
+                  <span style={{ color: 'inherit', flexShrink: 0, marginLeft: 8 }}>{canAfford ? formatNumber(buff.cost) : `${formatNumber(state.money)}/${formatNumber(buff.cost)}`}</span>
                 </button>
               )
             })}
             {purchasedBuffs.length === 0 && availableBuffs.length === 0 && (
-              <p style={{ margin: 0, fontSize: 12, opacity: 0.7 }}>
+              <p style={{ margin: 0, fontSize: 12, color: '#2A1A0A', opacity: 0.9 }}>
                 Hire managers and unlock hexes to unlock buffs.
               </p>
             )}
@@ -930,8 +941,8 @@ export function OregonCapitalistPage() {
 
           {(state.pioneerSpirits ?? 0) > 0 && (
             <>
-              <h3 style={{ margin: '24px 0 12px', fontSize: 18 }}>Spirit Shop</h3>
-              <p style={{ margin: '0 0 8px', fontSize: 13, opacity: 0.9 }}>
+              <h3 style={{ margin: '24px 0 12px', fontSize: 18, color: '#2A1A0A' }}>Spirit Shop</h3>
+              <p style={{ margin: '0 0 8px', fontSize: 13, color: '#2A1A0A', opacity: 0.95 }}>
                 Permanent upgrades that persist through prestige.
               </p>
               {hasAutoSpiritShopBuff(state.purchasedGlobalBuffs ?? []) && (
@@ -941,14 +952,15 @@ export function OregonCapitalistPage() {
                   style={{
                     width: '100%',
                     marginBottom: 8,
-                    padding: '6px 10px',
+                    padding: '6px 12px',
                     borderRadius: 8,
-                    border: '1px solid var(--paper-border)',
-                    background: state.autoSpiritShopPaused ? 'var(--cta)' : '#d9d0c4',
-                    color: state.autoSpiritShopPaused ? '#fff' : 'var(--muted)',
+                    border: state.autoSpiritShopPaused ? '1px solid #A86A45' : '1px solid #6B8E7A',
+                    background: state.autoSpiritShopPaused ? '#C17D5B' : '#8BAE9B',
+                    color: '#fff',
                     cursor: 'pointer',
-                    fontSize: 12,
-                    fontWeight: 500,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
                   }}
                 >
                   {state.autoSpiritShopPaused ? 'Resume Auto Spirit Shop' : 'Pause Auto Spirit Shop'}
@@ -967,11 +979,12 @@ export function OregonCapitalistPage() {
                       style={{
                         padding: '8px 12px',
                         borderRadius: 8,
-                        border: '1px solid var(--paper-border)',
-                        background: canAfford ? '#e8d080' : '#d9d0c4',
-                        color: canAfford ? 'var(--ink)' : 'var(--muted)',
+                        border: canAfford ? '1px solid #C9A227' : '1px solid #D9BDA5',
+                        background: canAfford ? '#E8D080' : '#E8E0D5',
+                        color: canAfford ? '#2A1A0A' : '#5C5348',
                         cursor: canAfford ? 'pointer' : 'not-allowed',
                         fontSize: 13,
+                        fontWeight: 600,
                         textAlign: 'left',
                         display: 'flex',
                         flexDirection: 'column',
@@ -981,11 +994,11 @@ export function OregonCapitalistPage() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontWeight: 600 }}>
                           {upgrade.name}
-                          {currentLevel > 0 && <span style={{ fontSize: 11, opacity: 0.8 }}> (Lv.{currentLevel})</span>}
+                          {currentLevel > 0 && <span style={{ fontSize: 11, opacity: 0.9 }}> (Lv.{currentLevel})</span>}
                         </span>
                         <span>{canAfford ? formatNumber(cost) : `${formatNumber(state.pioneerSpirits ?? 0)}/${formatNumber(cost)}`}</span>
                       </div>
-                      <div style={{ fontSize: 11, opacity: 0.85 }}>{upgrade.description}</div>
+                      <div style={{ fontSize: 11, color: 'inherit', opacity: 0.9 }}>{upgrade.description}</div>
                     </button>
                   )
                 })}
@@ -993,8 +1006,8 @@ export function OregonCapitalistPage() {
             </>
           )}
 
-          <h3 style={{ margin: '24px 0 12px', fontSize: 18 }}>Unlock hex</h3>
-          <p style={{ margin: '0 0 8px', fontSize: 13, opacity: 0.9 }}>
+          <h3 style={{ margin: '24px 0 12px', fontSize: 18, color: '#2A1A0A' }}>Unlock hex</h3>
+          <p style={{ margin: '0 0 8px', fontSize: 13, color: '#2A1A0A', opacity: 0.95 }}>
             Cost: early game is flexible; later some hexes require specific or multiple resources.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1036,11 +1049,12 @@ export function OregonCapitalistPage() {
                   style={{
                     padding: '8px 12px',
                     borderRadius: 8,
-                    border: '1px solid var(--paper-border)',
-                    background: canAfford ? 'var(--accent-sage)' : '#d9d0c4',
-                    color: canAfford ? '#fff' : 'var(--muted)',
+                    border: canAfford ? '1px solid #5A7A6A' : '1px solid #D9BDA5',
+                    background: canAfford ? '#8BAE9B' : '#E8E0D5',
+                    color: canAfford ? '#fff' : '#5C5348',
                     cursor: canAfford ? 'pointer' : 'not-allowed',
                     fontSize: 13,
+                    fontWeight: 600,
                     textAlign: 'left',
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -1052,7 +1066,7 @@ export function OregonCapitalistPage() {
               )
             })}
             {unlockableHexes.length === 0 && (
-              <p style={{ margin: 0, fontSize: 12, opacity: 0.7 }}>
+              <p style={{ margin: 0, fontSize: 12, color: '#2A1A0A', opacity: 0.9 }}>
                 Unlock adjacent hexes by collecting resources.
               </p>
             )}
@@ -1140,11 +1154,13 @@ export function OregonCapitalistPage() {
               >
             <div
               style={{
-                background: 'var(--parchment-bg)',
+                background: '#FFFBF0',
+                border: '1px solid #D9BDA5',
                 borderRadius: 12,
                 padding: 24,
                 maxWidth: 480,
-                color: 'var(--ink)',
+                color: '#2A1A0A',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
               }}
               onClick={(e) => e.stopPropagation()}
             >

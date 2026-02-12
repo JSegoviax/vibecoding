@@ -196,46 +196,12 @@ body:not(.no-grain-overlay)::before {
   text-transform: uppercase;
   letter-spacing: 2px;
 }
-/* Game Guide: high contrast on parchment so it doesn’t blend into the background */
 .game-page.parchment-page .game-guide-btn {
-  background: #B86A45 !important;
-  background-color: #B86A45 !important;
+  background: var(--cta) !important;
   color: #fff !important;
-  border: 1px solid rgba(0, 0, 0, 0.2) !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
 }
 .game-page.parchment-page .game-sidebar {
   border: 1px solid var(--paper-border);
-}
-
-/* Sidebar tabs (Resources / History): always readable; inactive = dark text + visible border */
-.game-sidebar .game-sidebar-tab {
-  color: #2A1A0A;
-  border: 1px solid #B89B7E;
-  background: rgba(42, 26, 10, 0.06);
-}
-.game-sidebar .game-sidebar-tab--active {
-  background: #C17D5B !important;
-  color: #fff !important;
-  border-color: #A86A45 !important;
-}
-
-/* Roll dice: always high-contrast so it’s obvious as the primary action */
-.roll-dice-btn {
-  background: var(--accent);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-}
-.game-page.parchment-page .roll-dice-btn {
-  background: #C17D5B !important;
-  background-color: #C17D5B !important;
-  color: #fff !important;
-  border: 1px solid rgba(0, 0, 0, 0.15) !important;
-}
-
-/* Resources section label inside sidebar: ensure it’s readable on parchment */
-.game-sidebar .player-resources-section-label {
-  color: #2A1A0A !important;
-  opacity: 0.9;
 }
 
 /* Sidebar title: ensure visible and not collapsed */
@@ -253,7 +219,7 @@ body:not(.no-grain-overlay)::before {
 /* Mobile-friendly layout and touch targets */
 @media (max-width: 768px) {
   #root {
-    padding: 6px 2px;
+    padding: 8px;
   }
 
   body {
@@ -261,8 +227,7 @@ body:not(.no-grain-overlay)::before {
   }
 
   .game-page {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
+    padding: 0 8px !important;
     max-width: 100% !important;
     width: 100% !important;
     overflow-x: hidden;
@@ -440,11 +405,11 @@ body.mode-select-view #root {
   margin-right: auto !important;
 }
 
-/* Mobile (iPhone SE 375px and similar): symmetric padding; card stays full width, content column centered inside */
+/* Mobile (Galaxy S8 360px, iPhone SE 375px, etc.): symmetric padding so card stays centered */
 @media (max-width: 430px) {
   .color-picker-screen {
-    padding-left: max(16px, env(safe-area-inset-left)) !important;
-    padding-right: max(16px, env(safe-area-inset-right)) !important;
+    padding-left: max(16px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) !important;
+    padding-right: max(16px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) !important;
   }
 
   .color-picker-screen .color-picker-card {
@@ -466,9 +431,16 @@ body.mode-select-view #root {
 }
 
 @media (max-width: 600px) {
+  .color-picker-screen {
+    justify-content: center !important;
+    align-items: center !important;
+  }
+
   .color-picker-screen .color-picker-card {
     padding-left: 16px !important;
     padding-right: 16px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
   }
 
   .color-picker-screen .color-picker-card h1 {

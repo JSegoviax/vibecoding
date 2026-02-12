@@ -59,6 +59,9 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMod
         left: 0,
         right: 0,
         bottom: 0,
+        width: '100%',
+        maxWidth: '100vw',
+        boxSizing: 'border-box',
         background: 'var(--parchment-bg, #F6EEE3)',
         display: 'flex',
         flexDirection: 'column',
@@ -67,6 +70,7 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMod
         zIndex: 10000,
         padding: 20,
         overflow: 'auto',
+        overflowX: 'hidden',
       }}
     >
       {onBack && (
@@ -102,6 +106,7 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMod
           maxWidth: 560,
           minHeight: 400,
           flexShrink: 0,
+          flexGrow: 0,
           boxSizing: 'border-box',
           overflow: 'visible',
           display: 'flex',
@@ -110,6 +115,7 @@ export function ColorSelection({ numPlayers, onColorsSelected, onBack, isVsAIMod
           paddingTop: 16,
           marginLeft: 'auto',
           marginRight: 'auto',
+          alignSelf: 'center',
         }}
       >
         <div className="color-picker-content" style={{ width: '100%', maxWidth: 320, marginLeft: 'auto', marginRight: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

@@ -50,13 +50,17 @@ const COLOR_TO_ROAD_BUILD: Record<string, { folder: string; prefix: string }> = 
 }
 const PLACEABLE_ROAD_FRAME_MS = 110
 
-/** Number token assets (2–12): use at native size, unaltered. */
-const NUMBER_TOKEN_WIDTH = 88
-const NUMBER_TOKEN_HEIGHT = 76
+/** Number token assets (2–12): 10% smaller than 78×66 (70×59). */
+const NUMBER_TOKEN_WIDTH = 70
+const NUMBER_TOKEN_HEIGHT = 59
 
 /** Water and desert hex assets: use at native size, unaltered (261×304). */
 const WATER_HEX_WIDTH = 261
 const WATER_HEX_HEIGHT = 304
+
+/** Robber token (raccoon) on the robber hex. Display size to fit in hex center. */
+const ROBBER_IMAGE_WIDTH = 62
+const ROBBER_IMAGE_HEIGHT = 46
 
 // Map player color image to city icon (built cities use these instead of the settlement/house image)
 const COLOR_TO_CITY_IMAGE: Record<string, string> = {
@@ -388,14 +392,14 @@ export function HexBoard({
               />
             )}
             {isRobberHex && (
-              <circle
-                cx={center.x}
-                cy={center.y}
-                r={20}
-                fill="#2d1f14"
-                stroke="#1a120c"
-                strokeWidth={2}
-                style={{ pointerEvents: 'none' }}
+              <image
+                href="/robber.png"
+                x={center.x - ROBBER_IMAGE_WIDTH / 2}
+                y={center.y - ROBBER_IMAGE_HEIGHT / 2}
+                width={ROBBER_IMAGE_WIDTH}
+                height={ROBBER_IMAGE_HEIGHT}
+                preserveAspectRatio="xMidYMid meet"
+                style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
               />
             )}
           </g>

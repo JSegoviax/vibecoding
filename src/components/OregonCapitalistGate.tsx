@@ -39,6 +39,7 @@ export function OregonCapitalistGate() {
 
   return (
     <div
+      className="parchment-page"
       style={{
         minHeight: '100vh',
         display: 'flex',
@@ -50,54 +51,81 @@ export function OregonCapitalistGate() {
         color: 'var(--ink)',
       }}
     >
-      <form
-        onSubmit={handleSubmit}
+      <div
+        className="paper-section"
         style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 12,
-          maxWidth: 280,
+          padding: 32,
+          borderRadius: 12,
+          maxWidth: 360,
           width: '100%',
         }}
       >
-        <label htmlFor="oc-password" style={{ fontSize: 14, opacity: 0.9 }}>
-          Enter password
-        </label>
-        <input
-          id="oc-password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="off"
-          autoFocus
+        <h1
           style={{
-            padding: '10px 14px',
-            borderRadius: 8,
-            border: '1px solid var(--paper-border)',
-            background: 'var(--surface)',
-            color: 'var(--text)',
-            fontSize: 16,
-          }}
-        />
-        {error && (
-          <span style={{ fontSize: 13, color: '#dc2626' }}>{error}</span>
-        )}
-        <button
-          type="submit"
-          style={{
-            padding: '10px 14px',
-            borderRadius: 8,
-            border: 'none',
-            background: 'var(--cta)',
-            color: '#fff',
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontSize: 14,
+            margin: '0 0 8px',
+            fontSize: 22,
+            fontFamily: '"Old Standard TT", Georgia, serif',
+            textTransform: 'uppercase',
+            letterSpacing: '1px',
+            color: 'var(--ink)',
           }}
         >
-          Unlock
-        </button>
-      </form>
+          Oregon Capitalist
+        </h1>
+        <p style={{ margin: '0 0 20px', fontSize: 14, opacity: 0.85 }}>
+          Enter the password to unlock.
+        </p>
+        <form
+          onSubmit={handleSubmit}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+            width: '100%',
+          }}
+        >
+          <label htmlFor="oc-password" style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>
+            Password
+          </label>
+          <input
+            id="oc-password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="off"
+            autoFocus
+            placeholder="Enter password"
+            style={{
+              padding: '12px 14px',
+              borderRadius: 8,
+              border: '1px solid var(--paper-border)',
+              background: '#fff',
+              color: 'var(--ink)',
+              fontSize: 16,
+            }}
+          />
+          {error && (
+            <span style={{ fontSize: 13, color: '#dc2626' }}>{error}</span>
+          )}
+          <button
+            type="submit"
+            style={{
+              marginTop: 4,
+              padding: '12px 20px',
+              borderRadius: 8,
+              border: 'none',
+              background: '#C17D5B',
+              color: '#fff',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontSize: 15,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+            }}
+          >
+            Unlock
+          </button>
+        </form>
+      </div>
     </div>
   )
 }

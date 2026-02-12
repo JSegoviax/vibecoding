@@ -83,8 +83,8 @@ interface PlayerResourcesProps {
   reliableHarvestHexOptions?: Array<{ hexId: string; label: string }>
   /** Oregon's Omens: Farm Swap — your producing hexes (terrain + number). */
   farmSwapMyHexOptions?: Array<{ hexId: string; label: string }>
-  /** Oregon's Omens: Farm Swap — opponent hexes available to swap with. */
-  farmSwapTargetHexOptions?: Array<{ hexId: string; label: string }>
+  /** Oregon's Omens: Farm Swap — opponent hexes available to swap with (grouped by owning player via optional ownerId/ownerName). */
+  farmSwapTargetHexOptions?: Array<{ hexId: string; label: string; ownerId?: number; ownerName?: string }>
   /** Oregon's Omens: number of cards drawn (in hands + discard) for "x/45 cards purchased" tally */
   omenCardsPurchased?: number
   /** Oregon's Omens: total deck size (45) for "x/45 cards purchased" tally */
@@ -244,15 +244,15 @@ export function PlayerResources({
             key={p.id}
             style={{
               marginBottom: 6,
-              padding: 8,
+              padding: 10,
               borderRadius: 8,
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid transparent',
+              background: 'rgba(255,251,240,0.6)',
+              border: '1px solid #D9BDA5',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <span style={{ fontWeight: 'bold', color: p.color, fontSize: 13 }}>{p.name}</span>
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>{p.victoryPoints} VP</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#2A1A0A' }}>{p.victoryPoints} VP</span>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {RESOURCE_TYPES.map(t => (
@@ -329,12 +329,12 @@ export function PlayerResources({
               </div>
             )}
             {showBuildControls && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8, padding: 10, borderRadius: 8, background: 'rgba(100,181,246,0.08)', border: '1px solid rgba(100,181,246,0.3)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8, padding: 10, borderRadius: 8, background: 'rgba(100,181,246,0.1)', border: '1px solid #94A3B8' }}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {lastDice != null && onEndTurn && !robberMode?.moving && !robberMode?.newHexId && (
                     <button
                       onClick={onEndTurn}
-                      style={{ padding: '6px 12px', background: 'var(--surface)', border: '1px solid var(--muted)', borderRadius: 6, color: 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                      style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #D9BDA5', background: '#E8E0D5', color: '#2A1A0A', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
                     >
                       End turn
                     </button>
@@ -343,7 +343,9 @@ export function PlayerResources({
                     const roadDisabled = p.roadsLeft <= 0 || canBuildRoad === false
                     const settlementDisabled = p.settlementsLeft <= 0 || canBuildSettlement === false
                     const cityDisabled = p.citiesLeft <= 0 || canBuildCity === false
-                    const greyStyle = { opacity: 0.5, cursor: 'not-allowed' as const }
+                    const activeBtn = { padding: '8px 14px', borderRadius: 8, border: '1px solid #A86A45', background: '#C17D5B', color: '#fff', cursor: 'pointer' as const, fontSize: 13, fontWeight: 600 }
+                    const selectedBtn = { padding: '8px 14px', borderRadius: 8, border: '1px solid #4A7AB8', background: 'rgba(100,181,246,0.35)', color: '#2A1A0A', cursor: 'pointer' as const, fontSize: 13, fontWeight: 600 }
+                    const disabledBtn = { padding: '8px 14px', borderRadius: 8, border: '1px solid #D9BDA5', background: '#E8E0D5', color: '#5C5348', cursor: 'not-allowed' as const, fontSize: 13, fontWeight: 600 }
                     return (
                       <>
                         <button
@@ -357,16 +359,7 @@ export function PlayerResources({
                             onSetErrorMessage?.(null)
                           }}
                           disabled={roadDisabled}
-                          style={{
-                            padding: '6px 12px',
-                            borderRadius: 6,
-                            border: '1px solid var(--muted)',
-                            background: buildMode === 'road' ? 'rgba(100,181,246,0.3)' : 'transparent',
-                            color: roadDisabled ? 'var(--muted)' : 'var(--text)',
-                            cursor: roadDisabled ? 'not-allowed' : 'pointer',
-                            fontSize: 12,
-                            ...(roadDisabled ? greyStyle : {}),
-                          }}
+                          style={roadDisabled ? disabledBtn : buildMode === 'road' ? selectedBtn : activeBtn}
                         >Road</button>
                         <button
                           onClick={() => {
@@ -379,16 +372,7 @@ export function PlayerResources({
                             onSetErrorMessage?.(null)
                           }}
                           disabled={settlementDisabled}
-                          style={{
-                            padding: '6px 12px',
-                            borderRadius: 6,
-                            border: '1px solid var(--muted)',
-                            background: buildMode === 'settlement' ? 'rgba(100,181,246,0.3)' : 'transparent',
-                            color: settlementDisabled ? 'var(--muted)' : 'var(--text)',
-                            cursor: settlementDisabled ? 'not-allowed' : 'pointer',
-                            fontSize: 12,
-                            ...(settlementDisabled ? greyStyle : {}),
-                          }}
+                          style={settlementDisabled ? disabledBtn : buildMode === 'settlement' ? selectedBtn : activeBtn}
                         >Settlement</button>
                         <button
                           onClick={() => {
@@ -401,16 +385,7 @@ export function PlayerResources({
                             onSetErrorMessage?.(null)
                           }}
                           disabled={cityDisabled}
-                          style={{
-                            padding: '6px 12px',
-                            borderRadius: 6,
-                            border: '1px solid var(--muted)',
-                            background: buildMode === 'city' ? 'rgba(100,181,246,0.3)' : 'transparent',
-                            color: cityDisabled ? 'var(--muted)' : 'var(--text)',
-                            cursor: cityDisabled ? 'not-allowed' : 'pointer',
-                            fontSize: 12,
-                            ...(cityDisabled ? greyStyle : {}),
-                          }}
+                          style={cityDisabled ? disabledBtn : buildMode === 'city' ? selectedBtn : activeBtn}
                         >City</button>
                         {oregonsOmensEnabled && (
                           <button
@@ -446,14 +421,14 @@ export function PlayerResources({
                         disabled={tradeDisabled}
                         onClick={() => { if (!tradeDisabled) { onSetTradeFormOpen?.(!tradeFormOpen); onSetErrorMessage?.(null) } }}
                         style={{
-                          padding: '6px 12px',
-                          borderRadius: 6,
-                          border: '1px solid var(--muted)',
-                          background: tradeFormOpen ? 'rgba(100,181,246,0.3)' : 'transparent',
-                          color: tradeDisabled ? 'var(--muted)' : 'var(--text)',
+                          padding: '8px 14px',
+                          borderRadius: 8,
+                          border: tradeDisabled ? '1px solid #D9BDA5' : tradeFormOpen ? '1px solid #4A7AB8' : '1px solid #A86A45',
+                          background: tradeDisabled ? '#E8E0D5' : tradeFormOpen ? 'rgba(100,181,246,0.35)' : '#C17D5B',
+                          color: tradeDisabled ? '#5C5348' : '#fff',
                           cursor: tradeDisabled ? 'not-allowed' : 'pointer',
-                          fontSize: 12,
-                          ...(tradeDisabled ? { opacity: 0.5 } : {}),
+                          fontSize: 13,
+                          fontWeight: 600,
                         }}
                       >Trade (4:1)</button>
                     )
@@ -462,28 +437,36 @@ export function PlayerResources({
                 {tradeFormOpen && onSetTradeGive && onSetTradeGet && tradeGive && tradeGet && (() => {
                   const tradeRate = getTradeRate && tradeGive !== 'desert' ? getTradeRate(tradeGive as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') : 4
                   return (
-                    <div style={{ padding: 10, borderRadius: 8, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--muted)' }}>
-                      <div style={{ fontSize: 12, marginBottom: 6 }}>
+                    <div style={{ padding: 12, borderRadius: 8, background: 'rgba(42,26,10,0.08)', border: '1px solid #D9BDA5' }}>
+                      <div style={{ fontSize: 13, marginBottom: 8, color: '#2A1A0A', fontWeight: 500 }}>
                         Give {tradeRate} of one, get 1 of another:
                         {tradeRate < 4 && (
-                          <span style={{ marginLeft: 6, color: '#fbbf24', fontSize: 11 }}>
+                          <span style={{ marginLeft: 6, color: '#B45309', fontSize: 11 }}>
                             (Harbor rate: {tradeRate}:1)
                           </span>
                         )}
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <label style={{ fontSize: 12 }}>
-                          Give {tradeRate}: <select value={tradeGive} onChange={e => onSetTradeGive(e.target.value as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')} style={{ marginLeft: 4, padding: 4, borderRadius: 4, background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--muted)' }}>
+                        <label style={{ fontSize: 13, color: '#2A1A0A' }}>
+                          Give {tradeRate}: <select value={tradeGive} onChange={e => onSetTradeGive(e.target.value as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')} style={{ marginLeft: 4, padding: '6px 8px', borderRadius: 6, background: '#FFFBF0', color: '#2A1A0A', border: '1px solid #D9BDA5', fontSize: 12 }}>
                             {RESOURCE_OPTIONS.filter(t => t !== 'desert').map(t => <option key={t} value={t}>{TERRAIN_LABELS[t]} ({p.resources[t] || 0})</option>)}
                           </select>
                         </label>
-                        <label style={{ fontSize: 12 }}>
-                          Get 1: <select value={tradeGet} onChange={e => onSetTradeGet(e.target.value as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')} style={{ marginLeft: 4, padding: 4, borderRadius: 4, background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--muted)' }}>
+                        <label style={{ fontSize: 13, color: '#2A1A0A' }}>
+                          Get 1: <select value={tradeGet} onChange={e => onSetTradeGet(e.target.value as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')} style={{ marginLeft: 4, padding: '6px 8px', borderRadius: 6, background: '#FFFBF0', color: '#2A1A0A', border: '1px solid #D9BDA5', fontSize: 12 }}>
                             {RESOURCE_OPTIONS.filter(t => t !== 'desert').map(t => <option key={t} value={t}>{TERRAIN_LABELS[t]}</option>)}
                           </select>
                         </label>
-                        <button onClick={() => { if ((p.resources[tradeGive] || 0) < tradeRate) { onSetErrorMessage?.(`Insufficient resources. Need ${tradeRate} ${TERRAIN_LABELS[tradeGive]} to trade.`) } else { onTrade?.(tradeGive as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', tradeGet as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') } }} style={{ padding: '4px 10px', borderRadius: 6, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 12 }}>Confirm</button>
-                        <button onClick={() => onSetTradeFormOpen?.(false)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--muted)', background: 'transparent', color: 'var(--text)', cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+                        <button
+                          type="button"
+                          onClick={() => { if ((p.resources[tradeGive] || 0) < tradeRate) { onSetErrorMessage?.(`Insufficient resources. Need ${tradeRate} ${TERRAIN_LABELS[tradeGive]} to trade.`) } else { onTrade?.(tradeGive as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', tradeGet as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') } }}
+                          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#C17D5B', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}
+                        >Confirm</button>
+                        <button
+                          type="button"
+                          onClick={() => onSetTradeFormOpen?.(false)}
+                          style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #D9BDA5', background: '#E8E0D5', color: '#2A1A0A', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                        >Cancel</button>
                       </div>
                     </div>
                   )
@@ -555,7 +538,7 @@ export function PlayerResources({
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.6)',
+            background: 'rgba(0,0,0,0.65)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -565,20 +548,21 @@ export function PlayerResources({
         >
           <div
             style={{
-              background: 'var(--surface)',
+              background: '#FFFBF0',
+              color: '#2A1A0A',
               borderRadius: 12,
               padding: 20,
               maxWidth: 320,
               width: '90%',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-              border: '1px solid var(--muted)',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(42,26,10,0.12)',
+              border: '1px solid rgba(42,26,10,0.2)',
             }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ fontSize: 16, fontWeight: 'bold', color: 'var(--text)', marginBottom: 8 }}>
+            <div style={{ fontSize: 16, fontWeight: 'bold', color: '#2A1A0A', marginBottom: 8 }}>
               {getOmenCardName(omensCardDetailId)}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: 'rgba(42,26,10,0.85)', marginBottom: 16, lineHeight: 1.4 }}>
               {getOmenCardEffectText(omensCardDetailId)}
             </div>
             {omensCardDetailId === 'foragers_bounty' && canPlayOmenCard?.(omensCardDetailId) && (
@@ -590,7 +574,7 @@ export function PlayerResources({
                       onPlayOmenCard?.('foragers_bounty', { resourceChoice: 'wood' })
                       setOmensCardDetailId(null)
                     }}
-                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: '#C17D5B', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, boxShadow: '0 2px 4px rgba(0,0,0,0.15)' }}
                   >
                     Gain 1 Wood
                   </button>
@@ -599,7 +583,7 @@ export function PlayerResources({
                       onPlayOmenCard?.('foragers_bounty', { resourceChoice: 'wheat' })
                       setOmensCardDetailId(null)
                     }}
-                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: '#C17D5B', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, boxShadow: '0 2px 4px rgba(0,0,0,0.15)' }}
                   >
                     Gain 1 Wheat
                   </button>
@@ -608,14 +592,14 @@ export function PlayerResources({
             )}
             {omensCardDetailId === 'skilled_prospector' && canPlayOmenCard?.(omensCardDetailId) && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Choose pair:</div>
+                <div style={{ fontSize: 12, color: 'rgba(42,26,10,0.8)', marginBottom: 8 }}>Choose pair:</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button
                     onClick={() => {
                       onPlayOmenCard?.('skilled_prospector', { resourceChoices: ['ore', 'wood'] })
                       setOmensCardDetailId(null)
                     }}
-                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: '#C17D5B', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, boxShadow: '0 2px 4px rgba(0,0,0,0.15)' }}
                   >
                     Ore + Wood
                   </button>
@@ -624,7 +608,7 @@ export function PlayerResources({
                       onPlayOmenCard?.('skilled_prospector', { resourceChoices: ['brick', 'wheat'] })
                       setOmensCardDetailId(null)
                     }}
-                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: '#C17D5B', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, boxShadow: '0 2px 4px rgba(0,0,0,0.15)' }}
                   >
                     Brick + Wheat
                   </button>
@@ -642,7 +626,7 @@ export function PlayerResources({
                         onPlayOmenCard?.('gold_rush', { goldRushChoice: t })
                         setOmensCardDetailId(null)
                       }}
-                      style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                      style={{ padding: '8px 14px', borderRadius: 8, background: '#C17D5B', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, boxShadow: '0 2px 4px rgba(0,0,0,0.15)' }}
                     >
                       {TERRAIN_LABELS[t]}
                     </button>
@@ -652,14 +636,14 @@ export function PlayerResources({
             )}
             {omensCardDetailId === 'sturdy_wagon_wheel' && canPlayOmenCard?.(omensCardDetailId) && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Next road costs 1 less:</div>
+                <div style={{ fontSize: 12, color: 'rgba(42,26,10,0.8)', marginBottom: 8 }}>Next road costs 1 less:</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button
                     onClick={() => {
                       onPlayOmenCard?.('sturdy_wagon_wheel', { roadDiscount: 'wood' })
                       setOmensCardDetailId(null)
                     }}
-                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: '#C17D5B', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, boxShadow: '0 2px 4px rgba(0,0,0,0.15)' }}
                   >
                     Wood
                   </button>
@@ -668,7 +652,7 @@ export function PlayerResources({
                       onPlayOmenCard?.('sturdy_wagon_wheel', { roadDiscount: 'brick' })
                       setOmensCardDetailId(null)
                     }}
-                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: '#C17D5B', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, boxShadow: '0 2px 4px rgba(0,0,0,0.15)' }}
                   >
                     Brick
                   </button>
@@ -686,7 +670,7 @@ export function PlayerResources({
                         onPlayOmenCard?.('reliable_harvest', { hexIdForHarvest: hexId })
                         setOmensCardDetailId(null)
                       }}
-                      style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                      style={{ padding: '8px 14px', borderRadius: 8, background: '#C17D5B', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, boxShadow: '0 2px 4px rgba(0,0,0,0.15)' }}
                     >
                       {label}
                     </button>
@@ -696,47 +680,73 @@ export function PlayerResources({
             )}
             {omensCardDetailId === 'farm_swap' && canPlayOmenCard?.(omensCardDetailId) && farmSwapMyHexOptions.length > 0 && farmSwapTargetHexOptions.length > 0 && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>Your hex to swap:</div>
+                <div style={{ fontSize: 12, color: 'rgba(42,26,10,0.8)', marginBottom: 6 }}>Your hex to swap:</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                  {farmSwapMyHexOptions.map(({ hexId, label }) => (
-                    <button
-                      key={hexId}
-                      onClick={() => setFarmSwapMyHexId(hexId)}
-                      style={{
-                        padding: '8px 14px',
-                        borderRadius: 8,
-                        border: farmSwapMyHexId === hexId ? '2px solid var(--accent)' : '1px solid var(--muted)',
-                        background: farmSwapMyHexId === hexId ? 'var(--accent)' : 'transparent',
-                        color: farmSwapMyHexId === hexId ? '#fff' : 'var(--text)',
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                  {farmSwapMyHexOptions.map(({ hexId, label }) => {
+                    const isSelected = farmSwapMyHexId === hexId
+                    return (
+                      <button
+                        key={hexId}
+                        onClick={() => setFarmSwapMyHexId(hexId)}
+                        style={{
+                          padding: '8px 14px',
+                          borderRadius: 8,
+                          border: isSelected ? '2px solid #C17D5B' : '1px solid rgba(42,26,10,0.35)',
+                          background: isSelected ? '#C17D5B' : '#F5EEE2',
+                          color: isSelected ? '#fff' : '#2A1A0A',
+                          cursor: 'pointer',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          boxShadow: isSelected ? '0 2px 4px rgba(0,0,0,0.18)' : 'none',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>Opponent hex to swap with:</div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {farmSwapTargetHexOptions.map(({ hexId, label }) => (
-                    <button
-                      key={hexId}
-                      onClick={() => setFarmSwapTargetHexId(hexId)}
-                      style={{
-                        padding: '8px 14px',
-                        borderRadius: 8,
-                        border: farmSwapTargetHexId === hexId ? '2px solid var(--accent)' : '1px solid var(--muted)',
-                        background: farmSwapTargetHexId === hexId ? 'var(--accent)' : 'transparent',
-                        color: farmSwapTargetHexId === hexId ? '#fff' : 'var(--text)',
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                <div style={{ fontSize: 12, color: 'rgba(42,26,10,0.8)', marginBottom: 6 }}>Opponent hex to swap with:</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {(() => {
+                    const grouped = new Map<string, typeof farmSwapTargetHexOptions>()
+                    for (const opt of farmSwapTargetHexOptions) {
+                      const ownerKey = opt.ownerName || (opt.ownerId != null ? `Player ${opt.ownerId}` : 'Other player(s)')
+                      const existing = grouped.get(ownerKey)
+                      if (existing) existing.push(opt)
+                      else grouped.set(ownerKey, [opt])
+                    }
+                    return Array.from(grouped.entries()).map(([ownerLabel, options]) => (
+                      <div key={ownerLabel}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(42,26,10,0.9)', marginBottom: 4 }}>
+                          {ownerLabel}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {options.map(({ hexId, label }) => {
+                            const isSelected = farmSwapTargetHexId === hexId
+                            return (
+                              <button
+                                key={hexId}
+                                onClick={() => setFarmSwapTargetHexId(hexId)}
+                                style={{
+                                  padding: '8px 14px',
+                                  borderRadius: 8,
+                                  border: isSelected ? '2px solid #C17D5B' : '1px solid rgba(42,26,10,0.35)',
+                                  background: isSelected ? '#C17D5B' : '#F5EEE2',
+                                  color: isSelected ? '#fff' : '#2A1A0A',
+                                  cursor: 'pointer',
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  boxShadow: isSelected ? '0 2px 4px rgba(0,0,0,0.18)' : 'none',
+                                }}
+                              >
+                                {label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  })()}
                 </div>
               </div>
             )}
@@ -754,13 +764,14 @@ export function PlayerResources({
                     style={{
                       padding: '8px 16px',
                       borderRadius: 8,
-                      background: farmSwapMyHexId && farmSwapTargetHexId ? 'var(--accent)' : 'var(--muted)',
+                      background: farmSwapMyHexId && farmSwapTargetHexId ? '#C17D5B' : '#B0A99E',
                       border: 'none',
                       color: '#fff',
                       cursor: farmSwapMyHexId && farmSwapTargetHexId ? 'pointer' : 'not-allowed',
                       fontSize: 13,
                       fontWeight: 600,
-                      opacity: farmSwapMyHexId && farmSwapTargetHexId ? 1 : 0.6,
+                      opacity: farmSwapMyHexId && farmSwapTargetHexId ? 1 : 0.7,
+                      boxShadow: farmSwapMyHexId && farmSwapTargetHexId ? '0 2px 6px rgba(0,0,0,0.2)' : 'none',
                     }}
                   >
                     Swap
@@ -770,11 +781,12 @@ export function PlayerResources({
                     style={{
                       padding: '8px 16px',
                       borderRadius: 8,
-                      border: '1px solid var(--muted)',
-                      background: 'transparent',
-                      color: 'var(--text)',
+                      border: '1px solid rgba(42,26,10,0.35)',
+                      background: '#E8E0D5',
+                      color: '#2A1A0A',
                       cursor: 'pointer',
                       fontSize: 13,
+                      fontWeight: 600,
                     }}
                   >
                     Cancel
@@ -795,13 +807,14 @@ export function PlayerResources({
                       style={{
                         padding: '8px 16px',
                         borderRadius: 8,
-                        background: canPlayOmenCard?.(omensCardDetailId) ? 'var(--accent)' : 'var(--muted)',
+                        background: canPlayOmenCard?.(omensCardDetailId) ? '#C17D5B' : '#B0A99E',
                         border: 'none',
                         color: '#fff',
                         cursor: canPlayOmenCard?.(omensCardDetailId) ? 'pointer' : 'not-allowed',
                         fontSize: 13,
                         fontWeight: 600,
-                        opacity: canPlayOmenCard?.(omensCardDetailId) ? 1 : 0.6,
+                        opacity: canPlayOmenCard?.(omensCardDetailId) ? 1 : 0.7,
+                        boxShadow: canPlayOmenCard?.(omensCardDetailId) ? '0 2px 6px rgba(0,0,0,0.2)' : 'none',
                       }}
                     >
                       Play card
@@ -812,11 +825,12 @@ export function PlayerResources({
                     style={{
                       padding: '8px 16px',
                       borderRadius: 8,
-                      border: '1px solid var(--muted)',
-                      background: 'transparent',
-                      color: 'var(--text)',
+                      border: '1px solid rgba(42,26,10,0.35)',
+                      background: '#E8E0D5',
+                      color: '#2A1A0A',
                       cursor: 'pointer',
                       fontSize: 13,
+                      fontWeight: 600,
                     }}
                   >
                     Close

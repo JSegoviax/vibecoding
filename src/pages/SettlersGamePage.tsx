@@ -868,7 +868,7 @@ export function SettlersGamePage() {
   return (
     <div className="game-page parchment-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px', paddingTop: '8px' }}>
       <GameGuide />
-      <p className="game-subtitle" style={{ textAlign: 'center', color: 'var(--muted)', marginTop: 0, marginBottom: '0.5rem' }}>
+      <p className="game-subtitle" style={{ textAlign: 'center', color: 'var(--text)', marginTop: 0, marginBottom: '0.5rem', padding: '8px 12px', borderRadius: 8, background: 'rgba(44,26,10,0.08)', border: '1px solid rgba(44,26,10,0.15)', display: 'inline-block', minWidth: 200 }}>
         {game.phase === 'setup' && !isSetupRoad && `Place a settlement`}
         {game.phase === 'setup' && isSetupRoad && `Place a road next to it`}
         {isPlaying && robberMode.moving && !omenRobberMode && `Rolled 7! Click a hex to move the robber`}
@@ -1110,7 +1110,7 @@ export function SettlersGamePage() {
           )}
         </div>
 
-        <aside className="game-sidebar" style={{ flex: '0 0 280px', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <aside className="game-sidebar" style={{ flex: '0 0 280px', minHeight: 0, maxHeight: 'calc(100vh - 24px)', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h1 className="game-title game-sidebar-title" style={{ margin: '0 0 8px', fontSize: '1.25rem', fontWeight: 700, flexShrink: 0, lineHeight: 1.3, color: 'var(--ink, var(--text))' }}>Settlers of Oregon</h1>
           {actualWinner && (
             <button
@@ -1129,13 +1129,14 @@ export function SettlersGamePage() {
                 fontWeight: 'bold', 
                 cursor: 'pointer',
                 marginBottom: 8,
-                width: '100%'
+                width: '100%',
+                flexShrink: 0,
               }}
             >
               New game
             </button>
           )}
-          <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+          <div style={{ display: 'flex', gap: 4, marginBottom: 4, flexShrink: 0 }}>
             <button
               type="button"
               className={`game-sidebar-tab ${sidebarTab === 'resources' ? 'game-sidebar-tab--active' : ''}`}
@@ -1167,6 +1168,7 @@ export function SettlersGamePage() {
               History
             </button>
           </div>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {sidebarTab === 'resources' && (
             <>
           <VictoryPointTracker
@@ -1282,7 +1284,16 @@ export function SettlersGamePage() {
                     const { targetHexIds } = getHexesForFarmSwap(game, actualPlayerId as PlayerId)
                     return targetHexIds.map(hexId => {
                       const h = game.hexes.find(x => x.id === hexId)
-                      return { hexId, label: h ? `${TERRAIN_LABELS[h.terrain]} (${h.number})` : hexId }
+                      const playersOnHex = getPlayersOnHex(game, hexId)
+                      const ownerIds = Array.from(playersOnHex).filter(pid => pid !== actualPlayerId)
+                      const ownerNames = ownerIds.map(pid => game.players[pid - 1]?.name ?? `Player ${pid}`)
+                      const ownerName = ownerNames.length ? ownerNames.join(', ') : 'Other player(s)'
+                      return {
+                        hexId,
+                        label: h ? `${TERRAIN_LABELS[h.terrain]} (${h.number})` : hexId,
+                        ownerId: ownerIds[0],
+                        ownerName,
+                      }
                     })
                   })()
                 : undefined
@@ -1295,17 +1306,18 @@ export function SettlersGamePage() {
           )}
 
           {game.phase === 'setup' && (
-            <p style={{ fontSize: 14, color: 'var(--muted)' }}>
+            <p style={{ fontSize: 14, color: 'var(--text)', padding: '8px 10px', borderRadius: 8, background: 'rgba(44,26,10,0.08)', border: '1px solid rgba(44,26,10,0.15)' }}>
               {isAITurn ? `${actualCurrentPlayer?.name ?? 'AI'} is placing…` : !isSetupRoad ? 'Click an empty spot to place a settlement.' : 'Click an edge connected to your settlement to place a road.'}
             </p>
           )}
 
           {isPlaying && isAITurn && (
-            <p style={{ fontSize: 14, color: 'var(--muted)' }}>
+            <p style={{ fontSize: 14, color: 'var(--text)', padding: '8px 10px', borderRadius: 8, background: 'rgba(44,26,10,0.08)', border: '1px solid rgba(44,26,10,0.15)' }}>
               {game.lastDice ? `${actualCurrentPlayer?.name ?? 'AI'} rolled ${game.lastDice[0]} + ${game.lastDice[1]} = ${game.lastDice[0] + game.lastDice[1]}` : `${actualCurrentPlayer?.name ?? 'AI'} is thinking…`}
             </p>
           )}
 
+          </div>
         </aside>
         </div>
       </div>

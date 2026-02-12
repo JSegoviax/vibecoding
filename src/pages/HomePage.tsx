@@ -83,11 +83,10 @@ export function HomePage() {
           {secretRevealed && (
             <Link
               to="/games/oregon-capitalist"
+              className="home-cta"
               style={{
                 display: 'block',
                 padding: '16px 24px',
-                background: 'var(--accent-sage)',
-                color: '#fff',
                 fontWeight: 600,
                 borderRadius: 12,
                 textDecoration: 'none',
