@@ -732,6 +732,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
               History
             </button>
           </div>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {sidebarTab === 'resources' && (
             <>
           <VictoryPointTracker
