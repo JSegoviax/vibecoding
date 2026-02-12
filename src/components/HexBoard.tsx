@@ -50,6 +50,14 @@ const COLOR_TO_ROAD_BUILD: Record<string, { folder: string; prefix: string }> = 
 }
 const PLACEABLE_ROAD_FRAME_MS = 110
 
+/** Number token assets (2–12): use at native size, unaltered. */
+const NUMBER_TOKEN_WIDTH = 88
+const NUMBER_TOKEN_HEIGHT = 76
+
+/** Water and desert hex assets: use at native size, unaltered (261×304). */
+const WATER_HEX_WIDTH = 261
+const WATER_HEX_HEIGHT = 304
+
 // Map player color image to city icon (built cities use these instead of the settlement/house image)
 const COLOR_TO_CITY_IMAGE: Record<string, string> = {
   '/player-teal.png': '/city-teal.png',
@@ -224,12 +232,12 @@ export function HexBoard({
             <g clipPath={`url(#water-clip-${q},${r})`}>
               <image
                 href="/water-hex.png"
-                x={center.x - HEX_R * 2}
-                y={center.y - HEX_R * 2}
-                width={HEX_R * 4}
-                height={HEX_R * 4}
-                preserveAspectRatio="none"
-                style={{ imageRendering: 'pixelated' }}
+                x={center.x - WATER_HEX_WIDTH / 2}
+                y={center.y - WATER_HEX_HEIGHT / 2}
+                width={WATER_HEX_WIDTH}
+                height={WATER_HEX_HEIGHT}
+                preserveAspectRatio="xMidYMid meet"
+                style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
               />
             </g>
             <path
@@ -359,32 +367,25 @@ export function HexBoard({
               <g clipPath={`url(#hex-clip-${h.id})`}>
                 <image
                   href="/desert-hex.png"
-                  x={center.x - HEX_R * 2}
-                  y={center.y - HEX_R * 2}
-                  width={HEX_R * 4}
-                  height={HEX_R * 4}
-                  preserveAspectRatio="none"
+                  x={center.x - HEX_R}
+                  y={center.y - HEX_R}
+                  width={HEX_R * 2}
+                  height={HEX_R * 2}
+                  preserveAspectRatio="xMidYMid meet"
                   style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
                 />
               </g>
             )}
             {showNumberTokens && h.number != null && (
-              <text
-                x={center.x}
-                y={center.y}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fill={h.number === 6 || h.number === 8 ? '#b91c1c' : '#1a1a1a'}
-                fontWeight="bold"
-                fontSize={47.5}
-                stroke="#ffffff"
-                strokeWidth={4}
-                paintOrder="stroke"
-                filter="url(#hex-number-shadow)"
-                style={{ pointerEvents: 'none' }}
-              >
-                {h.number}
-              </text>
+              <image
+                href={`/number-tokens/${h.number}.png`}
+                x={center.x - NUMBER_TOKEN_WIDTH / 2}
+                y={center.y - NUMBER_TOKEN_HEIGHT / 2}
+                width={NUMBER_TOKEN_WIDTH}
+                height={NUMBER_TOKEN_HEIGHT}
+                preserveAspectRatio="xMidYMid meet"
+                style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
+              />
             )}
             {isRobberHex && (
               <circle
