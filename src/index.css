@@ -269,6 +269,12 @@ body:not(.no-grain-overlay)::before {
     justify-content: center;
   }
 
+  /* Zoomable board: allow horizontal and vertical scroll for pan when zoomed */
+  .zoomable-board.game-board {
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+  }
+
   .game-board svg {
     width: 100% !important;
     max-width: 100% !important;
