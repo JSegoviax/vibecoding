@@ -15,6 +15,8 @@ export interface PlayerForResources {
   id: number
   name: string
   color: string
+  /** Path to player's house/settlement image (e.g. /player-teal.png) for build-cost icons */
+  colorImage?: string
   victoryPoints: number
   resources: Record<Terrain, number>
   settlementsLeft: number
@@ -527,6 +529,7 @@ export function PlayerResources({
                 oregonsOmensEnabled={oregonsOmensEnabled}
                 cardsPurchased={oregonsOmensEnabled ? omenCardsPurchased : undefined}
                 totalOmenCards={oregonsOmensEnabled ? omenCardsTotal : undefined}
+                playerColorImage={p.colorImage}
               />
             )}
           </div>

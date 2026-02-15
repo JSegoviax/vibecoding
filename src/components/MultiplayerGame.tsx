@@ -87,6 +87,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
   const [omenRobberMode, setOmenRobberMode] = useState<{ cardId: string; step: 'hex' | 'player'; hexId?: string; playersOnHex?: Set<number> } | null>(null)
   const [diceRolling, setDiceRolling] = useState<{ dice1: number; dice2: number } | null>(null)
   const [sidebarTab, setSidebarTab] = useState<'resources' | 'history'>('resources')
+  const [dismissedInstruction, setDismissedInstruction] = useState<string | null>(null)
   const gameWonTrackedRef = useRef(false)
 
   useEffect(() => {
@@ -461,19 +462,22 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     return () => clearTimeout(t)
   }, [game?.lastOmenDebuffDrawn, game?.lastOmenBuffPlayed, game?.lastPantryNegation, game?.lastRobbery, errorMessage, playerId])
 
+  const currentInstruction =
+    game.phase === 'setup' && !isSetupRoad ? 'Place a settlement' :
+    game.phase === 'setup' && isSetupRoad ? 'Place a road next to it' :
+    isPlaying && robberMode.moving && !omenRobberMode ? 'Rolled 7! Click a hex to move the robber' :
+    isPlaying && robberMode.newHexId && robberMode.playersToRob.size > 0 ? 'Select a player to rob' :
+    isPlaying && omenRobberMode?.step === 'hex' ? "Robber's Regret: click a hex to move the robber" :
+    isPlaying && omenRobberMode?.step === 'player' ? "Robber's Regret: select a player to rob (or skip)" :
+    isPlaying && !robberMode.moving && !robberMode.newHexId && !omenRobberMode
+      ? (isMyTurn ? 'Roll dice, then build or end turn' : `Waiting for Player ${game.currentPlayerIndex + 1}…`)
+      : winner ? `${winner.name} wins with ${winner.victoryPoints} VP!` : null
+
+  const showInstructionModal = currentInstruction != null && currentInstruction !== dismissedInstruction
+
   return (
     <div className="game-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
       <GameGuide />
-      <p className="game-subtitle" style={{ textAlign: 'center', color: 'var(--text)', marginTop: 0, padding: '8px 12px', borderRadius: 8, background: 'rgba(44,26,10,0.08)', border: '1px solid rgba(44,26,10,0.15)', display: 'inline-block', minWidth: 200 }}>
-        {game.phase === 'setup' && !isSetupRoad && `Place a settlement`}
-        {game.phase === 'setup' && isSetupRoad && `Place a road next to it`}
-        {isPlaying && robberMode.moving && !omenRobberMode && `Rolled 7! Click a hex to move the robber`}
-        {isPlaying && robberMode.newHexId && robberMode.playersToRob.size > 0 && `Select a player to rob`}
-        {isPlaying && omenRobberMode?.step === 'hex' && `Robber's Regret: click a hex to move the robber`}
-        {isPlaying && omenRobberMode?.step === 'player' && `Robber's Regret: select a player to rob (or skip)`}
-        {isPlaying && !robberMode.moving && !robberMode.newHexId && !omenRobberMode && (isMyTurn ? 'Roll dice, then build or end turn' : `Waiting for Player ${game.currentPlayerIndex + 1}…`)}
-        {winner && `${winner.name} wins with ${winner.victoryPoints} VP!`}
-      </p>
 
       {isPlaying && omenRobberMode?.step === 'player' && omenRobberMode.hexId && (
         <div style={{ margin: '0 auto 16px', maxWidth: 400, padding: 12, borderRadius: 8, background: 'rgba(139,69,19,0.15)', border: '1px solid rgba(139,69,19,0.4)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -698,7 +702,63 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
           )}
         </div>
 
-        <aside className="game-sidebar" style={{ flex: '0 0 280px', minHeight: 0, maxHeight: 'calc(100vh - 24px)', background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <aside className="game-sidebar" style={{ position: 'relative', flex: '0 0 280px', minHeight: 0, background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {showInstructionModal && (
+            <div
+              role="dialog"
+              aria-live="polite"
+              className="game-toast-enter game-instruction-modal"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                zIndex: 10,
+                padding: '12px 16px',
+                borderRadius: 10,
+                background: '#FFFBF0',
+                border: '1px solid rgba(42,26,10,0.2)',
+                color: '#2A1A0A',
+                fontSize: 15,
+                fontWeight: 600,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                boxSizing: 'border-box',
+              }}
+            >
+              <span style={{ flex: 1, minWidth: 0, textAlign: 'center', wordWrap: 'break-word', overflowWrap: 'break-word' }}>
+                {currentInstruction}
+              </span>
+              <button
+                type="button"
+                onClick={() => setDismissedInstruction(currentInstruction)}
+                aria-label="Dismiss"
+                style={{
+                  flexShrink: 0,
+                  width: 36,
+                  height: 36,
+                  minWidth: 36,
+                  minHeight: 36,
+                  padding: 0,
+                  border: 'none',
+                  borderRadius: 8,
+                  background: 'rgba(42,26,10,0.12)',
+                  color: '#2A1A0A',
+                  cursor: 'pointer',
+                  fontSize: 20,
+                  lineHeight: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                ×
+              </button>
+            </div>
+          )}
           <h1 className="game-title game-sidebar-title" style={{ margin: '0 0 8px', fontSize: '1.25rem', fontWeight: 700, flexShrink: 0, lineHeight: 1.3, color: 'var(--ink, var(--text))' }}>Settlers of Oregon (Multiplayer)</h1>
           <div style={{ display: 'flex', gap: 4, marginBottom: 4, flexShrink: 0 }}>
             <button
@@ -732,18 +792,9 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
               History
             </button>
           </div>
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="game-sidebar-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {sidebarTab === 'resources' && (
             <>
-          <VictoryPointTracker
-            vertices={game.vertices}
-            players={game.players}
-            activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
-            phase={game.phase}
-            longestRoadPlayerId={game.longestRoadPlayerId}
-            oregonsOmensEnabled={isOmensEnabled(game)}
-            omenHandPlayerId={game.omenHandPlayerId ?? null}
-          />
           <PlayerResources
             players={game.players}
             activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
@@ -852,6 +903,15 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
                   })()
                 : undefined
             }
+          />
+          <VictoryPointTracker
+            vertices={game.vertices}
+            players={game.players}
+            activePlayerIndex={game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex}
+            phase={game.phase}
+            longestRoadPlayerId={game.longestRoadPlayerId}
+            oregonsOmensEnabled={isOmensEnabled(game)}
+            omenHandPlayerId={game.omenHandPlayerId ?? null}
           />
             </>
           )}

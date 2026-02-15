@@ -4,6 +4,25 @@ import { getBuildCost } from '../game/logic'
 import { AnimatedResourceIcon } from './AnimatedResourceIcon'
 import type { Terrain } from '../game/types'
 
+// Match HexBoard: player colorImage -> road/city assets (so Resources module uses same game icons)
+const COLOR_TO_ROAD_IMAGE: Record<string, string> = {
+  '/player-teal.png': '/road-teal.png',
+  '/player-pink.png': '/road-pink.png',
+  '/player-purple.png': '/road-purple.png',
+  '/player-green.png': '/road-green2.png',
+  '/player-green2.png': '/road-green.png',
+  '/player-white.png': '/road-white.png',
+}
+const COLOR_TO_CITY_IMAGE: Record<string, string> = {
+  '/player-teal.png': '/city-teal.png',
+  '/player-pink.png': '/city-pink.png',
+  '/player-purple.png': '/city-purple.png',
+  '/player-green.png': '/city-green2.png',
+  '/player-green2.png': '/city-green.png',
+  '/player-white.png': '/city-white.png',
+}
+const DEFAULT_COLOR_IMAGE = '/player-teal.png'
+
 function TerrainIcon({ type, size = 12 }: { type: Terrain; size?: number }) {
   const style = { width: size, height: size, flexShrink: 0, imageRendering: 'pixelated' as const }
   if (type === 'wheat') return <AnimatedResourceIcon image1="/wheat-icon.png" image2="/wheat-icon.png" alt="Wheat" size={size} />
@@ -51,19 +70,18 @@ function CostLine({
   )
 }
 
-/** Structure icon for Road / Settlement / City */
-function StructureIcon({ type }: { type: 'road' | 'settlement' | 'city' }) {
+/** Structure icon for Road / Settlement / City. When colorImage provided, uses that player's game assets. */
+function StructureIcon({ type, colorImage }: { type: 'road' | 'settlement' | 'city'; colorImage?: string }) {
+  const playerImage = colorImage ?? DEFAULT_COLOR_IMAGE
+  const roadImage = COLOR_TO_ROAD_IMAGE[playerImage] ?? COLOR_TO_ROAD_IMAGE[DEFAULT_COLOR_IMAGE]
+  const cityImage = COLOR_TO_CITY_IMAGE[playerImage] ?? COLOR_TO_CITY_IMAGE[DEFAULT_COLOR_IMAGE]
+
   if (type === 'road') {
     return (
-      <span
-        style={{
-          display: 'inline-block',
-          width: 20,
-          height: 8,
-          borderRadius: 2,
-          background: 'var(--muted)',
-          opacity: 0.9,
-        }}
+      <img
+        src={roadImage}
+        alt=""
+        style={{ width: 20, height: 20, objectFit: 'contain', imageRendering: 'pixelated' }}
         title="Road"
       />
     )
@@ -71,19 +89,18 @@ function StructureIcon({ type }: { type: 'road' | 'settlement' | 'city' }) {
   if (type === 'settlement') {
     return (
       <img
-        src="/settlement-spot-gray.png"
+        src={playerImage}
         alt=""
-        style={{ width: 20, height: 20, imageRendering: 'pixelated' }}
+        style={{ width: 20, height: 20, objectFit: 'contain', imageRendering: 'pixelated' }}
         title="Settlement"
       />
     )
   }
-  // city: use same house icon, slightly larger
   return (
     <img
-      src="/settlement-spot-gray.png"
+      src={cityImage}
       alt=""
-      style={{ width: 24, height: 24, imageRendering: 'pixelated' }}
+      style={{ width: 24, height: 24, objectFit: 'contain', imageRendering: 'pixelated' }}
       title="City"
     />
   )
@@ -163,6 +180,8 @@ export function BuildCostsInline({
   oregonsOmensEnabled,
   cardsPurchased,
   totalOmenCards,
+  /** When provided, Road / Settlement / City icons use this player's game assets (matches board). */
+  playerColorImage,
 }: {
   playerResources: Record<Terrain, number>
   roadCost?: Partial<Record<Terrain, number>>
@@ -174,6 +193,8 @@ export function BuildCostsInline({
   oregonsOmensEnabled?: boolean
   cardsPurchased?: number
   totalOmenCards?: number
+  /** Player's color image path (e.g. /player-teal.png) so structure icons match player color */
+  playerColorImage?: string
 }) {
   const baseRoad = getBuildCost('road')
   const baseSettlement = getBuildCost('settlement')
@@ -218,21 +239,21 @@ export function BuildCostsInline({
     <div style={{ marginTop: 10 }}>
       <div style={sectionStyle}>
         <div style={titleStyle}>
-          <StructureIcon type="road" />
+          <StructureIcon type="road" colorImage={playerColorImage} />
           <span>Road</span>
         </div>
         <CostRow cost={roadCost} debuffMap={debuffSources?.road} />
       </div>
       <div style={sectionStyle}>
         <div style={titleStyle}>
-          <StructureIcon type="settlement" />
+          <StructureIcon type="settlement" colorImage={playerColorImage} />
           <span>Settlement</span>
         </div>
         <CostRow cost={settlementCost} debuffMap={debuffSources?.settlement} />
       </div>
       <div style={sectionStyle}>
         <div style={titleStyle}>
-          <StructureIcon type="city" />
+          <StructureIcon type="city" colorImage={playerColorImage} />
           <span>City</span>
         </div>
         <CostRow cost={cityCost} debuffMap={debuffSources?.city} />

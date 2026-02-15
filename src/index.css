@@ -205,6 +205,9 @@ body:not(.no-grain-overlay)::before {
   background: var(--cta) !important;
   color: #fff !important;
 }
+.game-page .game-sidebar {
+  max-height: calc(100vh - 24px);
+}
 .game-page.parchment-page .game-sidebar {
   border: 1px solid var(--paper-border);
 }
@@ -231,11 +234,15 @@ body:not(.no-grain-overlay)::before {
     overflow-x: hidden;
   }
 
+  /* Make the game page the scroll container so content can scroll (body/document scroll is unreliable in device emulation). */
   .game-page {
     padding: 0 8px !important;
     max-width: 100% !important;
     width: 100% !important;
-    overflow-x: hidden;
+    max-height: 100vh !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
   }
 
   .game-layout {
@@ -269,13 +276,26 @@ body:not(.no-grain-overlay)::before {
     max-height: 40vh !important;
   }
 
-  /* Modules (VP, Resources, etc.) below the board */
+  /* Modules (VP, Resources, etc.) below the board. Sidebar grows with content so the page scrolls. */
   .game-sidebar {
     order: 2;
     flex: 0 0 auto !important;
     width: 100% !important;
     max-width: 100% !important;
+    max-height: none !important;
     min-width: 0 !important;
+  }
+
+  /* Let the scroll wrapper grow with content so the sidebar isn't a 0-height trap; the document scrolls. */
+  .game-sidebar .game-sidebar-scroll {
+    flex: none !important;
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Bottom padding so the last content is reachable when scrolling */
+  .game-page {
+    padding-bottom: 24px !important;
   }
 
   /* Touch-friendly tap targets (min 44px) */
@@ -299,6 +319,13 @@ body:not(.no-grain-overlay)::before {
 
   .game-subtitle {
     font-size: 0.9rem !important;
+  }
+
+  /* Instruction modal (sits over sidebar title): compact on small screens */
+  .game-instruction-modal {
+    padding: 14px 16px !important;
+    font-size: 14px !important;
+    box-sizing: border-box !important;
   }
 }
 
