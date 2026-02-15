@@ -17,6 +17,7 @@ function parseGameId(input: string): string | null {
 export function MultiplayerLobby({ onBack }: { onBack: () => void }) {
   const [numPlayers, setNumPlayers] = useState<2 | 3 | 4>(2)
   const [oregonsOmens, setOregonsOmens] = useState(false)
+  const [createNickname, setCreateNickname] = useState('')
   const [joinGameId, setJoinGameId] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -28,14 +29,14 @@ export function MultiplayerLobby({ onBack }: { onBack: () => void }) {
       const { supabase } = await import('../lib/supabase')
       const { data: game, error: insertGameError } = await supabase
         .from('games')
-        .insert({ num_players: numPlayers, phase: 'lobby', oregons_omens: oregonsOmens })
+        .insert({ num_players: numPlayers, phase: 'lobby', oregons_omens: oregonsOmens, is_public: true })
         .select('id')
         .single()
       if (insertGameError) throw insertGameError
       const id = (game as { id: string }).id
       const { error: insertPlayerError } = await supabase
         .from('game_players')
-        .insert({ game_id: id, player_index: 0, nickname: 'Player 1' })
+        .insert({ game_id: id, player_index: 0, nickname: createNickname.trim() || 'Player 1' })
       if (insertPlayerError) throw insertPlayerError
       localStorage.setItem(STORAGE_KEY(id), JSON.stringify({ playerIndex: 0 }))
       trackEvent('multiplayer_game_created', 'multiplayer', `players_${numPlayers}`)
@@ -122,6 +123,24 @@ export function MultiplayerLobby({ onBack }: { onBack: () => void }) {
               />
               <span>Oregon&apos;s Omens (card variant)</span>
             </label>
+            <input
+              type="text"
+              placeholder="Your name (optional)"
+              value={createNickname}
+              onChange={e => setCreateNickname(e.target.value)}
+              maxLength={32}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                padding: '10px 12px',
+                marginBottom: 12,
+                borderRadius: 8,
+                border: '1px solid var(--paper-border)',
+                background: 'var(--parchment-bg)',
+                color: 'var(--ink)',
+                fontSize: 14,
+              }}
+            />
             <button
               type="button"
               disabled={creating}

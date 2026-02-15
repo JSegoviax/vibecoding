@@ -52,6 +52,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [myPlayerIndex, setMyPlayerIndex] = useState<number | null>(() => getInitialPlayerIndex(gameId))
   const [joining, setJoining] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [joinNickname, setJoinNickname] = useState('')
 
   // SEO: set document title for multiplayer /game/:id route
   useEffect(() => {
@@ -167,7 +168,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     const { error: e } = await supabase.from('game_players').insert({
       game_id: gameId,
       player_index: playerIndex,
-      nickname: `Player ${playerIndex + 1}`,
+      nickname: joinNickname.trim() || `Player ${playerIndex + 1}`,
     })
     setJoining(false)
     if (e) {
@@ -181,7 +182,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }
 
   const startGame = async () => {
-    if (!game || game.phase !== 'lobby' || myPlayerIndex !== 0 || players.length < 2) return
+    if (!game || game.phase !== 'lobby' || players.length < 2) return
     setStarting(true)
     const numPlayers = game.num_players as 2 | 3 | 4
     const colors = defaultColors.slice(0, numPlayers)
@@ -290,13 +291,31 @@ export function GameRoom({ gameId }: { gameId: string }) {
         <ul style={{ margin: 0, paddingLeft: 20 }}>
           {players.map(p => (
             <li key={p.id} style={{ marginBottom: 6 }}>
-              Player {p.player_index + 1}
+              {p.nickname || `Player ${p.player_index + 1}`}
               {myPlayerIndex === p.player_index && <span style={{ marginLeft: 8, color: 'var(--accent)', fontSize: 12 }}>(you)</span>}
             </li>
           ))}
         </ul>
         {emptySeats.length > 0 && (
           <div style={{ marginTop: 16 }}>
+            <input
+              type="text"
+              placeholder="Your name (optional)"
+              value={joinNickname}
+              onChange={e => setJoinNickname(e.target.value)}
+              maxLength={32}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                padding: '8px 12px',
+                marginBottom: 8,
+                borderRadius: 8,
+                border: '1px solid rgba(255,255,255,0.2)',
+                background: 'rgba(0,0,0,0.2)',
+                color: 'var(--text)',
+                fontSize: 14,
+              }}
+            />
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Join as:</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {emptySeats.map(i => (

@@ -53,6 +53,15 @@ body.oregon-capitalist-active #root {
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* Gateway: subtle infinite pulse for primary "Play vs AI" button */
+@keyframes mode-cta-pulse {
+  0%, 100% { box-shadow: 0 4px 14px rgba(0,0,0,0.15); }
+  50% { box-shadow: 0 4px 20px rgba(213,130,88,0.4); }
+}
+.mode-btn-cta-pulse {
+  animation: mode-cta-pulse 2s ease-in-out infinite;
+}
+
 /* Game toasts: modals above board, fade in and fade out */
 @keyframes game-toast-fade-in {
   from { opacity: 0; transform: translateY(-8px); }

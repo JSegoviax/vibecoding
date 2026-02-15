@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { HexBoard } from '../components/HexBoard'
 import { ZoomableBoard } from '../components/ZoomableBoard'
 import { PlayerResources } from '../components/PlayerResources'
@@ -61,6 +61,9 @@ import type { PlayOmenTargets } from '../game/omens'
 import type { GameState, PlayerId } from '../game/types'
 import { TERRAIN_LABELS } from '../game/terrain'
 import { trackEvent } from '../utils/analytics'
+import { SETTLERS_PATH } from '../config/games'
+
+const SETTLERS_LOBBY_PATH = `${SETTLERS_PATH}/lobby`
 
 const SETUP_ORDER: Record<number, number[]> = {
   2: [0, 1, 1, 0],
@@ -85,6 +88,7 @@ function updateGameState(g: GameState | null, updater: (state: GameState) => Gam
 type StartScreen = 'mode' | 'ai-count' | 'colors' | 'multiplayer' | 'game'
 
 export function SettlersGamePage() {
+  const navigate = useNavigate()
   const [startScreen, setStartScreen] = useState<StartScreen>('mode')
   const [, setSelectedColors] = useState<string[]>([])
   const [numPlayers, setNumPlayers] = useState<2 | 3 | 4>(2)
@@ -531,7 +535,7 @@ export function SettlersGamePage() {
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', marginTop: 28 }}>
               <button
                 type="button"
-                className="mode-btn mode-btn-cta"
+                className="mode-btn mode-btn-cta mode-btn-cta-pulse"
                 onClick={() => {
                   trackEvent('play_vs_ai_clicked', 'navigation', 'mode_select')
                   setStartScreen('ai-count')
@@ -555,7 +559,7 @@ export function SettlersGamePage() {
                 className="mode-btn mode-btn-sage"
                 onClick={() => {
                   trackEvent('multiplayer_clicked', 'navigation', 'mode_select')
-                  setStartScreen('multiplayer')
+                  navigate(SETTLERS_LOBBY_PATH)
                 }}
                 style={{
                   padding: '16px 32px',
@@ -572,11 +576,11 @@ export function SettlersGamePage() {
                 Multiplayer
               </button>
             </div>
-            <p style={{ marginTop: 16, marginBottom: 0, fontSize: 14, color: 'var(--ink)', opacity: 0.8 }}>
-              <Link to="/games" style={{ color: 'var(--cta)', textDecoration: 'none', marginRight: 16 }}>← Games</Link>
-              <Link to="/how-to-play" style={{ color: 'var(--cta)', textDecoration: 'none', marginRight: 16 }}>How to play</Link>
-              <Link to="/about" style={{ color: 'var(--cta)', textDecoration: 'none', marginRight: 16 }}>About</Link>
-              <Link to="/faq" style={{ color: 'var(--cta)', textDecoration: 'none' }}>FAQ</Link>
+            <p style={{ marginTop: 16, marginBottom: 0, fontSize: 14, color: 'var(--ink)', opacity: 0.65 }}>
+              <Link to="/games" style={{ color: 'var(--muted, #6b7280)', textDecoration: 'none', marginRight: 16 }}>Games</Link>
+              <Link to="/how-to-play" style={{ color: 'var(--muted, #6b7280)', textDecoration: 'none', marginRight: 16 }}>How to play</Link>
+              <Link to="/about" style={{ color: 'var(--muted, #6b7280)', textDecoration: 'none', marginRight: 16 }}>About</Link>
+              <Link to="/faq" style={{ color: 'var(--muted, #6b7280)', textDecoration: 'none' }}>FAQ</Link>
             </p>
           </main>
         </div>

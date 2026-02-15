@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from '
 import { HomePage } from './pages/HomePage'
 import { GamesIndexPage } from './pages/GamesIndexPage'
 import { SettlersGamePage } from './pages/SettlersGamePage'
+import { LobbyBrowserPage } from './pages/LobbyBrowserPage'
 import { OregonCapitalistGate } from './components/OregonCapitalistGate'
 import { SETTLERS_PATH } from './config/games'
 
@@ -75,6 +76,7 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/games" element={<GamesIndexPage />} />
         <Route path="/games/settlers-of-oregon" element={<SettlersGamePage />} />
+        <Route path="/games/settlers-of-oregon/lobby" element={<LobbyBrowserPage />} />
         <Route
           path="/games/settlers-of-oregon/game/:gameId"
           element={
