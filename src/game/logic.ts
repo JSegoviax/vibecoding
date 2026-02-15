@@ -471,4 +471,3 @@ export function updateOmenHand(state: GameState): void {
   }
   state.omenHandPlayerId = newOmenHandPlayerId
 }
-

@@ -67,6 +67,8 @@ const SETUP_ORDER: Record<number, number[]> = {
   4: [0, 1, 2, 3, 3, 2, 1, 0],
 }
 
+const SINGLE_PLAYER_STORAGE_KEY = 'settlers-sp-game'
+
 function getSetupPlayerIndex(state: { phase: string; setupPlacements: number; players: unknown[] }): number {
   const n = state.players.length
   const order = SETUP_ORDER[n as 2 | 3 | 4] ?? SETUP_ORDER[2]
@@ -96,6 +98,7 @@ export function SettlersGamePage() {
   const [omenRobberMode, setOmenRobberMode] = useState<{ cardId: string; step: 'hex' | 'player'; hexId?: string; playersOnHex?: Set<number> } | null>(null)
   const [diceRolling, setDiceRolling] = useState<{ dice1: number; dice2: number } | null>(null)
   const [sidebarTab, setSidebarTab] = useState<'resources' | 'history'>('resources')
+  const [pendingRestoreGame, setPendingRestoreGame] = useState<GameState | null>(null)
   const aiNextRoadEdge = useRef<string | null>(null)
   const aiBuildTarget = useRef<{ type: string; vertexId?: string; edgeId?: string } | null>(null)
   const gameWonTrackedRef = useRef(false)
@@ -121,6 +124,42 @@ export function SettlersGamePage() {
     document.body.classList.toggle('mode-select-view', active)
     return () => document.body.classList.remove('mode-select-view')
   }, [startScreen])
+
+  // Prevent pull-to-refresh on mobile when in an active single-player game (avoids accidental reload)
+  useEffect(() => {
+    document.body.classList.toggle('settlers-game-active', game != null)
+    return () => document.body.classList.remove('settlers-game-active')
+  }, [game])
+
+  // Check for saved single-player game on mount; show resume prompt instead of auto-restoring
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SINGLE_PLAYER_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as GameState
+      if (!parsed?.players?.length || !parsed?.hexes?.length) return
+      const hasWinner = parsed.players.some((p: { victoryPoints?: number }) => (p.victoryPoints ?? 0) >= 10)
+      if (hasWinner) return
+      setPendingRestoreGame(parsed)
+    } catch {
+      /* ignore corrupted or invalid saved state */
+    }
+  }, [])
+
+  // Persist single-player game so refresh or accidental reload doesn't lose progress
+  useEffect(() => {
+    if (!game) return
+    const hasWinner = game.players.some(p => p.victoryPoints >= 10)
+    try {
+      if (hasWinner) {
+        localStorage.removeItem(SINGLE_PLAYER_STORAGE_KEY)
+      } else {
+        localStorage.setItem(SINGLE_PLAYER_STORAGE_KEY, JSON.stringify(game))
+      }
+    } catch {
+      /* ignore quota or storage errors */
+    }
+  }, [game])
 
   const handleColorsSelected = (colors: string[], options?: { oregonsOmens?: boolean }) => {
     setSelectedColors(colors)
@@ -377,85 +416,169 @@ export function SettlersGamePage() {
 
   if (startScreen === 'mode') {
     return (
-      <div
-        className="mode-select home-page parchment-page"
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 24,
-          padding: 24,
-          background: 'var(--parchment-bg, #F6EEE3)',
-          color: 'var(--ink, #2A1A0A)',
-        }}
-      >
-        <GameGuide />
-        <main
-          aria-label="Choose game mode"
-          className="paper-section"
+      <>
+        {pendingRestoreGame && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 10000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 20,
+              background: 'rgba(0,0,0,0.4)',
+            }}
+            onClick={() => setPendingRestoreGame(null)}
+          >
+            <div
+              className="paper-section"
+              role="dialog"
+              aria-labelledby="resume-game-title"
+              style={{
+                background: '#FFFBF0',
+                color: '#2A1A0A',
+                borderRadius: 12,
+                padding: 24,
+                maxWidth: 360,
+                width: '100%',
+                boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+                border: '1px solid rgba(42,26,10,0.2)',
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <h2 id="resume-game-title" style={{ margin: '0 0 12px', fontSize: 20, fontWeight: 700 }}>
+                Resume game?
+              </h2>
+              <p style={{ margin: '0 0 20px', fontSize: 15, color: 'rgba(42,26,10,0.9)', lineHeight: 1.4 }}>
+                You have a single-player game in progress. Resume where you left off or start a new game.
+              </p>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGame(pendingRestoreGame)
+                    setStartScreen('game')
+                    setNumPlayers(pendingRestoreGame.players.length as 2 | 3 | 4)
+                    setPendingRestoreGame(null)
+                  }}
+                  style={{
+                    padding: '12px 20px',
+                    fontSize: 15,
+                    fontWeight: 600,
+                    background: '#C17D5B',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+                  }}
+                >
+                  Resume
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try { localStorage.removeItem(SINGLE_PLAYER_STORAGE_KEY) } catch { /* ignore */ }
+                    setPendingRestoreGame(null)
+                  }}
+                  style={{
+                    padding: '12px 20px',
+                    fontSize: 15,
+                    fontWeight: 600,
+                    background: '#E8E0D5',
+                    color: '#2A1A0A',
+                    border: '1px solid rgba(42,26,10,0.3)',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Start new game
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        <div
+          className="mode-select home-page parchment-page"
           style={{
+            minHeight: '100vh',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            textAlign: 'center',
+            justifyContent: 'center',
+            gap: 24,
+            padding: 24,
+            background: 'var(--parchment-bg, #F6EEE3)',
+            color: 'var(--ink, #2A1A0A)',
           }}
         >
-          <h1 style={{ margin: 0, fontSize: 28 }}>Settlers of Oregon</h1>
-          <p style={{ color: 'var(--ink)', opacity: 0.85, margin: 0 }}>Choose game mode</p>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', marginTop: 28 }}>
-          <button
-            type="button"
-            className="mode-btn mode-btn-cta"
-            onClick={() => {
-              trackEvent('play_vs_ai_clicked', 'navigation', 'mode_select')
-              setStartScreen('ai-count')
-            }}
+          <GameGuide />
+          <main
+            aria-label="Choose game mode"
+            className="paper-section"
             style={{
-              padding: '16px 32px',
-              fontSize: 18,
-              fontWeight: 'bold',
-              background: 'var(--cta, #C17D5B)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 12,
-              cursor: 'pointer',
-              boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
             }}
           >
-            Play vs AI
-          </button>
-          <button
-            type="button"
-            className="mode-btn mode-btn-sage"
-            onClick={() => {
-              trackEvent('multiplayer_clicked', 'navigation', 'mode_select')
-              setStartScreen('multiplayer')
-            }}
-            style={{
-              padding: '16px 32px',
-              fontSize: 18,
-              fontWeight: 'bold',
-              background: 'var(--accent-sage, #8BAE9B)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 12,
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            }}
-          >
-            Multiplayer
-          </button>
+            <h1 style={{ margin: 0, fontSize: 28 }}>Settlers of Oregon</h1>
+            <p style={{ color: 'var(--ink)', opacity: 0.85, margin: 0 }}>Choose game mode</p>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', marginTop: 28 }}>
+              <button
+                type="button"
+                className="mode-btn mode-btn-cta"
+                onClick={() => {
+                  trackEvent('play_vs_ai_clicked', 'navigation', 'mode_select')
+                  setStartScreen('ai-count')
+                }}
+                style={{
+                  padding: '16px 32px',
+                  fontSize: 18,
+                  fontWeight: 'bold',
+                  background: 'var(--cta, #C17D5B)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 12,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
+                }}
+              >
+                Play vs AI
+              </button>
+              <button
+                type="button"
+                className="mode-btn mode-btn-sage"
+                onClick={() => {
+                  trackEvent('multiplayer_clicked', 'navigation', 'mode_select')
+                  setStartScreen('multiplayer')
+                }}
+                style={{
+                  padding: '16px 32px',
+                  fontSize: 18,
+                  fontWeight: 'bold',
+                  background: 'var(--accent-sage, #8BAE9B)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 12,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                }}
+              >
+                Multiplayer
+              </button>
+            </div>
+            <p style={{ marginTop: 16, marginBottom: 0, fontSize: 14, color: 'var(--ink)', opacity: 0.8 }}>
+              <Link to="/games" style={{ color: 'var(--cta)', textDecoration: 'none', marginRight: 16 }}>← Games</Link>
+              <Link to="/how-to-play" style={{ color: 'var(--cta)', textDecoration: 'none', marginRight: 16 }}>How to play</Link>
+              <Link to="/about" style={{ color: 'var(--cta)', textDecoration: 'none', marginRight: 16 }}>About</Link>
+              <Link to="/faq" style={{ color: 'var(--cta)', textDecoration: 'none' }}>FAQ</Link>
+            </p>
+          </main>
         </div>
-        <p style={{ marginTop: 16, marginBottom: 0, fontSize: 14, color: 'var(--ink)', opacity: 0.8 }}>
-          <Link to="/games" style={{ color: 'var(--cta)', textDecoration: 'none', marginRight: 16 }}>← Games</Link>
-          <Link to="/how-to-play" style={{ color: 'var(--cta)', textDecoration: 'none', marginRight: 16 }}>How to play</Link>
-          <Link to="/about" style={{ color: 'var(--cta)', textDecoration: 'none', marginRight: 16 }}>About</Link>
-          <Link to="/faq" style={{ color: 'var(--cta)', textDecoration: 'none' }}>FAQ</Link>
-        </p>
-        </main>
-      </div>
+      </>
     )
   }
 

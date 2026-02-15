@@ -1,4 +1,4 @@
-image.png:root {
+:root {
   --bg: #1a1f2e;
   --surface: #252b3b;
   --text: #e8e6e3;
@@ -89,6 +89,11 @@ body {
   color: var(--text);
   min-height: 100vh;
   overflow-x: hidden;
+}
+
+/* Single-player game: prevent pull-to-refresh (overscroll) from reloading the page on mobile */
+body.settlers-game-active {
+  overscroll-behavior-y: none;
 }
 
 /* Subtle grain overlay (optional, very low opacity).
