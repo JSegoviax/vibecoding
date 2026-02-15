@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { HexBoard } from '../components/HexBoard'
+import { ZoomableBoard } from '../components/ZoomableBoard'
 import { PlayerResources } from '../components/PlayerResources'
 import { VictoryPointTracker } from '../components/VictoryPointTracker'
 import { GameGuide } from '../components/GameGuide'
@@ -1188,13 +1189,12 @@ export function SettlersGamePage() {
         </div>
 
         <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-        <div
+        <ZoomableBoard
           className="game-board"
           style={{
             flex: '1 1 auto',
             minWidth: 600,
             borderRadius: 12,
-            overflow: 'visible',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -1234,7 +1234,7 @@ export function SettlersGamePage() {
               onComplete={handleDiceRollComplete}
             />
           )}
-        </div>
+        </ZoomableBoard>
 
         <aside className="game-sidebar" style={{ position: 'relative', flex: '0 0 280px', minHeight: 0, background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {/* Closable instruction modal over the title so the map stays fully visible */}

@@ -254,8 +254,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   const takenSeats = new Set(players.map(p => p.player_index))
   const emptySeats = Array.from({ length: game.num_players }, (_, i) => i).filter(i => !takenSeats.has(i))
-  const isHost = myPlayerIndex === 0
-  const canStart = isHost && players.length >= 2
+  const canStart = myPlayerIndex !== null && players.length >= 2
 
   return (
     <div

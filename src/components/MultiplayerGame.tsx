@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { trackEvent } from '../utils/analytics'
 import { HexBoard } from './HexBoard'
+import { ZoomableBoard } from './ZoomableBoard'
 import { PlayerResources } from './PlayerResources'
 import { VictoryPointTracker } from './VictoryPointTracker'
 import { GameHistory } from './GameHistory'
@@ -476,7 +477,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
   const showInstructionModal = currentInstruction != null && currentInstruction !== dismissedInstruction
 
   return (
-    <div className="game-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px' }}>
+    <div className="game-page parchment-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px', paddingTop: '8px' }}>
       <GameGuide />
 
       {isPlaying && omenRobberMode?.step === 'player' && omenRobberMode.hexId && (
@@ -665,7 +666,10 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
         </div>
 
         <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-        <div className="game-board" style={{ flex: '1 1 auto', minWidth: 600, borderRadius: 12, overflow: 'visible', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+        <ZoomableBoard
+          className="game-board"
+          style={{ flex: '1 1 auto', minWidth: 600, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+        >
           <HexBoard
             hexes={game.hexes}
             vertexStates={vertexStates}
@@ -700,7 +704,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
               allowTapToStop={isMyTurn}
             />
           )}
-        </div>
+        </ZoomableBoard>
 
         <aside className="game-sidebar" style={{ position: 'relative', flex: '0 0 280px', minHeight: 0, background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {showInstructionModal && (
