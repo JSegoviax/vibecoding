@@ -20,6 +20,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    date: '2026-02-15',
+    dateLabel: 'Feb 15, 2026',
+    items: [
+      'Board Zoom & Pan: You can zoom in on the map only (the Resources drawer stays visible). Smooth drag-to-pan in all directions; the map centers when you zoom in.',
+      'Sidebar: Instruction messages now appear over the game title so the full map stays visible. Resources section moved above Victory Points.',
+      'Multiplayer: Either player can start the game once both have joined. Multiplayer now uses the same parchment look as single-player.',
+      'Resources UI: Road, Settlement, and City icons in the build costs now use the active player’s color.',
+    ],
+  },
+  {
     date: '2026-02-07',
     dateLabel: 'Feb 7, 2026',
     items: [
