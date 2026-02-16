@@ -231,25 +231,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   if (!game) return null
 
-  if (game.phase !== 'lobby' && game.state && myPlayerIndex !== null) {
+  if (game.phase !== 'lobby' && game.state) {
     return (
       <MultiplayerGame
         gameId={gameId}
-        myPlayerIndex={myPlayerIndex}
+        myPlayerIndex={myPlayerIndex ?? -1}
         initialState={{ ...game.state, setupPendingVertexId: game.state.setupPendingVertexId ?? null }}
       />
-    )
-  }
-
-  if (game.phase !== 'lobby') {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24, background: 'linear-gradient(180deg, rgb(26, 31, 46) 0%, rgb(45, 55, 72) 100%)', color: 'var(--text)' }}>
-        <h1 style={{ margin: 0, fontSize: 24 }}>Game started</h1>
-        <p style={{ color: 'var(--muted)', margin: 0, textAlign: 'center', maxWidth: 400 }}>
-          You need to join this game with the link to play. If you already joined, refresh the page.
-        </p>
-        <a href="/" style={{ padding: '12px 24px', background: 'var(--accent)', color: '#fff', borderRadius: 8, fontWeight: 'bold', textDecoration: 'none' }}>Back to home</a>
-      </div>
     )
   }
 

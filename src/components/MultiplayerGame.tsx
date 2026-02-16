@@ -92,6 +92,10 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
   const gameWonTrackedRef = useRef(false)
 
   useEffect(() => {
+    setSpectatorDismissedRobbery(false)
+  }, [game.lastRobbery])
+
+  useEffect(() => {
     const channel = supabase
       .channel(`game:${gameId}`)
       .on(
@@ -116,11 +120,12 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
       .eq('id', gameId)
   }
 
+  const isSpectator = myPlayerIndex < 0
   const n = game.players.length
   const setupPlayerIndex = getSetupPlayerIndex(game)
   const currentPlayer = game.players[game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex]
   const playerId = currentPlayer?.id ?? 1
-  const isMyTurn = (game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex) === myPlayerIndex
+  const isMyTurn = !isSpectator && (game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex) === myPlayerIndex
   const winner = game.players.find(p => p.victoryPoints >= 10)
   const setupPendingVertexId = game.setupPendingVertexId ?? null
   const isSetupRoad = game.phase === 'setup' && setupPendingVertexId != null
@@ -620,7 +625,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
                 <button onClick={() => sendStateUpdate({ ...game, lastPantryNegation: null })} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
               </div>
             )}
-            {(game.lastRobbery || errorMessage) && (
+            {(game.lastRobbery || errorMessage) && !(isSpectator && spectatorDismissedRobbery && game.lastRobbery) && (
               <div
                 role="alert"
                 className="game-toast-enter"
@@ -659,7 +664,17 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
                       })()
                     : errorMessage}
                 </span>
-                <button onClick={() => { setErrorMessage(null); sendStateUpdate({ ...game, lastRobbery: null }) }} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
+                <button
+                  onClick={() => {
+                    setErrorMessage(null)
+                    if (isSpectator && game.lastRobbery) setSpectatorDismissedRobbery(true)
+                    else if (game.lastRobbery) sendStateUpdate({ ...game, lastRobbery: null })
+                  }}
+                  style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}
+                  aria-label="Dismiss"
+                >
+                  ×
+                </button>
               </div>
             )}
           </div>
@@ -682,11 +697,13 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
             robberHexId={game.robberHexId}
             selectableRobberHexes={selectableRobberHexes}
             selectHex={
-              omenRobberMode?.step === 'hex'
-                ? handleSelectOmenRobberHex
-                : robberMode.moving
-                  ? handleSelectRobberHex
-                  : undefined
+              isSpectator
+                ? undefined
+                : omenRobberMode?.step === 'hex'
+                  ? handleSelectOmenRobberHex
+                  : robberMode.moving
+                    ? handleSelectRobberHex
+                    : undefined
             }
             harbors={game.harbors}
             players={game.players.map(p => ({ colorImage: p.colorImage, color: p.color }))}
@@ -763,7 +780,9 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
               </button>
             </div>
           )}
-          <h1 className="game-title game-sidebar-title" style={{ margin: '0 0 8px', fontSize: '1.25rem', fontWeight: 700, flexShrink: 0, lineHeight: 1.3, color: 'var(--ink, var(--text))' }}>Settlers of Oregon (Multiplayer)</h1>
+          <h1 className="game-title game-sidebar-title" style={{ margin: '0 0 8px', fontSize: '1.25rem', fontWeight: 700, flexShrink: 0, lineHeight: 1.3, color: 'var(--ink, var(--text))' }}>
+            Settlers of Oregon (Multiplayer){isSpectator && <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', marginTop: 2 }}>Spectating</span>}
+          </h1>
           <div style={{ display: 'flex', gap: 4, marginBottom: 4, flexShrink: 0 }}>
             <button
               type="button"
