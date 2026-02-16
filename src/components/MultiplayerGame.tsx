@@ -89,6 +89,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
   const [diceRolling, setDiceRolling] = useState<{ dice1: number; dice2: number } | null>(null)
   const [sidebarTab, setSidebarTab] = useState<'resources' | 'history'>('resources')
   const [dismissedInstruction, setDismissedInstruction] = useState<string | null>(null)
+  const [spectatorDismissedRobbery, setSpectatorDismissedRobbery] = useState(false)
   const gameWonTrackedRef = useRef(false)
 
   useEffect(() => {
