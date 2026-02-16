@@ -89,12 +89,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
   const [diceRolling, setDiceRolling] = useState<{ dice1: number; dice2: number } | null>(null)
   const [sidebarTab, setSidebarTab] = useState<'resources' | 'history'>('resources')
   const [dismissedInstruction, setDismissedInstruction] = useState<string | null>(null)
-  const [spectatorDismissedRobbery, setSpectatorDismissedRobbery] = useState(false)
   const gameWonTrackedRef = useRef(false)
-
-  useEffect(() => {
-    setSpectatorDismissedRobbery(false)
-  }, [game.lastRobbery])
 
   useEffect(() => {
     const channel = supabase
@@ -626,7 +621,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
                 <button onClick={() => sendStateUpdate({ ...game, lastPantryNegation: null })} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
               </div>
             )}
-            {(game.lastRobbery || errorMessage) && !(isSpectator && spectatorDismissedRobbery && game.lastRobbery) && (
+            {(game.lastRobbery || errorMessage) && (
               <div
                 role="alert"
                 className="game-toast-enter"
@@ -668,8 +663,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
                 <button
                   onClick={() => {
                     setErrorMessage(null)
-                    if (isSpectator && game.lastRobbery) setSpectatorDismissedRobbery(true)
-                    else if (game.lastRobbery) sendStateUpdate({ ...game, lastRobbery: null })
+                    if (!isSpectator && game.lastRobbery) sendStateUpdate({ ...game, lastRobbery: null })
                   }}
                   style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}
                   aria-label="Dismiss"
