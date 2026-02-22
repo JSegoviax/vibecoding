@@ -121,8 +121,14 @@ This document lists all implemented game features and logic in a structured form
 - **Specific resource harbor:** 2:1 for that resource.
 - **Rule:** Best rate applies if the player has a structure on a harbor vertex; trade is with the “bank,” not player-to-player.
 
-### 7.2 Player-to-player trading
-- **Not implemented:** Only bank/harbor trading exists. No offer/accept between players.
+### 7.2 Player-to-player trading (human ↔ AI, 2-player only)
+- **Implemented for single-player 2p:** Human can offer a **1:1** trade to the AI (Player 2). The AI evaluates the offer and accepts or declines.
+- **AI evaluation (`evaluateTradeOffer` in `ai.ts`):**
+  - **Anti-kingmaking:** If the offering player (human) has **≥ 8 VP**, the AI always rejects: “You’re too close to winning. I’m not helping you.”
+  - **Affordability:** If the AI doesn’t have enough of the requested resource, reject: “I don’t have enough [resource] to make that trade.”
+  - **Needs-based utility:** The AI has a current goal (road, settlement, or city) derived from its hand. It scores the trade: giving away a resource it needs for that goal hurts utility; receiving a resource it needs helps. If net utility &gt; 0, accept (“Deal. That helps me out.”); otherwise reject with an explainable reason (e.g. “I’m saving my Ore for a city.”).
+- **UX:** When the human clicks “Trade with Player 2” and submits an offer (give 1 / get 1), the UI shows “Player 2 is considering…” for **800–1200 ms** (artificial delay), then a **modal** shows the AI’s response (accept or reject reason). The same modal is used when the **AI** performs a **bank trade**: it shows the AI’s reasoning (e.g. “Trading with the bank to get Ore for a city.”).
+- **Scope:** Only 2-player single-player; no human–human or 3/4p player-to-player offer flow yet.
 
 ---
 
@@ -171,7 +177,10 @@ This document lists all implemented game features and logic in a structured form
 - **Robber message:** Contextual, color-coded (robber green, victim red, others default).
 - **Build buttons:** Road, Settlement, City are **greyed out** when the player cannot afford or has no valid placement (afford + at least one valid spot).
 - **End turn:** Single “End turn” button in the build row (visible after rolling, when not in robber flow).
-- **Potential spots:** Placeable vertices/edges highlighted (e.g. blue); settlement spots use color-matched pixel-art icons.
+- **Trade buttons:** “Trade (4:1)” opens the trade panel (bank/harbor rate). In **2-player single-player**, “Trade with Player 2” is shown in the same row; it opens the same panel with “Offer to Player 2 (1:1)” at the top (give 1 / get 1, then “Offer”). The button is only visible when the game has 2 players and the handler is provided (so it is never shown as a disabled no-op).
+- **AI trade response modal:** After the human offers a trade to the AI (or after the AI does a bank trade), a **modal** shows the AI’s reasoning: title “Player 2”, body = accept/reject reason (e.g. “Deal. That helps me out.” or “I’m saving my Ore for a city.”). “Got it” or backdrop click dismisses.
+- **Potential spots:** Placeable vertices/edges highlighted (e.g. blue); settlement spots use color-matched pixel-art icons. Clicks on these spots are not captured by the zoom/pan container (data-board-interactive).
+- **Board layout:** Desktop uses full viewport; game page and board area flex to fill width and height (see CSS and game-layout / ZoomableBoard).
 - **Harbors:** Visual docks; 2:1 and 3:1 (?) icons on coast.
 - **Victory points:** Shown per player; longest road included in VP total when applicable.
 - **SEO:** Meta tags, document title updates, optional sitemap/robots.
@@ -180,20 +189,24 @@ This document lists all implemented game features and logic in a structured form
 
 ## 13. STATE SNAPSHOT (KEY FIELDS)
 
-- **phase:** `'setup' | 'playing' | 'ended'`
+- **phase:** `'roll_order' | 'setup' | 'playing' | 'ended'`
 - **hexes, vertices, edges, harbors:** Board topology and layout.
-- **players:** id, name, color, resources, victoryPoints, settlementsLeft, citiesLeft, roadsLeft.
+- **players:** id, name, color, resources, victoryPoints, settlementsLeft, citiesLeft, roadsLeft; optional **isAI**; optional **omensHand**, **omenCardsPurchased** (when Omens enabled).
 - **currentPlayerIndex:** Whose turn (0-based).
+- **setupOrder:** Player indices in turn order (set after roll order completes).
 - **setupPlacements, setupPendingVertexId:** Setup progress and “place road next” constraint.
+- **Roll order:** **orderRolls**, **orderRollIndex**; tiebreak: **orderTiebreak**, **orderTiebreakRolls**, **orderTiebreakRollIndex**, **orderMainGroups**, **orderTiebreakGroupIndex**.
 - **lastDice, lastResourceFlash, lastResourceHexIds:** Dice result and production feedback.
 - **robberHexId, lastRobbery:** Robber position and last robbery for UI.
 - **longestRoadPlayerId:** Who holds longest road (if any).
+- **Oregons Omens (when enabled):** **omensDeck**, **omensDiscardPile**, **activeOmensEffects**; per-player **omensHand**, **hasDrawnOmenThisTurn**, **hasPlayedOmenThisTurn**; **omenCardsPurchased**.
+- **UI-only (not in GameState):** Trade panel open/closed, “AI is considering” flag, and **AI trade response modal** (accept/reject reason) are held in page state (e.g. SettlersGamePage).
 
 ---
 
 ## 14. WHAT IS NOT IMPLEMENTED (IDEAS FOR NEW MECHANICS)
 
-- Player-to-player trading (offers, acceptance).
+- **Player-to-player trading:** Human↔AI 1:1 offers are implemented (2p only). Human–human or 3/4p multi-way offers are not.
 - Development cards (e.g. Knight, VP, Road Building, Year of Plenty, Monopoly).
 - Largest army (knight count).
 - Themed “Oregon” flavor (e.g. events, tiles, or cards unique to Oregon).

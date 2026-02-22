@@ -46,6 +46,10 @@ interface PlayerResourcesProps {
   onSetTradeGet?: (terrain: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => void
   onTrade?: (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => void
   onSetErrorMessage?: (message: string | null) => void
+  /** Single-player: offer a 1:1 trade to the AI (Player 2). When set, trade form shows "Offer to Player 2" and delay + explainable response. */
+  onOfferToAI?: (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => void
+  /** Single-player: true while the AI is in its artificial delay before accepting/rejecting. */
+  aiTradeConsidering?: boolean
   canAfford?: (player: PlayerForResources, structure: 'road' | 'settlement' | 'city') => boolean
   getMissingResources?: (player: PlayerForResources, structure: 'road' | 'settlement' | 'city') => Array<{ terrain: Terrain; need: number }>
   getTradeRate?: (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => number
@@ -198,6 +202,8 @@ export function PlayerResources({
   onSetTradeGet,
   onTrade,
   onSetErrorMessage,
+  onOfferToAI,
+  aiTradeConsidering = false,
   canAfford,
   getMissingResources,
   getTradeRate,
@@ -293,7 +299,7 @@ export function PlayerResources({
                   type="button"
                   className="roll-dice-btn"
                   onClick={onRollDice}
-                  style={{ padding: '8px 16px', border: 'none', borderRadius: 6, color: '#fff', fontWeight: 'bold', cursor: 'pointer', fontSize: 13 }}
+                  style={{ padding: '10px 20px', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}
                 >
                   Roll dice
                 </button>
@@ -417,31 +423,86 @@ export function PlayerResources({
                   })()}
                   {(() => {
                     const canAffordAnyTrade = getTradeRate && RESOURCE_OPTIONS.some((t) => (p.resources[t] || 0) >= getTradeRate(t as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'))
-                    const tradeDisabled = !canAffordAnyTrade
+                    const canOfferToPlayer = onOfferToAI && RESOURCE_OPTIONS.some((t) => (p.resources[t] || 0) >= 1)
+                    const tradeDisabled = !canAffordAnyTrade && !canOfferToPlayer
+                    const hasPlayerTrade = players.length >= 2 && onOfferToAI != null
                     return (
-                      <button
-                        disabled={tradeDisabled}
-                        onClick={() => { if (!tradeDisabled) { onSetTradeFormOpen?.(!tradeFormOpen); onSetErrorMessage?.(null) } }}
-                        style={{
-                          padding: '8px 14px',
-                          borderRadius: 8,
-                          border: tradeDisabled ? '1px solid #D9BDA5' : tradeFormOpen ? '1px solid #4A7AB8' : '1px solid #A86A45',
-                          background: tradeDisabled ? '#E8E0D5' : tradeFormOpen ? 'rgba(100,181,246,0.35)' : '#C17D5B',
-                          color: tradeDisabled ? '#5C5348' : '#fff',
-                          cursor: tradeDisabled ? 'not-allowed' : 'pointer',
-                          fontSize: 13,
-                          fontWeight: 600,
-                        }}
-                      >Trade (4:1)</button>
+                      <>
+                        <button
+                          disabled={tradeDisabled}
+                          onClick={() => { if (!tradeDisabled) { onSetTradeFormOpen?.(!tradeFormOpen); onSetErrorMessage?.(null) } }}
+                          style={{
+                            padding: '8px 14px',
+                            borderRadius: 8,
+                            border: tradeDisabled ? '1px solid #D9BDA5' : tradeFormOpen ? '1px solid #4A7AB8' : '1px solid #A86A45',
+                            background: tradeDisabled ? '#E8E0D5' : tradeFormOpen ? 'rgba(100,181,246,0.35)' : hasPlayerTrade ? 'rgba(74, 122, 184, 0.9)' : '#C17D5B',
+                            color: tradeDisabled ? '#5C5348' : '#fff',
+                            cursor: tradeDisabled ? 'not-allowed' : 'pointer',
+                            fontSize: 13,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {hasPlayerTrade ? 'Trade (with player or bank)' : 'Trade (4:1)'}
+                        </button>
+                      </>
                     )
                   })()}
                 </div>
                 {tradeFormOpen && onSetTradeGive && onSetTradeGet && tradeGive && tradeGet && (() => {
                   const tradeRate = getTradeRate && tradeGive !== 'desert' ? getTradeRate(tradeGive as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') : 4
+                  const showOfferToPlayer2 = (onOfferToAI && isActive) || (players.length === 2 && isActive && phase === 'playing')
                   return (
                     <div style={{ padding: 12, borderRadius: 8, background: 'rgba(42,26,10,0.08)', border: '1px solid #D9BDA5' }}>
+                      {/* Trade with another player / AI first when available */}
+                      {showOfferToPlayer2 && (
+                        <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #D9BDA5' }}>
+                          <div style={{ fontSize: 13, marginBottom: 4, color: '#2A1A0A', fontWeight: 600 }}>
+                            Trade with {players.length === 2 ? 'Player 2 (AI)' : 'another player'} — 1:1
+                          </div>
+                          <div style={{ fontSize: 11, marginBottom: 8, color: '#5C5348' }}>
+                            Offer one resource for one; they may accept or refuse. Response appears in the Log.
+                          </div>
+                          {aiTradeConsidering ? (
+                            <div style={{ fontSize: 12, color: '#5C5348', fontStyle: 'italic' }}>
+                              Player 2 is considering…
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                              <label style={{ fontSize: 13, color: '#2A1A0A' }}>
+                                Give 1: <select value={tradeGive} onChange={e => onSetTradeGive(e.target.value as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')} style={{ marginLeft: 4, padding: '6px 8px', borderRadius: 6, background: '#FFFBF0', color: '#2A1A0A', border: '1px solid #D9BDA5', fontSize: 12 }}>
+                                  {RESOURCE_OPTIONS.filter(t => t !== 'desert').map(t => <option key={t} value={t}>{TERRAIN_LABELS[t]} ({p.resources[t] || 0})</option>)}
+                                </select>
+                              </label>
+                              <label style={{ fontSize: 13, color: '#2A1A0A' }}>
+                                Get 1: <select value={tradeGet} onChange={e => onSetTradeGet(e.target.value as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')} style={{ marginLeft: 4, padding: '6px 8px', borderRadius: 6, background: '#FFFBF0', color: '#2A1A0A', border: '1px solid #D9BDA5', fontSize: 12 }}>
+                                  {RESOURCE_OPTIONS.filter(t => t !== 'desert').map(t => <option key={t} value={t}>{TERRAIN_LABELS[t]}</option>)}
+                                </select>
+                              </label>
+                              <button
+                                type="button"
+                                disabled={!onOfferToAI || (p.resources[tradeGive] || 0) < 1}
+                                onClick={() => {
+                                  if (!onOfferToAI || (p.resources[tradeGive] || 0) < 1) return
+                                  onOfferToAI(tradeGive as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', tradeGet as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')
+                                }}
+                                style={{
+                                  padding: '8px 16px',
+                                  borderRadius: 8,
+                                  border: 'none',
+                                  background: !onOfferToAI || (p.resources[tradeGive] || 0) < 1 ? '#E8E0D5' : '#4A7AB8',
+                                  color: !onOfferToAI || (p.resources[tradeGive] || 0) < 1 ? '#5C5348' : '#fff',
+                                  cursor: !onOfferToAI || (p.resources[tradeGive] || 0) < 1 ? 'not-allowed' : 'pointer',
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                                }}
+                              >Offer</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div style={{ fontSize: 13, marginBottom: 8, color: '#2A1A0A', fontWeight: 500 }}>
-                        Give {tradeRate} of one, get 1 of another:
+                        Bank: give {tradeRate} of one, get 1 of another:
                         {tradeRate < 4 && (
                           <span style={{ marginLeft: 6, color: '#B45309', fontSize: 11 }}>
                             (Harbor rate: {tradeRate}:1)

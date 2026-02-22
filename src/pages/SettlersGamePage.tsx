@@ -9,8 +9,16 @@ import { DiceRollAnimation } from '../components/DiceRollAnimation'
 import { GameHistory } from '../components/GameHistory'
 import { ColorSelection } from '../components/ColorSelection'
 import { MultiplayerLobby } from '../components/MultiplayerLobby'
-import { createInitialState, appendGameLog } from '../game/state'
-import { runAISetup, runAITurn, runAITrade, runAIRobberMove, runAISelectPlayerToRob, runAIDrawOmen, runAIPlayOmen } from '../game/ai'
+import {
+  createInitialState,
+  appendGameLog,
+  getSetupOrderSequence,
+  getNextPlayerIndex,
+  getFirstPlayerIndex,
+  applyRollOrderRoll,
+} from '../game/state'
+import { runAISetup, runAITurn, runAITrade, runAIRobberMove, runAISelectPlayerToRob, runAIDrawOmen, runAIPlayOmen, evaluateTradeOffer } from '../game/ai'
+import { getTradeChatMessage } from '../game/tradeLogFlavor'
 import {
   canPlaceSettlement,
   canPlaceRoad,
@@ -65,18 +73,11 @@ import { SETTLERS_PATH } from '../config/games'
 
 const SETTLERS_LOBBY_PATH = `${SETTLERS_PATH}/lobby`
 
-const SETUP_ORDER: Record<number, number[]> = {
-  2: [0, 1, 1, 0],
-  3: [0, 1, 2, 2, 1, 0],
-  4: [0, 1, 2, 3, 3, 2, 1, 0],
-}
-
 const SINGLE_PLAYER_STORAGE_KEY = 'settlers-sp-game'
 
-function getSetupPlayerIndex(state: { phase: string; setupPlacements: number; players: unknown[] }): number {
-  const n = state.players.length
-  const order = SETUP_ORDER[n as 2 | 3 | 4] ?? SETUP_ORDER[2]
-  return order[Math.min(state.setupPlacements, order.length - 1)] ?? 0
+function getSetupPlayerIndex(state: GameState): number {
+  const sequence = getSetupOrderSequence(state)
+  return sequence[Math.min(state.setupPlacements, sequence.length - 1)] ?? 0
 }
 
 // Helper to ensure GameState is properly typed when updating
@@ -99,10 +100,11 @@ export function SettlersGamePage() {
   const [tradeFormOpen, setTradeFormOpen] = useState(false)
   const [tradeGive, setTradeGive] = useState<'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'>('wood')
   const [tradeGet, setTradeGet] = useState<'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'>('brick')
+  const [aiTradeConsidering, setAiTradeConsidering] = useState(false)
   const [robberMode, setRobberMode] = useState<{ moving: boolean; newHexId: string | null; playersToRob: Set<number> }>({ moving: false, newHexId: null, playersToRob: new Set() })
   const [omenRobberMode, setOmenRobberMode] = useState<{ cardId: string; step: 'hex' | 'player'; hexId?: string; playersOnHex?: Set<number> } | null>(null)
   const [diceRolling, setDiceRolling] = useState<{ dice1: number; dice2: number } | null>(null)
-  const [sidebarTab, setSidebarTab] = useState<'resources' | 'history'>('resources')
+  const [sidebarTab, setSidebarTab] = useState<'resources' | 'log'>('resources')
   const [pendingRestoreGame, setPendingRestoreGame] = useState<GameState | null>(null)
   const [dismissedInstruction, setDismissedInstruction] = useState<string | null>(null)
   const aiNextRoadEdge = useRef<string | null>(null)
@@ -177,12 +179,33 @@ export function SettlersGamePage() {
   // All hooks must be called before any early returns to avoid React hooks violations
   // Calculate derived values safely (will be recalculated when game is set)
   const n = game?.players.length ?? 0
+  const rollOrderRollerIndex =
+    game?.phase === 'roll_order'
+      ? (game.orderTiebreak != null ? (game.orderTiebreak[game.orderTiebreakRollIndex ?? 0] ?? 0) : (game.orderRollIndex ?? 0))
+      : 0
   const setupPlayerIndex = game ? getSetupPlayerIndex(game) : 0
-  const currentPlayer = game?.players[game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex]
+  const currentPlayer =
+    game?.phase === 'roll_order'
+      ? game?.players[rollOrderRollerIndex]
+      : game?.players[game?.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex]
   const playerId = currentPlayer?.id ?? 1
   const winner = game?.players.find(p => p.victoryPoints >= 10)
 
   const setupPendingVertexId = game?.setupPendingVertexId ?? null
+
+  // Roll for order: AI rolls when it's AI's turn
+  useEffect(() => {
+    if (!game || game.phase !== 'roll_order' || rollOrderRollerIndex === 0) return
+    const t = setTimeout(() => {
+      const a = 1 + Math.floor(Math.random() * 6)
+      const b = 1 + Math.floor(Math.random() * 6)
+      const sum = a + b
+      const next = applyRollOrderRoll(game, rollOrderRollerIndex, sum)
+      const withLog = appendGameLog(next, { type: 'roll_order', message: `Player ${rollOrderRollerIndex + 1} rolled ${a} + ${b} = ${sum} for turn order` })
+      setGame({ ...withLog, lastDice: [a, b] as [number, number] })
+    }, 600)
+    return () => clearTimeout(t)
+  }, [game?.phase, game?.orderRollIndex, game?.orderTiebreakRollIndex, rollOrderRollerIndex])
 
   // AI: setup — place settlement then road
   useEffect(() => {
@@ -267,7 +290,30 @@ export function SettlersGamePage() {
       }
       const trade = runAITrade(game, aiPlayerId)
       if (trade) {
-        handleTrade(trade.give as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', trade.get as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')
+        setGame(g => {
+          if (!g) return g
+          const idx = g.currentPlayerIndex
+          const p = g.players[idx]
+          if (!p || (p.resources[trade.give] ?? 0) < 4) return g
+          const baseRate = getTradeRate(g, aiPlayerId, trade.give)
+          const { rate: tradeRate, stateAfterTrade } = isOmensEnabled(g)
+            ? getEffectiveTradeRate(g, aiPlayerId, trade.give, baseRate)
+            : { rate: baseRate, stateAfterTrade: undefined }
+          if ((p.resources[trade.give] ?? 0) < tradeRate) return g
+          let next: GameState = {
+            ...g,
+            players: g.players.map((pl, i) => {
+              if (i !== idx) return pl
+              const res = { ...pl.resources }
+              res[trade.give] = Math.max(0, (res[trade.give] ?? 0) - tradeRate)
+              res[trade.get] = (res[trade.get] ?? 0) + 1
+              return { ...pl, resources: res }
+            }),
+          }
+          if (stateAfterTrade) next = { ...stateAfterTrade, players: next.players }
+          const playerName = next.players[aiPlayerId - 1]?.name ?? 'Player 2'
+          return appendGameLog(next, { type: 'resources', message: `${playerName}: ${trade.reason}` })
+        })
         return
       }
       const decision = runAITurn(game, aiPlayerId)
@@ -614,6 +660,72 @@ export function SettlersGamePage() {
     return <div>Loading...</div>
   }
 
+  const handleRollOrder = () => {
+    if (game.phase !== 'roll_order' || rollOrderRollerIndex !== 0) return
+    const dice1 = 1 + Math.floor(Math.random() * 6)
+    const dice2 = 1 + Math.floor(Math.random() * 6)
+    const sum = dice1 + dice2
+    const next = applyRollOrderRoll(game, 0, sum)
+    const withLog = appendGameLog(next, { type: 'roll_order', message: `Player 1 rolled ${dice1} + ${dice2} = ${sum} for turn order` })
+    setGame({ ...withLog, lastDice: [dice1, dice2] as [number, number] })
+  }
+
+  if (game.phase === 'roll_order') {
+    const rolls = game.orderTiebreak != null ? (game.orderTiebreakRolls ?? []) : (game.orderRolls ?? [])
+    const displayOrder = game.orderTiebreak ?? Array.from({ length: n }, (_, i) => i)
+    return (
+      <div className="game-page parchment-page" style={{ minHeight: '100vh', padding: 24, background: 'var(--parchment-bg)' }}>
+        <GameGuide />
+        <div style={{ maxWidth: 480, margin: '32px auto', padding: 24, background: 'var(--parchment-section)', borderRadius: 12, border: '1px solid var(--paper-border)', textAlign: 'center' }}>
+          <h2 style={{ margin: '0 0 8px', fontSize: 22, color: 'var(--ink)' }}>Roll for turn order</h2>
+          <p style={{ margin: '0 0 20px', fontSize: 14, color: 'var(--ink)', opacity: 0.9 }}>
+            {game.orderTiebreak != null ? 'Tiebreak: roll again to break the tie.' : 'Highest roll goes first. Roll the dice when it’s your turn.'}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20, textAlign: 'left' }}>
+            {displayOrder.map((playerIdx, i) => {
+              const roll = rolls[i]
+              const p = game.players[playerIdx]
+              return (
+                <div key={playerIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: roll >= 0 ? 'rgba(0,0,0,0.04)' : 'transparent', borderRadius: 8 }}>
+                  <span style={{ fontWeight: 500, color: 'var(--ink)' }}>{p?.name ?? `Player ${playerIdx + 1}`}</span>
+                  <span style={{ color: 'var(--muted)', fontSize: 14 }}>{roll >= 0 ? `Rolled ${roll}` : 'Waiting…'}</span>
+                </div>
+              )
+            })}
+          </div>
+          {game.lastDice && (
+            <p style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 600, color: 'var(--ink)' }}>
+              {game.lastDice[0]} + {game.lastDice[1]} = {game.lastDice[0] + game.lastDice[1]}
+            </p>
+          )}
+          {rollOrderRollerIndex === 0 ? (
+            <button
+              type="button"
+              onClick={handleRollOrder}
+              style={{
+                padding: '14px 28px',
+                fontSize: 16,
+                fontWeight: 700,
+                background: 'var(--cta, #D58258)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 10,
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              }}
+            >
+              Roll dice
+            </button>
+          ) : (
+            <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)' }}>
+              Waiting for {currentPlayer?.name ?? `Player ${rollOrderRollerIndex + 1}`} to roll…
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   // Calculate these values now that we know game exists
   const actualSetupPlayerIndex = getSetupPlayerIndex(game)
   const actualCurrentPlayer = game.players[game.phase === 'setup' ? actualSetupPlayerIndex : game.currentPlayerIndex]
@@ -767,7 +879,10 @@ export function SettlersGamePage() {
           i === actualPlayerId - 1 ? { ...p, roadsLeft: p.roadsLeft - 1 } : p
         )
         next.setupPlacements = (next.setupPlacements || 0) + 1
-        if (next.setupPlacements >= 2 * n) next.phase = 'playing'
+        if (next.setupPlacements >= 2 * n) {
+          next.phase = 'playing'
+          next.currentPlayerIndex = getFirstPlayerIndex(next)
+        }
         updateLongestRoad(next)
         return appendGameLog(next, { type: 'setup', message: `Player ${actualPlayerId} placed road (setup)` })
       })
@@ -985,11 +1100,57 @@ export function SettlersGamePage() {
       if (stateAfterTrade) next = { ...stateAfterTrade, players: next.players }
       return next
     }))
-    // Defer closing the trade form to the next frame to avoid Chrome layout/compositor glitches when resources and form disappear in the same paint
     requestAnimationFrame(() => {
       setTradeFormOpen(false)
       setErrorMessage(null)
     })
+  }
+
+  const handleOfferToAI = (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => {
+    if (!game || aiTradeConsidering) return
+    const human = game.players[0]
+    if (!human || (human.resources[give] || 0) < 1) {
+      setErrorMessage(`You need at least 1 ${give} to offer.`)
+      return
+    }
+    setAiTradeConsidering(true)
+    setErrorMessage(null)
+    const delayMs = 800 + Math.floor(Math.random() * 400)
+    setTimeout(() => {
+      const decision = evaluateTradeOffer(game, 2 as PlayerId, 1 as PlayerId, give, 1, get, 1)
+      const persona = game.aiPersona ?? 'merchant'
+      const { speaker, message } = decision.code
+        ? getTradeChatMessage(decision.code, persona, decision.resource)
+        : { speaker: 'AI', message: decision.reason }
+
+      setGame(g => {
+        if (!g) return g
+        let next = appendGameLog(g, { type: 'chat', message, speaker })
+        if (decision.accepted) {
+          next = {
+            ...next,
+            players: next.players.map((pl, i) => {
+              if (i === 0) {
+                const res = { ...pl.resources }
+                res[give] = Math.max(0, (res[give] || 0) - 1)
+                res[get] = (res[get] || 0) + 1
+                return { ...pl, resources: res }
+              }
+              if (i === 1) {
+                const res = { ...pl.resources }
+                res[get] = Math.max(0, (res[get] || 0) - 1)
+                res[give] = (res[give] || 0) + 1
+                return { ...pl, resources: res }
+              }
+              return pl
+            }),
+          }
+        }
+        return next
+      })
+      if (decision.accepted) setTradeFormOpen(false)
+      setAiTradeConsidering(false)
+    }, delayMs)
   }
 
   const isPlaying = game.phase === 'playing' && !actualWinner
@@ -1007,7 +1168,7 @@ export function SettlersGamePage() {
   const showInstructionModal = currentInstruction != null && currentInstruction !== dismissedInstruction
 
   return (
-    <div className="game-page parchment-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px', paddingTop: '8px' }}>
+    <div className="game-page parchment-page game-page--full-width" style={{ width: '100%', margin: 0, padding: '8px 16px 0' }}>
       <GameGuide />
 
       {/* Robber's Regret: select player to rob (or skip) */}
@@ -1040,7 +1201,7 @@ export function SettlersGamePage() {
         </div>
       )}
 
-      <div style={{ position: 'relative' }}>
+      <div className="game-layout-wrapper" style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {/* Game toasts: modals above board, fade in and auto fade away */}
         <div
           style={{
@@ -1192,12 +1353,13 @@ export function SettlersGamePage() {
           </div>
         </div>
 
-        <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+        <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
         <ZoomableBoard
           className="game-board"
           style={{
-            flex: '1 1 auto',
-            minWidth: 600,
+            flex: '1 1 0',
+            minWidth: 0,
+            minHeight: 400,
             borderRadius: 12,
             display: 'flex',
             alignItems: 'center',
@@ -1341,8 +1503,8 @@ export function SettlersGamePage() {
             </button>
             <button
               type="button"
-              className={`game-sidebar-tab ${sidebarTab === 'history' ? 'game-sidebar-tab--active' : ''}`}
-              onClick={() => setSidebarTab('history')}
+              className={`game-sidebar-tab ${sidebarTab === 'log' ? 'game-sidebar-tab--active' : ''}`}
+              onClick={() => setSidebarTab('log')}
               style={{
                 flex: 1,
                 padding: '8px 12px',
@@ -1352,7 +1514,7 @@ export function SettlersGamePage() {
                 fontSize: 13,
               }}
             >
-              History
+              Log
             </button>
           </div>
           <div className="game-sidebar-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1378,6 +1540,8 @@ export function SettlersGamePage() {
             onSetTradeGet={setTradeGet}
             onTrade={handleTrade}
             onSetErrorMessage={setErrorMessage}
+            onOfferToAI={isPlaying && !isAITurn && game.players.length === 2 ? handleOfferToAI : undefined}
+            aiTradeConsidering={aiTradeConsidering}
             canAfford={
               isOmensEnabled(game)
                 ? (p, s) => canAffordWithCost(p, getEffectiveBuildCost(game, actualPlayerId as PlayerId, s))
@@ -1487,7 +1651,7 @@ export function SettlersGamePage() {
           />
             </>
           )}
-          {sidebarTab === 'history' && (
+          {sidebarTab === 'log' && (
             <GameHistory gameLog={game.gameLog ?? []} maxHeight={420} />
           )}
 

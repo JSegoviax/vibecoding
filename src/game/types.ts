@@ -38,7 +38,7 @@ export interface Edge {
   road?: PlayerId
 }
 
-export type GamePhase = 'setup' | 'playing' | 'ended'
+export type GamePhase = 'roll_order' | 'setup' | 'playing' | 'ended'
 
 /** Active Oregon's Omens effect (ongoing cost/production/trade modifier, etc.) */
 export interface ActiveOmenEffect {
@@ -54,6 +54,8 @@ export interface ActiveOmenEffect {
 export interface Player {
   id: PlayerId
   name: string
+  /** When true, this seat is played by AI (e.g. in multiplayer with bot-filled slots). */
+  isAI?: boolean
   color: string // Hex color for UI
   colorId: string // Color identifier (teal, green, pink, etc.)
   colorImage: string // Path to house image
@@ -80,6 +82,22 @@ export interface GameState {
   harbors: Harbor[]
   players: Player[]
   currentPlayerIndex: number
+  /** Turn order from roll (player indices: first to act in setup/playing). Set when leaving roll_order. */
+  setupOrder?: number[]
+  /** Roll-for-order: each player's dice sum (-1 = not rolled). Used when phase === 'roll_order'. */
+  orderRolls?: number[]
+  /** Roll-for-order: index of next player who must roll (0..n-1). */
+  orderRollIndex?: number
+  /** Roll-for-order: when ties exist, these player indices re-roll. */
+  orderTiebreak?: number[] | null
+  /** Roll-for-order: tiebreak round rolls (parallel to orderTiebreak). -1 = not rolled. */
+  orderTiebreakRolls?: number[]
+  /** Roll-for-order: index into orderTiebreak for who rolls next in tiebreak. */
+  orderTiebreakRollIndex?: number
+  /** Roll-for-order: groups from first round (each group = same roll); flattened in order gives setupOrder when no ties left. */
+  orderMainGroups?: number[][]
+  /** Roll-for-order: which group index in orderMainGroups we are resolving in tiebreak. */
+  orderTiebreakGroupIndex?: number
   setupPlacements: number  // 0–1 for first placement round, 2–3 for second
   /** When set, current player must place a road next to this vertex (setup phase) */
   setupPendingVertexId: VertexId | null
@@ -108,14 +126,18 @@ export interface GameState {
   lastOmenBuffPlayed?: { cardId: string; playerId: PlayerId; resourcesGained: Terrain[] } | null
   /** Oregon's Omens: Well-Stocked Pantry negated a loss; negatedCardId is the debuff that was negated. For UI banner. Cleared on dismiss. */
   lastPantryNegation?: { playerId: PlayerId; negatedCardId: string } | null
-  /** Running game log for History tab (dice, builds, robberies, omens, etc.). */
+  /** Running game log for Log tab (dice, builds, robberies, omens, trade chat, etc.). */
   gameLog?: GameLogEntry[]
+  /** AI persona for 2p single-player (merchant / aggressor / joker); used for trade chat flavor. */
+  aiPersona?: 'merchant' | 'aggressor' | 'joker'
 }
 
 export interface GameLogEntry {
   id: string
-  type: 'dice' | 'resources' | 'resource_gain' | 'robbery' | 'build' | 'turn' | 'omen_play' | 'omen_draw_debuff' | 'omen_buff' | 'pantry_negate' | 'setup'
+  type: 'dice' | 'resources' | 'resource_gain' | 'robbery' | 'build' | 'turn' | 'omen_play' | 'omen_draw_debuff' | 'omen_buff' | 'pantry_negate' | 'setup' | 'roll_order' | 'chat'
   message: string
   playerId?: number
   turnIndex?: number
+  /** For type === 'chat': persona name prefix (e.g. "💰 Merchant"). */
+  speaker?: string
 }

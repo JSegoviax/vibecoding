@@ -62,6 +62,16 @@ body.oregon-capitalist-active #root {
   animation: mode-cta-pulse 2s ease-in-out infinite;
 }
 
+/* Roll dice button: CTA styling + pulse to draw focus when it's the player's turn */
+@keyframes roll-dice-pulse {
+  0%, 100% { box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  50% { box-shadow: 0 2px 16px rgba(213,130,88,0.5); }
+}
+.roll-dice-btn {
+  background: var(--cta, #D58258) !important;
+  animation: roll-dice-pulse 2s ease-in-out infinite;
+}
+
 /* Game toasts: modals above board, fade in and fade out */
 @keyframes game-toast-fade-in {
   from { opacity: 0; transform: translateY(-8px); }
@@ -264,7 +274,7 @@ body:not(.no-grain-overlay)::before {
     overflow-x: hidden;
   }
 
-  /* Board: fit within phone width; cap height so sidebar (Resources/History) is visible */
+  /* Board: fit within phone width; cap height so sidebar (Resources/Log) is visible */
   .game-board {
     order: 1;
     min-width: 0 !important;
@@ -401,6 +411,29 @@ body:not(.no-grain-overlay)::before {
 .game-page.parchment-page,
 .game-page {
   padding-top: 8px !important;
+}
+
+/* Desktop: use full viewport for board area */
+@media (min-width: 769px) {
+  .game-page.game-page--full-width {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 2rem);
+    box-sizing: border-box;
+  }
+  .game-page.game-page--full-width .game-layout-wrapper {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .game-page.game-page--full-width .game-layout {
+    flex: 1;
+    min-height: 0;
+  }
+  .game-page.game-page--full-width .game-board {
+    min-height: calc(100vh - 200px);
+  }
 }
 
 /* Game page: extra top padding on mobile so title isn't cramped (button is at bottom) */

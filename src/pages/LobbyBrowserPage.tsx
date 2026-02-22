@@ -65,8 +65,17 @@ function getHostNickname(players: GamePlayerRow[]): string {
 
 function getPlayersLabel(count: number, numPlayers: number): string {
   if (count === 1 && numPlayers === 4) return '1/4 (3 Bots)'
+  if (count === 2 && numPlayers === 4) return '2/4 (2 Bots)'
+  if (count === 1 && numPlayers === 2) return '1/2 (1 Bot)'
   return `${count}/${numPlayers}`
 }
+
+/** Always-visible quick-join options: create a new game with this config and join as player 0. */
+const QUICK_JOIN_TEMPLATES: { num_players: 2 | 4; hostLabel: string; playersLabel: string }[] = [
+  { num_players: 4, hostLabel: '—', playersLabel: '1 slot (3 Bots, 4 player)' },
+  { num_players: 4, hostLabel: '—', playersLabel: '2 slots (2 Bots, 4 player)' },
+  { num_players: 2, hostLabel: '—', playersLabel: '1 slot (1 Bot, 2 player)' },
+]
 
 export function LobbyBrowserPage() {
   const navigate = useNavigate()
@@ -77,6 +86,7 @@ export function LobbyBrowserPage() {
   const [searchHost, setSearchHost] = useState('')
   const [createNickname, setCreateNickname] = useState('')
   const [creating, setCreating] = useState(false)
+  const [quickJoinNumPlayers, setQuickJoinNumPlayers] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const fetchData = async () => {
@@ -162,6 +172,31 @@ export function LobbyBrowserPage() {
   const handleJoin = (gameId: string) => {
     trackEvent('multiplayer_join_clicked', 'multiplayer', 'lobby_browser')
     navigate(`${SETTLERS_PATH}/game/${gameId}`)
+  }
+
+  const handleQuickJoin = async (numPlayers: 2 | 4) => {
+    setError(null)
+    setQuickJoinNumPlayers(numPlayers)
+    try {
+      const { data: game, error: insertGameError } = await supabase
+        .from('games')
+        .insert({ num_players: numPlayers, phase: 'lobby', oregons_omens: false, is_public: true })
+        .select('id')
+        .single()
+      if (insertGameError) throw insertGameError
+      const id = (game as { id: string }).id
+      const { error: insertPlayerError } = await supabase
+        .from('game_players')
+        .insert({ game_id: id, player_index: 0, nickname: createNickname.trim() || 'Player 1' })
+      if (insertPlayerError) throw insertPlayerError
+      localStorage.setItem(STORAGE_KEY(id), JSON.stringify({ playerIndex: 0 }))
+      trackEvent('multiplayer_quick_join', 'multiplayer', `${numPlayers}p`)
+      window.location.href = settlersGameRoomUrl(id, true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to create game')
+    } finally {
+      setQuickJoinNumPlayers(null)
+    }
   }
 
   const handleSpectate = (gameId: string) => {
@@ -276,10 +311,6 @@ export function LobbyBrowserPage() {
         >
           {loading ? (
             <p style={{ padding: 32, textAlign: 'center', color: 'var(--ink)', opacity: 0.8 }}>Loading lobby…</p>
-          ) : filteredGames.length === 0 ? (
-            <p style={{ padding: 32, textAlign: 'center', color: 'var(--ink)', opacity: 0.8 }}>
-              No games match. Create one above or adjust filters.
-            </p>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>
@@ -291,7 +322,40 @@ export function LobbyBrowserPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredGames.map((game, idx) => {
+                {QUICK_JOIN_TEMPLATES.map((t, idx) => (
+                  <tr key={`quick-${t.num_players}-${idx}`} style={{ background: idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.03)' }}>
+                    <td style={{ padding: '12px 16px', color: 'var(--ink)' }}>{t.hostLabel}</td>
+                    <td style={{ padding: '12px 16px', color: 'var(--ink)' }}>{t.playersLabel}</td>
+                    <td style={{ padding: '12px 16px', color: 'var(--ink)' }}>Standard Game</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickJoin(t.num_players)}
+                        disabled={quickJoinNumPlayers !== null}
+                        style={{
+                          padding: '8px 16px',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          background: 'var(--accent-sage, #8BAE9B)',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: 8,
+                          cursor: quickJoinNumPlayers !== null ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        {quickJoinNumPlayers === t.num_players ? 'Creating…' : 'Join'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredGames.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ padding: 24, textAlign: 'center', color: 'var(--ink)', opacity: 0.8 }}>
+                      No other games match. Create one above or adjust filters.
+                    </td>
+                  </tr>
+                ) : (
+                filteredGames.map((game, idx) => {
                   const players = playersByGame.get(game.id) ?? []
                   const count = players.length
                   const isFull = count >= game.num_players
@@ -346,7 +410,8 @@ export function LobbyBrowserPage() {
                       </td>
                     </tr>
                   )
-                })}
+                })
+                )}
               </tbody>
             </table>
           )}

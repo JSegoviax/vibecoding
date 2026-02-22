@@ -293,7 +293,7 @@ export function HexBoard({
         }
 
         return (
-          <g key={h.id}>
+          <g key={h.id} data-board-interactive={selectHex && (isSelectable || isRobberHex) ? '' : undefined}>
             <path
               d={d}
               fill={fill}
@@ -520,6 +520,7 @@ export function HexBoard({
               key={e.id}
               transform={`translate(${midX}, ${midY}) rotate(${angleDeg})`}
               clipPath={`url(#${clipId})`}
+              data-board-interactive={selectEdge ? '' : undefined}
               onClick={() => selectEdge?.(e.id)}
               style={{ cursor: selectEdge ? 'pointer' : 'default' }}
             >
@@ -744,7 +745,7 @@ export function HexBoard({
             ? (COLOR_TO_CITY_IMAGE[player.colorImage] ?? player.colorImage)
             : player.colorImage
           return (
-            <g key={v.id}>
+            <g key={v.id} data-board-interactive={selectVertex ? '' : undefined}>
               <image
                 href={imageHref}
                 x={v.x - size / 2}
@@ -806,7 +807,7 @@ export function HexBoard({
         const spotSize = 48
         const pulse = pulsePlaceableSpots ?? (phase === 'setup')
         return (
-          <g key={`spot-${v.id}`} transform={`translate(${v.x}, ${v.y})`}>
+          <g key={`spot-${v.id}`} transform={`translate(${v.x}, ${v.y})`} data-board-interactive={selectVertex ? '' : undefined}>
             <g>
               {pulse && (
                 <animateTransform

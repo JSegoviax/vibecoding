@@ -53,6 +53,8 @@ export function ZoomableBoard({ children, className, style }: ZoomableBoardProps
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return
     if ((e.target as HTMLElement).closest?.('[data-zoom-controls]')) return
+    // Don't capture when clicking interactive board elements (vertices, edges, hexes) so their onClick fires
+    if ((e.target as HTMLElement).closest?.('[data-board-interactive]')) return
     const el = containerRef.current
     if (!el) return
     el.setPointerCapture(e.pointerId)

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { GameLogEntry } from '../game/types'
 
 interface GameHistoryProps {
@@ -6,16 +7,25 @@ interface GameHistoryProps {
 }
 
 export function GameHistory({ gameLog, maxHeight = 320 }: GameHistoryProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0
+    }
+  }, [gameLog?.length])
+
   if (!gameLog || gameLog.length === 0) {
     return (
       <div style={{ padding: 12, color: 'var(--muted)', fontSize: 13, textAlign: 'center' }}>
-        No events yet. Dice rolls, builds, robberies, and omen plays will appear here.
+        No events yet. Dice rolls, builds, and trades will appear here.
       </div>
     )
   }
 
   return (
     <div
+      ref={scrollRef}
       style={{
         overflowY: 'auto',
         maxHeight,
@@ -25,22 +35,31 @@ export function GameHistory({ gameLog, maxHeight = 320 }: GameHistoryProps) {
         padding: '8px 0',
       }}
       role="log"
-      aria-label="Game history"
+      aria-label="Game log"
     >
-      {[...gameLog].reverse().map((entry) => (
+      {gameLog.map((entry) => (
         <div
           key={entry.id}
           style={{
-            fontSize: 12,
             lineHeight: 1.4,
+            fontSize: entry.type === 'chat' ? 14 : 13,
+            fontWeight: entry.type === 'chat' ? 600 : 400,
+            color: entry.type === 'chat' ? 'var(--ink, #2A1A0A)' : 'var(--muted, rgba(42,26,10,0.78))',
             padding: '6px 10px',
             borderRadius: 6,
-            background: entryTypeBg(entry.type),
-            borderLeft: `3px solid ${entryTypeColor(entry.type)}`,
-            color: 'var(--text)',
+            ...(entry.type === 'chat'
+              ? { background: 'rgba(0,0,0,0.06)', borderLeft: '3px solid var(--accent)' }
+              : { background: entryTypeBg(entry.type), borderLeft: `3px solid ${entryTypeColor(entry.type)}` }),
           }}
         >
-          {entry.message}
+          {entry.type === 'chat' && entry.speaker ? (
+            <>
+              <span style={{ marginRight: 6 }}>{entry.speaker}:</span>
+              {entry.message}
+            </>
+          ) : (
+            entry.message
+          )}
         </div>
       ))}
     </div>
@@ -75,6 +94,7 @@ function entryTypeColor(type: GameLogEntry['type']): string {
 }
 
 function entryTypeBg(type: GameLogEntry['type']): string {
+  if (type === 'chat') return 'rgba(0,0,0,0.06)'
   const c = entryTypeColor(type)
   return `${c}15`
 }

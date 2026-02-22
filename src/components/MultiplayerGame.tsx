@@ -55,20 +55,28 @@ import {
   TOTAL_OMEN_DECK_SIZE,
 } from '../game/omens'
 import type { PlayOmenTargets } from '../game/omens'
-import { appendGameLog } from '../game/state'
+import {
+  runAISetup,
+  runAITurn,
+  runAITrade,
+  runAIRobberMove,
+  runAISelectPlayerToRob,
+  runAIDrawOmen,
+  runAIPlayOmen,
+} from '../game/ai'
+import {
+  appendGameLog,
+  getSetupOrderSequence,
+  getNextPlayerIndex,
+  getFirstPlayerIndex,
+  applyRollOrderRoll,
+} from '../game/state'
 import type { GameState, PlayerId } from '../game/types'
 import { TERRAIN_LABELS } from '../game/terrain'
 
-const SETUP_ORDER: Record<number, number[]> = {
-  2: [0, 1, 1, 0],
-  3: [0, 1, 2, 2, 1, 0],
-  4: [0, 1, 2, 3, 3, 2, 1, 0],
-}
-
 function getSetupPlayerIndex(state: GameState): number {
-  const n = state.players.length
-  const order = SETUP_ORDER[n as 2 | 3 | 4] ?? SETUP_ORDER[2]
-  return order[Math.min(state.setupPlacements, order.length - 1)] ?? 0
+  const sequence = getSetupOrderSequence(state)
+  return sequence[Math.min(state.setupPlacements, sequence.length - 1)] ?? 0
 }
 
 function normalizeState(s: GameState): GameState {
@@ -87,9 +95,10 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
   const [robberMode, setRobberMode] = useState<{ moving: boolean; newHexId: string | null; playersToRob: Set<number> }>({ moving: false, newHexId: null, playersToRob: new Set() })
   const [omenRobberMode, setOmenRobberMode] = useState<{ cardId: string; step: 'hex' | 'player'; hexId?: string; playersOnHex?: Set<number> } | null>(null)
   const [diceRolling, setDiceRolling] = useState<{ dice1: number; dice2: number } | null>(null)
-  const [sidebarTab, setSidebarTab] = useState<'resources' | 'history'>('resources')
+  const [sidebarTab, setSidebarTab] = useState<'resources' | 'log'>('resources')
   const [dismissedInstruction, setDismissedInstruction] = useState<string | null>(null)
   const gameWonTrackedRef = useRef(false)
+  const aiRunningRef = useRef(false)
 
   useEffect(() => {
     const channel = supabase
@@ -108,6 +117,237 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     }
   }, [gameId])
 
+  // —— AI execution (multiplayer games with bot-filled slots) ——
+  const rollOrderRollerIndex =
+    game.phase === 'roll_order'
+      ? (game.orderTiebreak != null ? (game.orderTiebreak[game.orderTiebreakRollIndex ?? 0] ?? 0) : (game.orderRollIndex ?? 0))
+      : 0
+  const isAIRollOrderTurn = game.phase === 'roll_order' && game.players[rollOrderRollerIndex]?.isAI === true
+  const setupPlayerIndexForAI = getSetupPlayerIndex(game)
+  const setupPendingForAI = game.setupPendingVertexId ?? null
+  const currentPlayerForAI = game.players[game.phase === 'setup' ? setupPlayerIndexForAI : game.currentPlayerIndex]
+  const isAITurn = myPlayerIndex >= 0 && (currentPlayerForAI?.isAI === true)
+  const aiPlayerId = currentPlayerForAI?.id ?? (1 as PlayerId)
+  const numPlayers = game.players.length
+  const winnerForAI = game.players.find(p => p.victoryPoints >= 10)
+
+  useEffect(() => {
+    if (!isAIRollOrderTurn || aiRunningRef.current) return
+    aiRunningRef.current = true
+    const t = setTimeout(() => {
+      const a = 1 + Math.floor(Math.random() * 6)
+      const b = 1 + Math.floor(Math.random() * 6)
+      const sum = a + b
+      const next = applyRollOrderRoll(game, rollOrderRollerIndex, sum)
+      const withLog = appendGameLog(next, { type: 'roll_order', message: `Player ${rollOrderRollerIndex + 1} rolled ${a} + ${b} = ${sum} for turn order` })
+      sendStateUpdate({ ...withLog, lastDice: [a, b] as [number, number] })
+      aiRunningRef.current = false
+    }, 500)
+    return () => clearTimeout(t)
+  }, [isAIRollOrderTurn, game.phase, game.orderRollIndex, game.orderTiebreakRollIndex, rollOrderRollerIndex])
+
+  useEffect(() => {
+    if (!isAITurn || aiRunningRef.current || winnerForAI) return
+    if (game.phase === 'setup' && !setupPendingForAI) {
+      aiRunningRef.current = true
+      const t = setTimeout(() => {
+        try {
+          const { vertexId, edgeId } = runAISetup(game, aiPlayerId)
+          let next: GameState = {
+            ...game,
+            vertices: { ...game.vertices },
+            players: game.players.map(p => ({ ...p, resources: { ...p.resources } })),
+            setupPendingVertexId: vertexId,
+          }
+          next.vertices[vertexId] = { ...next.vertices[vertexId], structure: { player: aiPlayerId, type: 'settlement' } }
+          next.players = game.players.map((p, i) =>
+            i === aiPlayerId - 1 ? { ...p, resources: { ...p.resources }, settlementsLeft: p.settlementsLeft - 1, victoryPoints: p.victoryPoints + 1 } : p
+          )
+          if (game.setupPlacements >= numPlayers) giveInitialResources(next, vertexId)
+          next = { ...next, edges: { ...next.edges }, setupPendingVertexId: null }
+          next.edges[edgeId] = { ...next.edges[edgeId], road: aiPlayerId }
+          next.players = next.players.map((p, i) => (i === aiPlayerId - 1 ? { ...p, roadsLeft: p.roadsLeft - 1 } : p))
+          next.setupPlacements = (next.setupPlacements ?? 0) + 1
+          if (next.setupPlacements >= 2 * numPlayers) {
+            next.phase = 'playing'
+            next.currentPlayerIndex = getFirstPlayerIndex(next)
+          }
+          updateLongestRoad(next)
+          sendStateUpdate(appendGameLog(next, { type: 'setup', message: `Player ${aiPlayerId} placed settlement and road (setup)` }))
+        } catch {
+          // no-op
+        }
+        aiRunningRef.current = false
+      }, 400)
+      return () => clearTimeout(t)
+    }
+    return undefined
+  }, [isAITurn, game.phase, game.setupPlacements, setupPendingForAI, winnerForAI, aiPlayerId, numPlayers])
+
+  useEffect(() => {
+    if (!isAITurn || aiRunningRef.current || winnerForAI || game.phase !== 'playing' || game.lastDice || diceRolling) return
+    aiRunningRef.current = true
+    const t = setTimeout(() => {
+      const a = 1 + Math.floor(Math.random() * 6)
+      const b = 1 + Math.floor(Math.random() * 6)
+      const sum = a + b
+      let next: GameState = {
+        ...game,
+        lastDice: [a, b] as [number, number],
+        players: game.players.map(p => ({ ...p, resources: { ...p.resources } })),
+        lastResourceFlash: null,
+      }
+      if (sum === 7) {
+        next.lastResourceHexIds = []
+      } else {
+        next.lastResourceFlash = distributeResources(next, sum) || null
+        next.lastResourceHexIds = getHexIdsThatProducedResources(next, sum)
+        if (isOmensEnabled(next)) next = applyProductionModifiersAfterRoll(next, sum)
+      }
+      sendStateUpdate(appendGameLog(next, { type: 'dice', message: `Player ${aiPlayerId} rolled ${a} + ${b} = ${sum}` }))
+      aiRunningRef.current = false
+    }, 500)
+    return () => clearTimeout(t)
+  }, [isAITurn, game.phase, game.currentPlayerIndex, game.lastDice, winnerForAI, diceRolling, aiPlayerId])
+
+  useEffect(() => {
+    if (!isAITurn || aiRunningRef.current || winnerForAI || game.phase !== 'playing' || !game.lastDice) return
+    const sum = game.lastDice[0] + game.lastDice[1]
+    if (sum !== 7) return
+    aiRunningRef.current = true
+    const t = setTimeout(() => {
+      try {
+        const hexId = runAIRobberMove(game, aiPlayerId)
+        const targetPlayerId = runAISelectPlayerToRob(game, hexId, aiPlayerId)
+        const next: GameState = {
+          ...game,
+          robberHexId: hexId,
+          players: game.players.map(p => ({ ...p, resources: { ...p.resources } })),
+          lastRobbery: null,
+        }
+        let stolen: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore' | null = null
+        if (targetPlayerId != null) {
+          stolen = stealResource(next, aiPlayerId, targetPlayerId) as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore' | null
+        }
+        next.lastRobbery = stolen ? { robbingPlayerId: aiPlayerId, targetPlayerId: targetPlayerId as PlayerId, resource: stolen } : null
+        const msg = stolen ? `Player ${aiPlayerId} stole from Player ${targetPlayerId}` : `Player ${aiPlayerId} moved the robber`
+        sendStateUpdate(appendGameLog(next, { type: 'robbery', message: msg }))
+      } catch {
+        // no-op
+      }
+      aiRunningRef.current = false
+    }, 400)
+    return () => clearTimeout(t)
+  }, [isAITurn, game.phase, game.currentPlayerIndex, game.lastDice, game.robberHexId, winnerForAI, aiPlayerId])
+
+  useEffect(() => {
+    if (!isAITurn || aiRunningRef.current || winnerForAI || game.phase !== 'playing' || !game.lastDice) return
+    const sum = game.lastDice[0] + game.lastDice[1]
+    if (sum === 7 && !game.lastRobbery) return
+    if (robberMode.moving || robberMode.newHexId || omenRobberMode) return
+    aiRunningRef.current = true
+    const t = setTimeout(() => {
+      try {
+        let next: GameState = game
+        if (runAIDrawOmen(game, aiPlayerId)) {
+          next = drawOmenCard(game, aiPlayerId)
+          updateOmenHand(next)
+          sendStateUpdate(next)
+          aiRunningRef.current = false
+          return
+        }
+        const playOmen = runAIPlayOmen(game, aiPlayerId)
+        if (playOmen && playOmen.cardId !== 'robbers_regret') {
+          sendStateUpdate(playOmenCard(game, aiPlayerId, playOmen.cardId, playOmen.targets))
+          aiRunningRef.current = false
+          return
+        }
+        const trade = runAITrade(game, aiPlayerId)
+        if (trade) {
+          const p = game.players[game.currentPlayerIndex]
+          if (p && (p.resources[trade.give] || 0) >= 4) {
+            next = {
+              ...game,
+              players: game.players.map((pl, i) => {
+                if (i !== game.currentPlayerIndex) return pl
+                const res = { ...pl.resources }
+                res[trade.give] = Math.max(0, (res[trade.give] || 0) - 4)
+                res[trade.get] = (res[trade.get] || 0) + 1
+                return { ...pl, resources: res }
+              }),
+            }
+            sendStateUpdate(next)
+            aiRunningRef.current = false
+            return
+          }
+        }
+        const decision = runAITurn(game, aiPlayerId)
+        if (decision.action === 'end') {
+          const nextIndex = (game.currentPlayerIndex + 1) % game.players.length
+          next = { ...game, currentPlayerIndex: nextIndex, lastDice: null, lastResourceFlash: null }
+          if (isOmensEnabled(next)) next = resetPlayerOmensFlagsForNewTurn(next, nextIndex)
+          sendStateUpdate(appendGameLog(next, { type: 'turn', message: `Turn: Player ${nextIndex + 1}'s turn` }))
+        } else if (decision.action === 'settlement' && 'vertexId' in decision) {
+          const vid = decision.vertexId
+          const cost = isOmensEnabled(game) ? getEffectiveBuildCost(game, aiPlayerId, 'settlement') : getBuildCost('settlement')
+          next = { ...game, vertices: { ...game.vertices } }
+          next.vertices[vid] = { ...next.vertices[vid], structure: { player: aiPlayerId, type: 'settlement' } }
+          next.players = game.players.map((p, i) => {
+            if (i !== aiPlayerId - 1) return p
+            const res = { ...p.resources }
+            for (const [t, n] of Object.entries(cost)) {
+              if (n != null && n > 0) (res as Record<string, number>)[t] = Math.max(0, ((res as Record<string, number>)[t] || 0) - (n as number))
+            }
+            return { ...p, resources: res, settlementsLeft: p.settlementsLeft - 1, victoryPoints: p.victoryPoints + 1 }
+          })
+          if (isOmensEnabled(next)) next = consumeCostEffectAfterBuild(next, aiPlayerId, 'settlement')
+          if (isOmensEnabled(next)) next = consumeFreeBuildEffect(next, aiPlayerId, 'settlement')
+          sendStateUpdate(appendGameLog(next, { type: 'build', message: `Player ${aiPlayerId} built a settlement` }))
+        } else if (decision.action === 'city' && 'vertexId' in decision) {
+          const vid = decision.vertexId
+          const cost = isOmensEnabled(game) ? getEffectiveBuildCost(game, aiPlayerId, 'city') : getBuildCost('city')
+          next = { ...game, vertices: { ...game.vertices } }
+          const v = next.vertices[vid]
+          if (v?.structure) {
+            next.vertices[vid] = { ...v, structure: { player: aiPlayerId, type: 'city' } }
+            next.players = game.players.map((p, i) => {
+              if (i !== aiPlayerId - 1) return p
+              const res = { ...p.resources }
+              for (const [t, n] of Object.entries(cost)) {
+                if (n != null && n > 0) (res as Record<string, number>)[t] = Math.max(0, ((res as Record<string, number>)[t] || 0) - (n as number))
+              }
+              return { ...p, resources: res, citiesLeft: p.citiesLeft - 1, victoryPoints: p.victoryPoints + 1 }
+            })
+            if (isOmensEnabled(next)) next = consumeFreeBuildEffect(next, aiPlayerId, 'city')
+            sendStateUpdate(appendGameLog(next, { type: 'build', message: `Player ${aiPlayerId} built a city` }))
+          }
+        } else if (decision.action === 'road' && 'edgeId' in decision) {
+          const eid = decision.edgeId
+          const roadCost = isOmensEnabled(game) ? getEffectiveBuildCost(game, aiPlayerId, 'road') : getBuildCost('road')
+          next = { ...game, edges: { ...game.edges } }
+          next.edges[eid] = { ...next.edges[eid], road: aiPlayerId }
+          next.players = game.players.map((p, i) => {
+            if (i !== aiPlayerId - 1) return p
+            const res = { ...p.resources }
+            for (const [t, n] of Object.entries(roadCost)) {
+              if (n != null && n > 0) (res as Record<string, number>)[t] = Math.max(0, ((res as Record<string, number>)[t] || 0) - (n as number))
+            }
+            return { ...p, resources: res, roadsLeft: p.roadsLeft - 1 }
+          })
+          if (isOmensEnabled(next)) next = consumeCostEffectAfterBuild(next, aiPlayerId, 'road')
+          if (isOmensEnabled(next)) next = consumeFreeBuildEffect(next, aiPlayerId, 'road')
+          if (isOmensEnabled(game) && roadIgnoresAdjacencyThisTurn(game, aiPlayerId)) next = consumePathfinderEffect(next, aiPlayerId)
+          updateLongestRoad(next)
+          sendStateUpdate(appendGameLog(next, { type: 'build', message: `Player ${aiPlayerId} built a road` }))
+        }
+      } catch {
+        // no-op
+      }
+      aiRunningRef.current = false
+    }, 500)
+    return () => clearTimeout(t)
+  }, [isAITurn, game.phase, game.currentPlayerIndex, game.lastDice, game.lastRobbery, winnerForAI, robberMode.moving, robberMode.newHexId, omenRobberMode, aiPlayerId])
+
   const sendStateUpdate = async (nextState: GameState) => {
     setGame(nextState)
     await supabase
@@ -118,10 +358,23 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
 
   const isSpectator = myPlayerIndex < 0
   const n = game.players.length
+  const rollOrderCurrentPlayerIndex =
+    game.phase === 'roll_order'
+      ? (game.orderTiebreak != null
+          ? (game.orderTiebreak[game.orderTiebreakRollIndex ?? 0] ?? 0)
+          : (game.orderRollIndex ?? 0))
+      : 0
   const setupPlayerIndex = getSetupPlayerIndex(game)
-  const currentPlayer = game.players[game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex]
+  const currentPlayer =
+    game.phase === 'roll_order'
+      ? game.players[rollOrderCurrentPlayerIndex]
+      : game.players[game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex]
   const playerId = currentPlayer?.id ?? 1
-  const isMyTurn = !isSpectator && (game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex) === myPlayerIndex
+  const isMyTurn =
+    !isSpectator &&
+    (game.phase === 'roll_order'
+      ? rollOrderCurrentPlayerIndex === myPlayerIndex
+      : (game.phase === 'setup' ? setupPlayerIndex : game.currentPlayerIndex) === myPlayerIndex)
   const winner = game.players.find(p => p.victoryPoints >= 10)
   const setupPendingVertexId = game.setupPendingVertexId ?? null
   const isSetupRoad = game.phase === 'setup' && setupPendingVertexId != null
@@ -243,7 +496,10 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
       next.edges[eid] = { ...next.edges[eid], road: playerId }
       next.players = game.players.map((p, i) => i === playerId - 1 ? { ...p, roadsLeft: p.roadsLeft - 1 } : p)
       next.setupPlacements = (next.setupPlacements || 0) + 1
-      if (next.setupPlacements >= 2 * n) next.phase = 'playing'
+      if (next.setupPlacements >= 2 * n) {
+        next.phase = 'playing'
+        next.currentPlayerIndex = getFirstPlayerIndex(next)
+      }
       updateLongestRoad(next)
       sendStateUpdate(appendGameLog(next, { type: 'setup', message: `Player ${playerId} placed road (setup)` }))
       return
@@ -391,7 +647,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
   const handleEndTurn = () => {
     if (!isMyTurn) return
     trackEvent('end_turn', 'gameplay', 'multiplayer')
-    const nextIndex = (game.currentPlayerIndex + 1) % game.players.length
+    const nextIndex = getNextPlayerIndex(game)
     let next: GameState = {
       ...game,
       currentPlayerIndex: nextIndex,
@@ -404,6 +660,16 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
     setTradeFormOpen(false)
     setRobberMode({ moving: false, newHexId: null, playersToRob: new Set() })
     setOmenRobberMode(null)
+  }
+
+  const handleRollOrder = () => {
+    if (game.phase !== 'roll_order' || !isMyTurn) return
+    const dice1 = 1 + Math.floor(Math.random() * 6)
+    const dice2 = 1 + Math.floor(Math.random() * 6)
+    const sum = dice1 + dice2
+    const next = applyRollOrderRoll(game, myPlayerIndex, sum)
+    const withLog = appendGameLog(next, { type: 'roll_order', message: `Player ${playerId} rolled ${dice1} + ${dice2} = ${sum} for turn order` })
+    sendStateUpdate({ ...withLog, lastDice: [dice1, dice2] as [number, number] })
   }
 
   const handleTrade = (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => {
@@ -465,7 +731,9 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
   }, [game?.lastOmenDebuffDrawn, game?.lastOmenBuffPlayed, game?.lastPantryNegation, game?.lastRobbery, errorMessage, playerId])
 
   const currentInstruction =
-    game.phase === 'setup' && !isSetupRoad ? 'Place a settlement' :
+    game.phase === 'roll_order'
+      ? (isMyTurn ? 'Roll the dice to determine turn order' : `${currentPlayer?.name ?? `Player ${rollOrderCurrentPlayerIndex + 1}`} is rolling for turn order…`)
+      : game.phase === 'setup' && !isSetupRoad ? 'Place a settlement' :
     game.phase === 'setup' && isSetupRoad ? 'Place a road next to it' :
     isPlaying && robberMode.moving && !omenRobberMode ? 'Rolled 7! Click a hex to move the robber' :
     isPlaying && robberMode.newHexId && robberMode.playersToRob.size > 0 ? 'Select a player to rob' :
@@ -477,8 +745,64 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
 
   const showInstructionModal = currentInstruction != null && currentInstruction !== dismissedInstruction
 
+  if (game.phase === 'roll_order') {
+    const rolls = game.orderTiebreak != null ? (game.orderTiebreakRolls ?? []) : (game.orderRolls ?? [])
+    const displayOrder = game.orderTiebreak ?? Array.from({ length: n }, (_, i) => i)
+    return (
+      <div className="game-page parchment-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px', paddingTop: '8px' }}>
+        <GameGuide />
+        <div style={{ maxWidth: 480, margin: '32px auto', padding: 24, background: 'var(--parchment-section)', borderRadius: 12, border: '1px solid var(--paper-border)', textAlign: 'center' }}>
+          <h2 style={{ margin: '0 0 8px', fontSize: 22, color: 'var(--ink)' }}>Roll for turn order</h2>
+          <p style={{ margin: '0 0 20px', fontSize: 14, color: 'var(--ink)', opacity: 0.9 }}>
+            {game.orderTiebreak != null ? 'Tiebreak: roll again to break the tie.' : 'Highest roll goes first. Roll the dice when it’s your turn.'}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20, textAlign: 'left' }}>
+            {displayOrder.map((playerIdx, i) => {
+              const roll = rolls[i]
+              const p = game.players[playerIdx]
+              return (
+                <div key={playerIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: roll >= 0 ? 'rgba(0,0,0,0.04)' : 'transparent', borderRadius: 8 }}>
+                  <span style={{ fontWeight: 500, color: 'var(--ink)' }}>{p?.name ?? `Player ${playerIdx + 1}`}</span>
+                  <span style={{ color: 'var(--muted)', fontSize: 14 }}>{roll >= 0 ? `Rolled ${roll}` : 'Waiting…'}</span>
+                </div>
+              )
+            })}
+          </div>
+          {game.lastDice && (
+            <p style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 600, color: 'var(--ink)' }}>
+              {game.lastDice[0]} + {game.lastDice[1]} = {game.lastDice[0] + game.lastDice[1]}
+            </p>
+          )}
+          {isMyTurn ? (
+            <button
+              type="button"
+              onClick={handleRollOrder}
+              style={{
+                padding: '14px 28px',
+                fontSize: 16,
+                fontWeight: 700,
+                background: 'var(--cta, #D58258)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 10,
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              }}
+            >
+              Roll dice
+            </button>
+          ) : (
+            <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)' }}>
+              Waiting for {currentPlayer?.name ?? `Player ${rollOrderCurrentPlayerIndex + 1}`} to roll…
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="game-page parchment-page" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 16px', paddingTop: '8px' }}>
+    <div className="game-page parchment-page game-page--full-width" style={{ width: '100%', margin: 0, padding: '8px 16px 0' }}>
       <GameGuide />
 
       {isPlaying && omenRobberMode?.step === 'player' && omenRobberMode.hexId && (
@@ -510,7 +834,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
         </div>
       )}
 
-      <div style={{ position: 'relative' }}>
+      <div className="game-layout-wrapper" style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {/* Game toasts: modals above board, fade in and auto fade away */}
         <div
           style={{
@@ -675,10 +999,10 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
           </div>
         </div>
 
-        <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+        <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
         <ZoomableBoard
           className="game-board"
-          style={{ flex: '1 1 auto', minWidth: 600, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+          style={{ flex: '1 1 0', minWidth: 0, minHeight: 400, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
         >
           <HexBoard
             hexes={game.hexes}
@@ -807,7 +1131,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
                 fontSize: 13,
               }}
             >
-              History
+              Log
             </button>
           </div>
           <div className="game-sidebar-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -933,7 +1257,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
           />
             </>
           )}
-          {sidebarTab === 'history' && (
+          {sidebarTab === 'log' && (
             <GameHistory gameLog={game.gameLog ?? []} maxHeight={420} />
           )}
           {game.phase === 'setup' && <p style={{ fontSize: 14, color: 'var(--text)', padding: '8px 10px', borderRadius: 8, background: 'rgba(44,26,10,0.08)', border: '1px solid rgba(44,26,10,0.15)' }}>{isMyTurn ? (!isSetupRoad ? 'Click an empty spot to place a settlement.' : 'Click an edge connected to your settlement to place a road.') : `Waiting for Player ${setupPlayerIndex + 1}…`}</p>}

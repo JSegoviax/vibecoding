@@ -182,11 +182,15 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }
 
   const startGame = async () => {
-    if (!game || game.phase !== 'lobby' || players.length < 2) return
+    if (!game || game.phase !== 'lobby' || players.length < 1) return
     setStarting(true)
     const numPlayers = game.num_players as 2 | 3 | 4
     const colors = defaultColors.slice(0, numPlayers)
-    const state = createInitialState(numPlayers, [...colors], { multiplayer: true, oregonsOmens: game.oregons_omens ?? false })
+    const state = createInitialState(numPlayers, [...colors], {
+      multiplayer: true,
+      oregonsOmens: game.oregons_omens ?? false,
+      humanCount: players.length,
+    })
     const { error: e } = await supabase
       .from('games')
       .update({
@@ -243,7 +247,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   const takenSeats = new Set(players.map(p => p.player_index))
   const emptySeats = Array.from({ length: game.num_players }, (_, i) => i).filter(i => !takenSeats.has(i))
-  const canStart = myPlayerIndex !== null && players.length >= 2
+  const canStart = myPlayerIndex !== null && players.length >= 1
 
   return (
     <div

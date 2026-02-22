@@ -108,10 +108,11 @@ export function runAITurn(state: GameState, aiPlayerId: PlayerId = DEFAULT_AI_PL
   return { action: 'end' }
 }
 
-export function runAITrade(state: GameState, aiPlayerId: PlayerId = DEFAULT_AI_PLAYER_ID): { give: Terrain; get: Terrain } | null {
+export function runAITrade(state: GameState, aiPlayerId: PlayerId = DEFAULT_AI_PLAYER_ID): { give: Terrain; get: Terrain; reason: string } | null {
   const player = state.players[aiPlayerId - 1]
   if (!player) return null
   const order: ('city' | 'settlement' | 'road')[] = ['city', 'settlement', 'road']
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
   for (const struct of order) {
     if (struct === 'city' && player.citiesLeft <= 0) continue
     if (struct === 'settlement' && player.settlementsLeft <= 0) continue
@@ -135,7 +136,8 @@ export function runAITrade(state: GameState, aiPlayerId: PlayerId = DEFAULT_AI_P
           const rateB = getTradeRate(state, aiPlayerId, b)
           return rateA - rateB // Lower is better (2 < 3 < 4)
         })[0]
-        return { give: bestOption, get: m.terrain }
+        const reason = `Trading with the bank to get ${cap(m.terrain)} for a ${struct}.`
+        return { give: bestOption, get: m.terrain, reason }
       }
     }
   }
@@ -300,4 +302,104 @@ export function runAIPlayOmen(state: GameState, aiPlayerId: PlayerId = DEFAULT_A
   }
 
   return null
+}
+
+// ——— Player-to-player trade evaluation (needs-based + explainable AI) ———
+
+export type TradeDecisionCode = 'ACCEPT_TRADE' | 'REJECT_HOARDING' | 'REJECT_KINGMAKING' | 'REJECT_NO_MATCH'
+export type TradeDecision = { accepted: boolean; reason: string; code?: TradeDecisionCode; resource?: Terrain }
+
+type AIGoal = 'road' | 'settlement' | 'city'
+
+function getGoalRequirements(goal: AIGoal): Partial<Record<Terrain, number>> {
+  return getBuildCost(goal === 'city' ? 'city' : goal === 'settlement' ? 'settlement' : 'road')
+}
+
+/** Guess what the AI is trying to build from its hand. */
+function guessAIGoal(
+  state: GameState,
+  aiPlayerId: PlayerId,
+  resources: Record<Terrain, number>
+): AIGoal {
+  const player = state.players[aiPlayerId - 1]
+  if (!player) return 'road'
+  if (player.citiesLeft > 0 && (resources.ore ?? 0) > 0) return 'city'
+  if (player.settlementsLeft > 0 && ((resources.wood ?? 0) > 0 || (resources.brick ?? 0) > 0)) return 'settlement'
+  return 'road'
+}
+
+/**
+ * Evaluate a player-to-player trade offer from the AI's perspective.
+ * Returns { accepted, reason } for explainable UX. Anti-kingmaking: reject if offerer has 8+ VP.
+ */
+export function evaluateTradeOffer(
+  state: GameState,
+  aiPlayerId: PlayerId,
+  offeringPlayerId: PlayerId,
+  give: Terrain,
+  giveAmount: number,
+  want: Terrain,
+  wantAmount: number
+): TradeDecision {
+  const ai = state.players[aiPlayerId - 1]
+  const offerer = state.players[offeringPlayerId - 1]
+  if (!ai || !offerer) return { accepted: false, reason: "I can't trade right now." }
+  if (give === 'desert' || want === 'desert') return { accepted: false, reason: "That's not a valid trade." }
+
+  const offeringVP = offerer.victoryPoints ?? 0
+  if (offeringVP >= 8) {
+    return { accepted: false, reason: "You're too close to winning. I'm not helping you.", code: 'REJECT_KINGMAKING' }
+  }
+
+  const aiHas = ai.resources[want] ?? 0
+  if (aiHas < wantAmount) {
+    return {
+      accepted: false,
+      reason: `I don't have enough ${want} to make that trade.`,
+      code: 'REJECT_NO_MATCH',
+    }
+  }
+
+  const goal = guessAIGoal(state, aiPlayerId, ai.resources)
+  const goalReqs = getGoalRequirements(goal)
+  const goalLabel = goal === 'city' ? 'City' : goal === 'settlement' ? 'Settlement' : 'Road'
+
+  let utilityScore = 0
+  let hurtGoalResource: Terrain | null = null
+
+  // What the AI is giving up (what human wants)
+  const afterGive = (ai.resources[want] ?? 0) - wantAmount
+  const needForGoal = goalReqs[want] ?? 0
+  if (needForGoal > 0 && afterGive < needForGoal) {
+    utilityScore -= 5
+    hurtGoalResource = want
+  } else {
+    utilityScore += 1
+  }
+
+  // What the AI is getting (what human gives)
+  const getting = (ai.resources[give] ?? 0) + giveAmount
+  const needGive = goalReqs[give] ?? 0
+  if (needGive > 0 && (ai.resources[give] ?? 0) < needGive && getting >= needGive) {
+    utilityScore += 5
+  } else if (giveAmount > 0) {
+    utilityScore += 1
+  }
+
+  if (utilityScore > 0) {
+    return { accepted: true, reason: 'Deal. That helps me out.', code: 'ACCEPT_TRADE' }
+  }
+  if (hurtGoalResource) {
+    return {
+      accepted: false,
+      reason: `I can't do that. I'm saving my ${hurtGoalResource} for a ${goalLabel}.`,
+      code: 'REJECT_HOARDING',
+      resource: hurtGoalResource,
+    }
+  }
+  return {
+    accepted: false,
+    reason: "No thanks, that trade doesn't help my current strategy.",
+    code: 'REJECT_NO_MATCH',
+  }
 }
