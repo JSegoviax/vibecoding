@@ -2,6 +2,7 @@ import { createBoard } from './board'
 import { buildTopology } from './topology'
 import { createHarbors } from './harbors'
 import { createOmensDeck } from './omens'
+import { randomPersona } from './tradeLogFlavor'
 import type { GameState, Player, Vertex, Edge, PlayerId } from './types'
 export { appendGameLog } from './gameLog'
 

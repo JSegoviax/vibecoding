@@ -1120,8 +1120,8 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
             </button>
             <button
               type="button"
-              className={`game-sidebar-tab ${sidebarTab === 'history' ? 'game-sidebar-tab--active' : ''}`}
-              onClick={() => setSidebarTab('history')}
+              className={`game-sidebar-tab ${sidebarTab === 'log' ? 'game-sidebar-tab--active' : ''}`}
+              onClick={() => setSidebarTab('log')}
               style={{
                 flex: 1,
                 padding: '8px 12px',
