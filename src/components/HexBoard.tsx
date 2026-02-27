@@ -252,6 +252,12 @@ export function HexBoard({
                 style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
               />
             </g>
+            <path
+              d={d}
+              fill="none"
+              stroke="#152a47"
+              strokeWidth={4}
+            />
           </g>
         )
       })}
