@@ -142,7 +142,7 @@ export function ZoomableBoard({ children, className, style }: ZoomableBoardProps
       <div
         style={{
           position: 'absolute',
-          bottom: 8,
+          top: 8,
           right: 8,
           display: 'flex',
           alignItems: 'center',

@@ -46,10 +46,19 @@ interface PlayerResourcesProps {
   onSetTradeGet?: (terrain: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => void
   onTrade?: (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => void
   onSetErrorMessage?: (message: string | null) => void
-  /** Single-player: offer a 1:1 trade to the AI (Player 2). When set, trade form shows "Offer to Player 2" and delay + explainable response. */
-  onOfferToAI?: (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => void
-  /** Single-player: true while the AI is in its artificial delay before accepting/rejecting. */
-  aiTradeConsidering?: boolean
+  /** Single-player: broadcast 1:1 trade offer to all AI opponents. When set, trade form shows Trade Market UI. */
+  onOfferToTable?: (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => void
+  /** Single-player: 'idle' | 'considering' | 'resolved' — state of the table trade flow. */
+  tableTradeState?: 'idle' | 'considering' | 'resolved'
+  /** Single-player: when resolved with multiple acceptors, acceptedAIs + rejected for UI. */
+  tableTradeResolution?: {
+    acceptedAIs: number[]
+    rejected: { playerId: number; message: string }[]
+    give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'
+    get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'
+  } | null
+  /** Single-player: when multiple AIs accepted, human finalizes trade with chosen AI. */
+  onFinalizeTableTrade?: (playerId: number) => void
   canAfford?: (player: PlayerForResources, structure: 'road' | 'settlement' | 'city') => boolean
   getMissingResources?: (player: PlayerForResources, structure: 'road' | 'settlement' | 'city') => Array<{ terrain: Terrain; need: number }>
   getTradeRate?: (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => number
@@ -91,7 +100,7 @@ interface PlayerResourcesProps {
   farmSwapMyHexOptions?: Array<{ hexId: string; label: string }>
   /** Oregon's Omens: Farm Swap — opponent hexes available to swap with (grouped by owning player via optional ownerId/ownerName). */
   farmSwapTargetHexOptions?: Array<{ hexId: string; label: string; ownerId?: number; ownerName?: string }>
-  /** Oregon's Omens: number of cards drawn (in hands + discard) for "x/45 cards purchased" tally */
+  /** Oregon's Omens: current player's cards purchased for "x/45 cards purchased" tally */
   omenCardsPurchased?: number
   /** Oregon's Omens: total deck size (45) for "x/45 cards purchased" tally */
   omenCardsTotal?: number
@@ -202,8 +211,10 @@ export function PlayerResources({
   onSetTradeGet,
   onTrade,
   onSetErrorMessage,
-  onOfferToAI,
-  aiTradeConsidering = false,
+  onOfferToTable,
+  tableTradeState = 'idle',
+  tableTradeResolution = null,
+  onFinalizeTableTrade,
   canAfford,
   getMissingResources,
   getTradeRate,
@@ -423,9 +434,9 @@ export function PlayerResources({
                   })()}
                   {(() => {
                     const canAffordAnyTrade = getTradeRate && RESOURCE_OPTIONS.some((t) => (p.resources[t] || 0) >= getTradeRate(t as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'))
-                    const canOfferToPlayer = onOfferToAI && RESOURCE_OPTIONS.some((t) => (p.resources[t] || 0) >= 1)
+                    const canOfferToPlayer = onOfferToTable && RESOURCE_OPTIONS.some((t) => (p.resources[t] || 0) >= 1) && tradeGive !== tradeGet
                     const tradeDisabled = !canAffordAnyTrade && !canOfferToPlayer
-                    const hasPlayerTrade = players.length >= 2 && onOfferToAI != null
+                    const hasPlayerTrade = players.length >= 2 && onOfferToTable != null
                     return (
                       <>
                         <button
@@ -450,21 +461,53 @@ export function PlayerResources({
                 </div>
                 {tradeFormOpen && onSetTradeGive && onSetTradeGet && tradeGive && tradeGet && (() => {
                   const tradeRate = getTradeRate && tradeGive !== 'desert' ? getTradeRate(tradeGive as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') : 4
-                  const showOfferToPlayer2 = (onOfferToAI && isActive) || (players.length === 2 && isActive && phase === 'playing')
+                  const showTradeMarket = (onOfferToTable && isActive) || (players.length >= 2 && isActive && phase === 'playing')
                   return (
                     <div style={{ padding: 12, borderRadius: 8, background: 'rgba(42,26,10,0.08)', border: '1px solid #D9BDA5' }}>
-                      {/* Trade with another player / AI first when available */}
-                      {showOfferToPlayer2 && (
+                      {/* Trade Market: broadcast offer to all AI opponents */}
+                      {showTradeMarket && (
                         <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #D9BDA5' }}>
                           <div style={{ fontSize: 13, marginBottom: 4, color: '#2A1A0A', fontWeight: 600 }}>
-                            Trade with {players.length === 2 ? 'Player 2 (AI)' : 'another player'} — 1:1
+                            Trade Market
                           </div>
                           <div style={{ fontSize: 11, marginBottom: 8, color: '#5C5348' }}>
-                            Offer one resource for one; they may accept or refuse. Response appears in the Log.
+                            Offer resources to the table. Anyone with the cards can accept.
                           </div>
-                          {aiTradeConsidering ? (
+                          {tableTradeState === 'considering' ? (
                             <div style={{ fontSize: 12, color: '#5C5348', fontStyle: 'italic' }}>
-                              Player 2 is considering…
+                              The table is reviewing your offer...
+                            </div>
+                          ) : tableTradeState === 'resolved' && tableTradeResolution && tableTradeResolution.acceptedAIs.length > 0 ? (
+                            <div>
+                              <div style={{ fontSize: 12, marginBottom: 8, color: '#2A1A0A', fontWeight: 500 }}>
+                                Your offer was accepted! Choose who to trade with:
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {tableTradeResolution.acceptedAIs.map((pid) => {
+                                  const pl = players.find(x => x.id === pid)
+                                  return (
+                                    <div key={pid} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <span style={{ color: '#16a34a' }}>✓</span>
+                                      <span style={{ fontSize: 13, color: '#2A1A0A' }}>{pl?.name ?? `Player ${pid}`}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => onFinalizeTableTrade?.(pid)}
+                                        style={{ marginLeft: 'auto', padding: '6px 12px', borderRadius: 6, border: 'none', background: '#4A7AB8', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                                      >Trade</button>
+                                    </div>
+                                  )
+                                })}
+                                {tableTradeResolution.rejected.map((r) => {
+                                  const pl = players.find(x => x.id === r.playerId)
+                                  return (
+                                    <div key={r.playerId} style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: 0.8 }}>
+                                      <span style={{ color: '#dc2626' }}>✗</span>
+                                      <span style={{ fontSize: 13, color: '#5C5348' }}>{pl?.name ?? `Player ${r.playerId}`}</span>
+                                      <span style={{ fontSize: 11, color: '#5C5348' }}>— {r.message}</span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
                             </div>
                           ) : (
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -480,23 +523,23 @@ export function PlayerResources({
                               </label>
                               <button
                                 type="button"
-                                disabled={!onOfferToAI || (p.resources[tradeGive] || 0) < 1}
+                                disabled={!onOfferToTable || (p.resources[tradeGive] || 0) < 1 || tradeGive === tradeGet}
                                 onClick={() => {
-                                  if (!onOfferToAI || (p.resources[tradeGive] || 0) < 1) return
-                                  onOfferToAI(tradeGive as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', tradeGet as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')
+                                  if (!onOfferToTable || (p.resources[tradeGive] || 0) < 1 || tradeGive === tradeGet) return
+                                  onOfferToTable(tradeGive as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', tradeGet as 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore')
                                 }}
                                 style={{
                                   padding: '8px 16px',
                                   borderRadius: 8,
                                   border: 'none',
-                                  background: !onOfferToAI || (p.resources[tradeGive] || 0) < 1 ? '#E8E0D5' : '#4A7AB8',
-                                  color: !onOfferToAI || (p.resources[tradeGive] || 0) < 1 ? '#5C5348' : '#fff',
-                                  cursor: !onOfferToAI || (p.resources[tradeGive] || 0) < 1 ? 'not-allowed' : 'pointer',
+                                  background: !onOfferToTable || (p.resources[tradeGive] || 0) < 1 || tradeGive === tradeGet ? '#E8E0D5' : '#4A7AB8',
+                                  color: !onOfferToTable || (p.resources[tradeGive] || 0) < 1 || tradeGive === tradeGet ? '#5C5348' : '#fff',
+                                  cursor: !onOfferToTable || (p.resources[tradeGive] || 0) < 1 || tradeGive === tradeGet ? 'not-allowed' : 'pointer',
                                   fontSize: 13,
                                   fontWeight: 600,
                                   boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
                                 }}
-                              >Offer</button>
+                              >Offer to Table</button>
                             </div>
                           )}
                         </div>

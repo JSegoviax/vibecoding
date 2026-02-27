@@ -54,9 +54,7 @@ const PLACEABLE_ROAD_FRAME_MS = 110
 const NUMBER_TOKEN_WIDTH = 70
 const NUMBER_TOKEN_HEIGHT = 59
 
-/** Water and desert hex assets: use at native size, unaltered (261×304). */
-const WATER_HEX_WIDTH = 261
-const WATER_HEX_HEIGHT = 304
+/** Water hex: use intrinsic image dimensions to avoid stretching. Loaded at runtime. */
 
 /** Robber token (raccoon) on the robber hex. Display size to fit in hex center. */
 const ROBBER_IMAGE_WIDTH = 62
@@ -143,6 +141,14 @@ export function HexBoard({
   }, [hasPlaceableRoads])
 
   const waterPositions = useMemo(() => getWaterHexPositions(), [])
+
+  // Load water hex image and use intrinsic dimensions (avoids stretching)
+  const [waterHexSize, setWaterHexSize] = useState<{ width: number; height: number } | null>(null)
+  useEffect(() => {
+    const img = new Image()
+    img.onload = () => setWaterHexSize({ width: img.naturalWidth, height: img.naturalHeight })
+    img.src = '/water-hex.png'
+  }, [])
 
   // Calculate actual bounds including both land and water hexes
   const bounds = useMemo(() => {
@@ -231,25 +237,21 @@ export function HexBoard({
         const center = hexToPixel(q, r)
         const pts = [0, 1, 2, 3, 4, 5].map(i => hexCorner(center, i))
         const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z'
+        const w = waterHexSize?.width ?? 261
+        const h = waterHexSize?.height ?? 304
         return (
           <g key={`w${q},${r}`}>
             <g clipPath={`url(#water-clip-${q},${r})`}>
               <image
                 href="/water-hex.png"
-                x={center.x - WATER_HEX_WIDTH / 2}
-                y={center.y - WATER_HEX_HEIGHT / 2}
-                width={WATER_HEX_WIDTH}
-                height={WATER_HEX_HEIGHT}
+                x={center.x - w / 2}
+                y={center.y - h / 2}
+                width={w}
+                height={h}
                 preserveAspectRatio="xMidYMid meet"
                 style={{ imageRendering: 'pixelated', pointerEvents: 'none' }}
               />
             </g>
-            <path
-              d={d}
-              fill="none"
-              stroke="#152a47"
-              strokeWidth={4}
-            />
           </g>
         )
       })}

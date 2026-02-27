@@ -216,11 +216,12 @@ export function DiceRollAnimation({ dice1, dice2, onComplete, allowTapToStop = t
           transition: top 0.5s ease-out, left 0.5s ease-out, right 0.5s ease-out, transform 0.5s ease-out;
         }
         .dice-in-corner {
-          top: 20px;
-          right: 20px;
-          left: auto;
+          bottom: 20px;
+          left: 20px;
+          top: auto;
+          right: auto;
           transform: translate(0, 0);
-          transition: top 0.5s ease-out, left 0.5s ease-out, right 0.5s ease-out, transform 0.5s ease-out;
+          transition: top 0.5s ease-out, left 0.5s ease-out, right 0.5s ease-out, bottom 0.5s ease-out, transform 0.5s ease-out;
         }
       `}</style>
     </div>

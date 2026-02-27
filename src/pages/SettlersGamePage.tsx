@@ -100,7 +100,13 @@ export function SettlersGamePage() {
   const [tradeFormOpen, setTradeFormOpen] = useState(false)
   const [tradeGive, setTradeGive] = useState<'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'>('wood')
   const [tradeGet, setTradeGet] = useState<'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'>('brick')
-  const [aiTradeConsidering, setAiTradeConsidering] = useState(false)
+  const [tableTradeState, setTableTradeState] = useState<'idle' | 'considering' | 'resolved'>('idle')
+  const [tableTradeResolution, setTableTradeResolution] = useState<{
+    acceptedAIs: PlayerId[]
+    rejected: { playerId: PlayerId; message: string }[]
+    give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'
+    get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore'
+  } | null>(null)
   const [robberMode, setRobberMode] = useState<{ moving: boolean; newHexId: string | null; playersToRob: Set<number> }>({ moving: false, newHexId: null, playersToRob: new Set() })
   const [omenRobberMode, setOmenRobberMode] = useState<{ cardId: string; step: 'hex' | 'player'; hexId?: string; playersOnHex?: Set<number> } | null>(null)
   const [diceRolling, setDiceRolling] = useState<{ dice1: number; dice2: number } | null>(null)
@@ -1106,37 +1112,81 @@ export function SettlersGamePage() {
     })
   }
 
-  const handleOfferToAI = (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => {
-    if (!game || aiTradeConsidering) return
+  const handleOfferToTable = (give: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore', get: 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore') => {
+    if (!game || tableTradeState === 'considering') return
+    if (give === get) {
+      setErrorMessage('Give and Get must be different resources.')
+      return
+    }
     const human = game.players[0]
     if (!human || (human.resources[give] || 0) < 1) {
       setErrorMessage(`You need at least 1 ${give} to offer.`)
       return
     }
-    setAiTradeConsidering(true)
+    const aiOpponents = game.players.filter(p => p.id !== 1) as { id: PlayerId }[]
+    if (aiOpponents.length === 0) return
+
+    setTableTradeState('considering')
+    setTableTradeResolution(null)
     setErrorMessage(null)
-    const delayMs = 800 + Math.floor(Math.random() * 400)
+
+    const delayMs = 800 + Math.floor(Math.random() * 700)
     setTimeout(() => {
-      const decision = evaluateTradeOffer(game, 2 as PlayerId, 1 as PlayerId, give, 1, get, 1)
       const persona = game.aiPersona ?? 'merchant'
-      const { speaker, message } = decision.code
-        ? getTradeChatMessage(decision.code, persona, decision.resource)
-        : { speaker: 'AI', message: decision.reason }
+      const acceptedAIs: PlayerId[] = []
+      const rejected: { playerId: PlayerId; message: string }[] = []
+
+      for (const ai of aiOpponents) {
+        const aiId = ai.id as PlayerId
+        const decision = evaluateTradeOffer(game, aiId, 1 as PlayerId, give, 1, get, 1)
+        const { speaker, message } = decision.code
+          ? getTradeChatMessage(decision.code, persona, decision.resource)
+          : { speaker: ai.id === 2 ? 'Player 2' : `Player ${ai.id}`, message: decision.reason }
+
+        if (decision.accepted) {
+          acceptedAIs.push(aiId)
+        } else {
+          const logMessage = decision.code === 'REJECT_NO_MATCH' ? 'No thanks.' : message
+          rejected.push({ playerId: aiId, message: logMessage })
+        }
+      }
 
       setGame(g => {
         if (!g) return g
-        let next = appendGameLog(g, { type: 'chat', message, speaker })
-        if (decision.accepted) {
+        let next = g
+        for (const r of rejected) {
+          const p = g.players[r.playerId - 1]
+          next = appendGameLog(next, { type: 'chat', message: r.message, speaker: p?.name ?? `Player ${r.playerId}` })
+        }
+        return next
+      })
+
+      if (acceptedAIs.length === 0) {
+        setTableTradeState('idle')
+        setTableTradeResolution(null)
+        setTradeFormOpen(false)
+        return
+      }
+
+      if (acceptedAIs.length === 1) {
+        const targetId = acceptedAIs[0]
+        const targetPlayer = game.players[targetId - 1]
+        const { message } = getTradeChatMessage('ACCEPT_TRADE', persona)
+        const speaker = targetPlayer?.name ?? `Player ${targetId}`
+
+        setGame(g => {
+          if (!g) return g
+          let next = appendGameLog(g, { type: 'chat', message, speaker })
           next = {
             ...next,
-            players: next.players.map((pl, i) => {
-              if (i === 0) {
+            players: next.players.map((pl) => {
+              if (pl.id === 1) {
                 const res = { ...pl.resources }
                 res[give] = Math.max(0, (res[give] || 0) - 1)
                 res[get] = (res[get] || 0) + 1
                 return { ...pl, resources: res }
               }
-              if (i === 1) {
+              if (pl.id === targetId) {
                 const res = { ...pl.resources }
                 res[get] = Math.max(0, (res[get] || 0) - 1)
                 res[give] = (res[give] || 0) + 1
@@ -1145,12 +1195,53 @@ export function SettlersGamePage() {
               return pl
             }),
           }
-        }
-        return next
-      })
-      if (decision.accepted) setTradeFormOpen(false)
-      setAiTradeConsidering(false)
+          return next
+        })
+        setTableTradeState('idle')
+        setTableTradeResolution(null)
+        setTradeFormOpen(false)
+        return
+      }
+
+      setTableTradeState('resolved')
+      setTableTradeResolution({ acceptedAIs, rejected, give, get })
     }, delayMs)
+  }
+
+  const handleFinalizeTableTrade = (targetAiPlayerId: number) => {
+    if (!game || !tableTradeResolution || !tableTradeResolution.acceptedAIs.includes(targetAiPlayerId as PlayerId)) return
+    const { give, get } = tableTradeResolution
+    const targetPlayer = game.players[targetAiPlayerId - 1]
+    const persona = game.aiPersona ?? 'merchant'
+    const { message } = getTradeChatMessage('ACCEPT_TRADE', persona)
+    const speaker = targetPlayer?.name ?? `Player ${targetAiPlayerId}`
+
+    setGame(g => {
+      if (!g) return g
+      let next = appendGameLog(g, { type: 'chat', message, speaker })
+      next = {
+        ...next,
+        players: next.players.map((pl) => {
+          if (pl.id === 1) {
+            const res = { ...pl.resources }
+            res[give] = Math.max(0, (res[give] || 0) - 1)
+            res[get] = (res[get] || 0) + 1
+            return { ...pl, resources: res }
+          }
+          if (pl.id === targetAiPlayerId) {
+            const res = { ...pl.resources }
+            res[get] = Math.max(0, (res[get] || 0) - 1)
+            res[give] = (res[give] || 0) + 1
+            return { ...pl, resources: res }
+          }
+          return pl
+        }),
+      }
+      return next
+    })
+    setTableTradeState('idle')
+    setTableTradeResolution(null)
+    setTradeFormOpen(false)
   }
 
   const isPlaying = game.phase === 'playing' && !actualWinner
@@ -1165,11 +1256,108 @@ export function SettlersGamePage() {
     isPlaying && !robberMode.moving && !robberMode.newHexId && !omenRobberMode ? 'Roll dice, then build or end turn' :
     winner ? `${winner.name} wins with ${winner.victoryPoints} VP!` : null
 
-  const showInstructionModal = currentInstruction != null && currentInstruction !== dismissedInstruction
+  const showInstruction = currentInstruction != null && currentInstruction !== dismissedInstruction
+
+  // Consolidated header banner: events (robbery, omen, error) take priority over instruction
+  const bannerEvent = (game.lastOmenDebuffDrawn && game.lastOmenDebuffDrawn.playerId === 1)
+    ? (() => {
+        const d = game.lastOmenDebuffDrawn!
+        const counts: Record<string, number> = {}
+        for (const t of d.lostResources ?? []) { counts[t] = (counts[t] ?? 0) + 1 }
+        const lostStr = Object.keys(counts).length ? ` You lost: ${Object.entries(counts).map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`).join(', ')}` : ''
+        return { text: `You drew a debuff: ${getOmenCardName(d.cardId)} — ${getOmenCardEffectText(d.cardId)}${lostStr}`, style: { background: 'rgba(254, 226, 226, 1)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }, onDismiss: () => setGame(g => g ? { ...g, lastOmenDebuffDrawn: null } : g) }
+      })()
+    : (game.lastOmenBuffPlayed && game.lastOmenBuffPlayed.playerId === 1)
+    ? (() => {
+        const b = game.lastOmenBuffPlayed!
+        const counts: Record<string, number> = {}
+        for (const t of b.resourcesGained) { counts[t] = (counts[t] ?? 0) + 1 }
+        const list = Object.entries(counts).map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`).join(', ')
+        return { text: `${getOmenCardName(b.cardId)}: you collected ${list}`, style: { background: 'rgba(220, 252, 231, 1)', border: '1px solid rgba(22, 163, 74, 0.6)', color: '#14532d' }, onDismiss: () => setGame(g => g ? { ...g, lastOmenBuffPlayed: null } : g) }
+      })()
+    : (game.lastPantryNegation && game.lastPantryNegation.playerId === 1)
+    ? { text: `Well-Stocked Pantry negated ${getOmenCardName(game.lastPantryNegation.negatedCardId)} — no resources lost.`, style: { background: 'rgba(220, 252, 231, 1)', border: '1px solid rgba(22, 163, 74, 0.6)', color: '#14532d' }, onDismiss: () => setGame(g => g ? { ...g, lastPantryNegation: null } : g) }
+    : (game.lastRobbery || errorMessage)
+    ? (() => {
+        const r = game.lastRobbery
+        const viewerId = 1 as PlayerId
+        const isRobber = r && r.robbingPlayerId === viewerId
+        const isVictim = r && r.targetPlayerId === viewerId
+        const resourceLabel = r?.resource ? TERRAIN_LABELS[r.resource] : ''
+        const text = r
+          ? (isRobber ? `You stole ${resourceLabel}` : isVictim ? `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole your ${resourceLabel}` : `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole ${resourceLabel} from ${game.players[r.targetPlayerId - 1]?.name || `Player ${r.targetPlayerId}`}`)
+          : (errorMessage ?? '')
+        const style = r
+          ? (isRobber ? { background: 'rgba(220, 252, 231, 1)', border: '1px solid rgba(22, 163, 74, 0.6)', color: '#14532d' } as const
+            : isVictim ? { background: 'rgba(254, 226, 226, 1)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' } as const
+            : { background: '#FFFBF0', border: '1px solid rgba(42,26,10,0.2)', color: '#2A1A0A' } as const)
+          : { background: 'rgba(254, 226, 226, 1)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' } as const
+        return { text, style, onDismiss: () => { setErrorMessage(null); setGame(g => g ? { ...g, lastRobbery: null } : g) } }
+      })()
+    : showInstruction && currentInstruction
+    ? { text: currentInstruction, style: { background: '#FFFBF0', border: '1px solid rgba(42,26,10,0.2)', color: '#2A1A0A' }, onDismiss: () => setDismissedInstruction(currentInstruction) }
+    : null
 
   return (
-    <div className="game-page parchment-page game-page--full-width" style={{ width: '100%', margin: 0, padding: '8px 16px 0' }}>
-      <GameGuide />
+    <div className="game-page parchment-page game-page--full-width" style={{ width: '100%', margin: 0, padding: '8px 16px 0', display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      {/* Game title (left) and consolidated banner (centered in header) */}
+      <header style={{ flexShrink: 0, padding: '0 16px 12px', borderBottom: '1px solid rgba(42,26,10,0.12)', display: 'flex', alignItems: 'center', position: 'relative' }}>
+        <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: 'var(--ink, #2A1A0A)', flexShrink: 0 }}>Settlers of Oregon</h1>
+        {bannerEvent && (
+          <div
+            role={bannerEvent.text.includes('stole') || bannerEvent.text.includes('debuff') ? 'alert' : 'status'}
+            aria-live="polite"
+            className="game-toast-enter game-instruction-modal"
+            style={{
+              position: 'fixed',
+              left: '50vw',
+              transform: 'translateX(-50%)',
+              top: 14,
+              zIndex: 1001,
+              maxWidth: 420,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+              padding: '10px 16px',
+              borderRadius: 10,
+              ...bannerEvent.style,
+              fontSize: 14,
+              fontWeight: 600,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            }}
+          >
+            <span style={{ flex: 1, minWidth: 0, textAlign: 'center', wordWrap: 'break-word', overflowWrap: 'break-word' }}>
+              {bannerEvent.text}
+            </span>
+            <button
+              type="button"
+              onClick={bannerEvent.onDismiss}
+              aria-label="Dismiss"
+              style={{
+                flexShrink: 0,
+                width: 32,
+                height: 32,
+                minWidth: 32,
+                minHeight: 32,
+                padding: 0,
+                border: 'none',
+                borderRadius: 8,
+                background: 'rgba(42,26,10,0.12)',
+                color: 'inherit',
+                cursor: 'pointer',
+                fontSize: 18,
+                lineHeight: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+      </header>
 
       {/* Robber's Regret: select player to rob (or skip) */}
       {isPlaying && omenRobberMode?.step === 'player' && omenRobberMode.hexId && (
@@ -1202,157 +1390,6 @@ export function SettlersGamePage() {
       )}
 
       <div className="game-layout-wrapper" style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {/* Game toasts: modals above board, fade in and auto fade away */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 12,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 1000,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 8,
-            width: '100%',
-            maxWidth: 500,
-            pointerEvents: 'none',
-          }}
-        >
-          <div style={{ pointerEvents: 'auto', width: '100%' }}>
-            {game.lastOmenDebuffDrawn && game.lastOmenDebuffDrawn.playerId === 1 && (
-              <div
-                role="alert"
-                className="game-toast-enter"
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  background: 'rgba(254, 226, 226, 0.98)',
-                  border: '1px solid rgba(185, 28, 28, 0.6)',
-                  color: '#7f1d1d',
-                  fontSize: 14,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                }}
-              >
-                <span>
-                  You drew a debuff: <strong>{getOmenCardName(game.lastOmenDebuffDrawn.cardId)}</strong> — {getOmenCardEffectText(game.lastOmenDebuffDrawn.cardId)}
-                  {game.lastOmenDebuffDrawn.lostResources?.length ? (
-                    <> You lost: {(() => {
-                      const counts: Record<string, number> = {}
-                      for (const t of game.lastOmenDebuffDrawn.lostResources!) {
-                        counts[t] = (counts[t] ?? 0) + 1
-                      }
-                      return Object.entries(counts)
-                        .map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`)
-                        .join(', ')
-                    })()}</>
-                  ) : null}
-                </span>
-                <button onClick={() => setGame(g => g ? { ...g, lastOmenDebuffDrawn: null } : g)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
-              </div>
-            )}
-            {game.lastOmenBuffPlayed && game.lastOmenBuffPlayed.playerId === 1 && (
-              <div
-                role="alert"
-                className="game-toast-enter"
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  background: 'rgba(220, 252, 231, 0.98)',
-                  border: '1px solid rgba(22, 163, 74, 0.6)',
-                  color: '#14532d',
-                  fontSize: 14,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                }}
-              >
-                <span>
-                  <strong>{getOmenCardName(game.lastOmenBuffPlayed.cardId)}:</strong> you collected{' '}
-                  {(() => {
-                    const counts: Record<string, number> = {}
-                    for (const t of game.lastOmenBuffPlayed.resourcesGained) {
-                      counts[t] = (counts[t] ?? 0) + 1
-                    }
-                    return Object.entries(counts)
-                      .map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`)
-                      .join(', ')
-                  })()}
-                </span>
-                <button onClick={() => setGame(g => g ? { ...g, lastOmenBuffPlayed: null } : g)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
-              </div>
-            )}
-            {game.lastPantryNegation && game.lastPantryNegation.playerId === 1 && (
-              <div
-                role="alert"
-                className="game-toast-enter"
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  background: 'rgba(220, 252, 231, 0.98)',
-                  border: '1px solid rgba(22, 163, 74, 0.6)',
-                  color: '#14532d',
-                  fontSize: 14,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                }}
-              >
-                <span>
-                  <strong>Well-Stocked Pantry</strong> negated <strong>{getOmenCardName(game.lastPantryNegation.negatedCardId)}</strong> — no resources lost.
-                </span>
-                <button onClick={() => setGame(g => g ? { ...g, lastPantryNegation: null } : g)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
-              </div>
-            )}
-            {(game.lastRobbery || errorMessage) && (
-              <div
-                role="alert"
-                className="game-toast-enter"
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  ...(game.lastRobbery
-                    ? (() => {
-                        const r = game.lastRobbery!
-                        const viewerId = 1 as PlayerId
-                        const isRobber = r.robbingPlayerId === viewerId
-                        const isVictim = r.targetPlayerId === viewerId
-                        const resourceLabel = r.resource ? TERRAIN_LABELS[r.resource] : ''
-                        if (isRobber) return { background: 'rgba(220, 252, 231, 0.98)', border: '1px solid rgba(22, 163, 74, 0.6)', color: '#14532d' }
-                        if (isVictim) return { background: 'rgba(254, 226, 226, 0.98)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }
-                        return { background: 'rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.12)', color: 'var(--text)' }
-                      })()
-                    : { background: 'rgba(254, 226, 226, 0.98)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }),
-                  fontSize: 14,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                }}
-              >
-                <span>{game.lastRobbery ? (() => {
-                  const r = game.lastRobbery!
-                  const viewerId = 1 as PlayerId
-                  const isRobber = r.robbingPlayerId === viewerId
-                  const isVictim = r.targetPlayerId === viewerId
-                  const resourceLabel = r.resource ? TERRAIN_LABELS[r.resource] : ''
-                  return isRobber ? `You stole ${resourceLabel}` : isVictim ? `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole your ${resourceLabel}` : `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole ${resourceLabel} from ${game.players[r.targetPlayerId - 1]?.name || `Player ${r.targetPlayerId}`}`
-                })() : errorMessage}</span>
-                <button onClick={() => { setErrorMessage(null); setGame(g => g ? { ...g, lastRobbery: null } : g) }} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
-              </div>
-            )}
-          </div>
-        </div>
-
         <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
         <ZoomableBoard
           className="game-board"
@@ -1403,64 +1440,6 @@ export function SettlersGamePage() {
         </ZoomableBoard>
 
         <aside className="game-sidebar" style={{ position: 'relative', flex: '0 0 280px', minHeight: 0, background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* Closable instruction modal over the title so the map stays fully visible */}
-          {showInstructionModal && (
-            <div
-              role="dialog"
-              aria-live="polite"
-              className="game-toast-enter game-instruction-modal"
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                zIndex: 10,
-                padding: '12px 16px',
-                borderRadius: 10,
-                background: '#FFFBF0',
-                border: '1px solid rgba(42,26,10,0.2)',
-                color: '#2A1A0A',
-                fontSize: 15,
-                fontWeight: 600,
-                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-                boxSizing: 'border-box',
-              }}
-            >
-              <span style={{ flex: 1, minWidth: 0, textAlign: 'center', wordWrap: 'break-word', overflowWrap: 'break-word' }}>
-                {currentInstruction}
-              </span>
-              <button
-                type="button"
-                onClick={() => setDismissedInstruction(currentInstruction)}
-                aria-label="Dismiss"
-                style={{
-                  flexShrink: 0,
-                  width: 36,
-                  height: 36,
-                  minWidth: 36,
-                  minHeight: 36,
-                  padding: 0,
-                  border: 'none',
-                  borderRadius: 8,
-                  background: 'rgba(42,26,10,0.12)',
-                  color: '#2A1A0A',
-                  cursor: 'pointer',
-                  fontSize: 20,
-                  lineHeight: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                ×
-              </button>
-            </div>
-          )}
-          <h1 className="game-title game-sidebar-title" style={{ margin: '0 0 8px', fontSize: '1.25rem', fontWeight: 700, flexShrink: 0, lineHeight: 1.3, color: 'var(--ink, var(--text))' }}>Settlers of Oregon</h1>
           {actualWinner && (
             <button
               onClick={() => {
@@ -1468,6 +1447,9 @@ export function SettlersGamePage() {
                 gameWonTrackedRef.current = false
                 setGame(createInitialState(2))
                 setBuildMode(null)
+                setTradeFormOpen(false)
+                setTableTradeState('idle')
+                setTableTradeResolution(null)
               }}
               style={{ 
                 padding: '10px 20px', 
@@ -1533,15 +1515,23 @@ export function SettlersGamePage() {
             buildMode={buildMode}
             onSetBuildMode={setBuildMode}
             tradeFormOpen={tradeFormOpen}
-            onSetTradeFormOpen={setTradeFormOpen}
+            onSetTradeFormOpen={(open) => {
+              setTradeFormOpen(open)
+              if (!open) {
+                setTableTradeState('idle')
+                setTableTradeResolution(null)
+              }
+            }}
             tradeGive={tradeGive}
             onSetTradeGive={setTradeGive}
             tradeGet={tradeGet}
             onSetTradeGet={setTradeGet}
             onTrade={handleTrade}
             onSetErrorMessage={setErrorMessage}
-            onOfferToAI={isPlaying && !isAITurn && game.players.length === 2 ? handleOfferToAI : undefined}
-            aiTradeConsidering={aiTradeConsidering}
+            onOfferToTable={isPlaying && !isAITurn && game.players.length >= 2 ? handleOfferToTable : undefined}
+            tableTradeState={tableTradeState}
+            tableTradeResolution={tableTradeResolution}
+            onFinalizeTableTrade={handleFinalizeTableTrade}
             canAfford={
               isOmensEnabled(game)
                 ? (p, s) => canAffordWithCost(p, getEffectiveBuildCost(game, actualPlayerId as PlayerId, s))
@@ -1587,7 +1577,7 @@ export function SettlersGamePage() {
             getBuildCostDebuffSourcesForPlayer={isOmensEnabled(game) ? (pid) => getBuildCostDebuffSources(game, pid as PlayerId) : undefined}
             omenCardsPurchased={
               isOmensEnabled(game)
-                ? game.players.reduce((s, p) => s + (p.omensHand?.length ?? 0), 0) + (game.omensDiscardPile?.length ?? 0)
+                ? (game.players.find(p => p.id === actualPlayerId)?.omenCardsPurchased ?? 0)
                 : undefined
             }
             omenCardsTotal={isOmensEnabled(game) ? TOTAL_OMEN_DECK_SIZE : undefined}
@@ -1652,7 +1642,9 @@ export function SettlersGamePage() {
             </>
           )}
           {sidebarTab === 'log' && (
-            <GameHistory gameLog={game.gameLog ?? []} maxHeight={420} />
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <GameHistory gameLog={game.gameLog ?? []} fillHeight />
+            </div>
           )}
 
           {game.phase === 'setup' && (
@@ -1667,6 +1659,10 @@ export function SettlersGamePage() {
             </p>
           )}
 
+          </div>
+          {/* Game Guide at bottom of panel - accessible, no SEO impact (content in modal + How to Play page) */}
+          <div style={{ flexShrink: 0, marginTop: 'auto', paddingTop: 12, paddingBottom: 'max(8px, env(safe-area-inset-bottom))', borderTop: '1px solid rgba(42,26,10,0.12)' }}>
+            <GameGuide variant="inline" />
           </div>
         </aside>
         </div>

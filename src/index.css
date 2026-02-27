@@ -395,9 +395,17 @@ body:not(.no-grain-overlay)::before {
   }
 }
 
-/* Game Guide: on mobile move to bottom so it doesn't obscure the title; larger tap target */
+/* Game Guide: inline variant stays in layout flow (sidebar bottom); skip fixed positioning */
+.game-guide-btn--inline {
+  position: relative !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+}
+
+/* Game Guide: on mobile move floating button to bottom; larger tap target */
 @media (max-width: 768px) {
-  .game-guide-btn {
+  .game-guide-btn:not(.game-guide-btn--inline) {
     padding: 12px 20px !important;
     font-size: 16px !important;
     min-height: 44px !important;

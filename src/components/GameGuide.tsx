@@ -11,7 +11,12 @@ function shouldOpenGuideFromHash(): boolean {
   return false
 }
 
-export function GameGuide() {
+interface GameGuideProps {
+  /** When 'inline', button flows in layout (e.g. at bottom of sidebar). Default 'floating' for fixed top-right. */
+  variant?: 'floating' | 'inline'
+}
+
+export function GameGuide({ variant = 'floating' }: GameGuideProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   useEffect(() => {
@@ -44,13 +49,14 @@ export function GameGuide() {
   return (
     <>
       <button
-        className="game-guide-btn"
+        className={`game-guide-btn ${variant === 'inline' ? 'game-guide-btn--inline' : ''}`}
         onClick={handleOpen}
+        aria-label="Game Guide: opens game rules and how-to-play"
+        title="Game rules and how-to-play"
         style={{
-          position: 'fixed',
-          top: 16,
-          right: 16,
-          padding: '10px 16px',
+          ...(variant === 'inline'
+            ? { display: 'block', width: '100%', padding: '10px 16px', whiteSpace: 'nowrap' }
+            : { position: 'fixed', top: 16, right: 16, zIndex: 1000 }),
           borderRadius: 8,
           background: 'var(--accent)',
           border: 'none',
@@ -58,8 +64,7 @@ export function GameGuide() {
           fontWeight: 'bold',
           cursor: 'pointer',
           fontSize: 14,
-          zIndex: 1000,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          boxShadow: variant === 'inline' ? '0 1px 4px rgba(0,0,0,0.15)' : '0 2px 8px rgba(0,0,0,0.2)',
         }}
       >
         📖 Game Guide

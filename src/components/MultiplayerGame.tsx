@@ -743,7 +743,46 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
       ? (isMyTurn ? 'Roll dice, then build or end turn' : `Waiting for Player ${game.currentPlayerIndex + 1}…`)
       : winner ? `${winner.name} wins with ${winner.victoryPoints} VP!` : null
 
-  const showInstructionModal = currentInstruction != null && currentInstruction !== dismissedInstruction
+  const showInstruction = currentInstruction != null && currentInstruction !== dismissedInstruction
+  const viewerId = (game.players[myPlayerIndex]?.id ?? (myPlayerIndex + 1)) as PlayerId
+
+  const bannerEvent = (game.lastOmenDebuffDrawn && game.lastOmenDebuffDrawn.playerId === playerId)
+    ? (() => {
+        const d = game.lastOmenDebuffDrawn!
+        const counts: Record<string, number> = {}
+        for (const t of d.lostResources ?? []) { counts[t] = (counts[t] ?? 0) + 1 }
+        const lostStr = Object.keys(counts).length ? ` You lost: ${Object.entries(counts).map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`).join(', ')}` : ''
+        return { text: `You drew a debuff: ${getOmenCardName(d.cardId)} — ${getOmenCardEffectText(d.cardId)}${lostStr}`, style: { background: 'rgba(254, 226, 226, 1)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }, onDismiss: () => sendStateUpdate({ ...game, lastOmenDebuffDrawn: null }) }
+      })()
+    : (game.lastOmenBuffPlayed && game.lastOmenBuffPlayed.playerId === playerId)
+    ? (() => {
+        const b = game.lastOmenBuffPlayed!
+        const counts: Record<string, number> = {}
+        for (const t of b.resourcesGained) { counts[t] = (counts[t] ?? 0) + 1 }
+        const list = Object.entries(counts).map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`).join(', ')
+        return { text: `${getOmenCardName(b.cardId)}: you collected ${list}`, style: { background: 'rgba(220, 252, 231, 1)', border: '1px solid rgba(22, 163, 74, 0.6)', color: '#14532d' }, onDismiss: () => sendStateUpdate({ ...game, lastOmenBuffPlayed: null }) }
+      })()
+    : (game.lastPantryNegation && game.lastPantryNegation.playerId === playerId)
+    ? { text: `Well-Stocked Pantry negated ${getOmenCardName(game.lastPantryNegation.negatedCardId)} — no resources lost.`, style: { background: 'rgba(220, 252, 231, 1)', border: '1px solid rgba(22, 163, 74, 0.6)', color: '#14532d' }, onDismiss: () => sendStateUpdate({ ...game, lastPantryNegation: null }) }
+    : (game.lastRobbery || errorMessage)
+    ? (() => {
+        const r = game.lastRobbery
+        const isRobber = r && r.robbingPlayerId === viewerId
+        const isVictim = r && r.targetPlayerId === viewerId
+        const resourceLabel = r?.resource ? TERRAIN_LABELS[r.resource] : ''
+        const text = r
+          ? (isRobber ? `You stole ${resourceLabel}` : isVictim ? `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole your ${resourceLabel}` : `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole ${resourceLabel} from ${game.players[r.targetPlayerId - 1]?.name || `Player ${r.targetPlayerId}`}`)
+          : (errorMessage ?? '')
+        const style = r
+          ? (isRobber ? { background: 'rgba(220, 252, 231, 1)', border: '1px solid rgba(22, 163, 74, 0.6)', color: '#14532d' } as const
+            : isVictim ? { background: 'rgba(254, 226, 226, 1)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' } as const
+            : { background: '#FFFBF0', border: '1px solid rgba(42,26,10,0.2)', color: '#2A1A0A' } as const)
+          : { background: 'rgba(254, 226, 226, 1)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' } as const
+        return { text, style, onDismiss: () => { setErrorMessage(null); if (!isSpectator && game.lastRobbery) sendStateUpdate({ ...game, lastRobbery: null }) } }
+      })()
+    : showInstruction && currentInstruction
+    ? { text: currentInstruction, style: { background: '#FFFBF0', border: '1px solid rgba(42,26,10,0.2)', color: '#2A1A0A' }, onDismiss: () => setDismissedInstruction(currentInstruction) }
+    : null
 
   if (game.phase === 'roll_order') {
     const rolls = game.orderTiebreak != null ? (game.orderTiebreakRolls ?? []) : (game.orderRolls ?? [])
@@ -802,8 +841,66 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
   }
 
   return (
-    <div className="game-page parchment-page game-page--full-width" style={{ width: '100%', margin: 0, padding: '8px 16px 0' }}>
-      <GameGuide />
+    <div className="game-page parchment-page game-page--full-width" style={{ width: '100%', margin: 0, padding: '8px 16px 0', display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <header style={{ flexShrink: 0, padding: '0 16px 12px', borderBottom: '1px solid rgba(42,26,10,0.12)', display: 'flex', alignItems: 'center', position: 'relative' }}>
+        <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: 'var(--ink, #2A1A0A)', flexShrink: 0 }}>
+          Settlers of Oregon (Multiplayer){isSpectator && <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', marginTop: 2 }}>Spectating</span>}
+        </h1>
+        {bannerEvent && (
+          <div
+            role={bannerEvent.text.includes('stole') || bannerEvent.text.includes('debuff') ? 'alert' : 'status'}
+            aria-live="polite"
+            className="game-toast-enter game-instruction-modal"
+            style={{
+              position: 'fixed',
+              left: '50vw',
+              transform: 'translateX(-50%)',
+              top: 14,
+              zIndex: 1001,
+              maxWidth: 420,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+              padding: '10px 16px',
+              borderRadius: 10,
+              ...bannerEvent.style,
+              fontSize: 14,
+              fontWeight: 600,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            }}
+          >
+            <span style={{ flex: 1, minWidth: 0, textAlign: 'center', wordWrap: 'break-word', overflowWrap: 'break-word' }}>
+              {bannerEvent.text}
+            </span>
+            <button
+              type="button"
+              onClick={bannerEvent.onDismiss}
+              aria-label="Dismiss"
+              style={{
+                flexShrink: 0,
+                width: 32,
+                height: 32,
+                minWidth: 32,
+                minHeight: 32,
+                padding: 0,
+                border: 'none',
+                borderRadius: 8,
+                background: 'rgba(42,26,10,0.12)',
+                color: 'inherit',
+                cursor: 'pointer',
+                fontSize: 18,
+                lineHeight: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+      </header>
 
       {isPlaying && omenRobberMode?.step === 'player' && omenRobberMode.hexId && (
         <div style={{ margin: '0 auto 16px', maxWidth: 400, padding: 12, borderRadius: 8, background: 'rgba(139,69,19,0.15)', border: '1px solid rgba(139,69,19,0.4)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -835,170 +932,6 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
       )}
 
       <div className="game-layout-wrapper" style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {/* Game toasts: modals above board, fade in and auto fade away */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 12,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 1000,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 8,
-            width: '100%',
-            maxWidth: 500,
-            pointerEvents: 'none',
-          }}
-        >
-          <div style={{ pointerEvents: 'auto', width: '100%' }}>
-            {game.lastOmenDebuffDrawn && game.lastOmenDebuffDrawn.playerId === playerId && (
-              <div
-                role="alert"
-                className="game-toast-enter"
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  background: 'rgba(254, 226, 226, 0.98)',
-                  border: '1px solid rgba(185, 28, 28, 0.6)',
-                  color: '#7f1d1d',
-                  fontSize: 14,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                }}
-              >
-                <span>
-                  You drew a debuff: <strong>{getOmenCardName(game.lastOmenDebuffDrawn.cardId)}</strong> — {getOmenCardEffectText(game.lastOmenDebuffDrawn.cardId)}
-                  {game.lastOmenDebuffDrawn.lostResources?.length ? (
-                    <> You lost: {(() => {
-                      const counts: Record<string, number> = {}
-                      for (const t of game.lastOmenDebuffDrawn.lostResources!) {
-                        counts[t] = (counts[t] ?? 0) + 1
-                      }
-                      return Object.entries(counts)
-                        .map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`)
-                        .join(', ')
-                    })()}</>
-                  ) : null}
-                </span>
-                <button onClick={() => sendStateUpdate({ ...game, lastOmenDebuffDrawn: null })} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
-              </div>
-            )}
-            {game.lastOmenBuffPlayed && game.lastOmenBuffPlayed.playerId === playerId && (
-              <div
-                role="alert"
-                className="game-toast-enter"
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  background: 'rgba(220, 252, 231, 0.98)',
-                  border: '1px solid rgba(22, 163, 74, 0.6)',
-                  color: '#14532d',
-                  fontSize: 14,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                }}
-              >
-                <span>
-                  <strong>{getOmenCardName(game.lastOmenBuffPlayed.cardId)}:</strong> you collected{' '}
-                  {(() => {
-                    const counts: Record<string, number> = {}
-                    for (const t of game.lastOmenBuffPlayed.resourcesGained) {
-                      counts[t] = (counts[t] ?? 0) + 1
-                    }
-                    return Object.entries(counts)
-                      .map(([t, n]) => n === 1 ? TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS] : `${n} ${TERRAIN_LABELS[t as keyof typeof TERRAIN_LABELS]}`)
-                      .join(', ')
-                  })()}
-                </span>
-                <button onClick={() => sendStateUpdate({ ...game, lastOmenBuffPlayed: null })} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
-              </div>
-            )}
-            {game.lastPantryNegation && game.lastPantryNegation.playerId === playerId && (
-              <div
-                role="alert"
-                className="game-toast-enter"
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  background: 'rgba(220, 252, 231, 0.98)',
-                  border: '1px solid rgba(22, 163, 74, 0.6)',
-                  color: '#14532d',
-                  fontSize: 14,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                }}
-              >
-                <span>
-                  <strong>Well-Stocked Pantry</strong> negated <strong>{getOmenCardName(game.lastPantryNegation.negatedCardId)}</strong> — no resources lost.
-                </span>
-                <button onClick={() => sendStateUpdate({ ...game, lastPantryNegation: null })} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Dismiss">×</button>
-              </div>
-            )}
-            {(game.lastRobbery || errorMessage) && (
-              <div
-                role="alert"
-                className="game-toast-enter"
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  ...(game.lastRobbery
-                    ? (() => {
-                        const r = game.lastRobbery!
-                        const viewerId = (game.players[myPlayerIndex]?.id ?? (myPlayerIndex + 1)) as PlayerId
-                        const isRobber = r.robbingPlayerId === viewerId
-                        const isVictim = r.targetPlayerId === viewerId
-                        const resourceLabel = r.resource ? TERRAIN_LABELS[r.resource] : ''
-                        if (isRobber) return { background: 'rgba(220, 252, 231, 0.98)', border: '1px solid rgba(22, 163, 74, 0.6)', color: '#14532d' }
-                        if (isVictim) return { background: 'rgba(254, 226, 226, 0.98)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }
-                        return { background: 'rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.12)', color: 'var(--text)' }
-                      })()
-                    : { background: 'rgba(254, 226, 226, 0.98)', border: '1px solid rgba(185, 28, 28, 0.6)', color: '#7f1d1d' }),
-                  fontSize: 14,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                }}
-              >
-                <span>
-                  {game.lastRobbery
-                    ? (() => {
-                        const r = game.lastRobbery!
-                        const viewerId = (game.players[myPlayerIndex]?.id ?? (myPlayerIndex + 1)) as PlayerId
-                        const isRobber = r.robbingPlayerId === viewerId
-                        const isVictim = r.targetPlayerId === viewerId
-                        const resourceLabel = r.resource ? TERRAIN_LABELS[r.resource] : ''
-                        return isRobber ? `You stole ${resourceLabel}` : isVictim ? `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole your ${resourceLabel}` : `${game.players[r.robbingPlayerId - 1]?.name || `Player ${r.robbingPlayerId}`} stole ${resourceLabel} from ${game.players[r.targetPlayerId - 1]?.name || `Player ${r.targetPlayerId}`}`
-                      })()
-                    : errorMessage}
-                </span>
-                <button
-                  onClick={() => {
-                    setErrorMessage(null)
-                    if (!isSpectator && game.lastRobbery) sendStateUpdate({ ...game, lastRobbery: null })
-                  }}
-                  style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}
-                  aria-label="Dismiss"
-                >
-                  ×
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
         <div className="game-layout" style={{ display: 'flex', gap: 24, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
         <ZoomableBoard
           className="game-board"
@@ -1043,65 +976,6 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
         </ZoomableBoard>
 
         <aside className="game-sidebar" style={{ position: 'relative', flex: '0 0 280px', minHeight: 0, background: 'var(--surface)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {showInstructionModal && (
-            <div
-              role="dialog"
-              aria-live="polite"
-              className="game-toast-enter game-instruction-modal"
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                zIndex: 10,
-                padding: '12px 16px',
-                borderRadius: 10,
-                background: '#FFFBF0',
-                border: '1px solid rgba(42,26,10,0.2)',
-                color: '#2A1A0A',
-                fontSize: 15,
-                fontWeight: 600,
-                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-                boxSizing: 'border-box',
-              }}
-            >
-              <span style={{ flex: 1, minWidth: 0, textAlign: 'center', wordWrap: 'break-word', overflowWrap: 'break-word' }}>
-                {currentInstruction}
-              </span>
-              <button
-                type="button"
-                onClick={() => setDismissedInstruction(currentInstruction)}
-                aria-label="Dismiss"
-                style={{
-                  flexShrink: 0,
-                  width: 36,
-                  height: 36,
-                  minWidth: 36,
-                  minHeight: 36,
-                  padding: 0,
-                  border: 'none',
-                  borderRadius: 8,
-                  background: 'rgba(42,26,10,0.12)',
-                  color: '#2A1A0A',
-                  cursor: 'pointer',
-                  fontSize: 20,
-                  lineHeight: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                ×
-              </button>
-            </div>
-          )}
-          <h1 className="game-title game-sidebar-title" style={{ margin: '0 0 8px', fontSize: '1.25rem', fontWeight: 700, flexShrink: 0, lineHeight: 1.3, color: 'var(--ink, var(--text))' }}>
-            Settlers of Oregon (Multiplayer){isSpectator && <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', marginTop: 2 }}>Spectating</span>}
-          </h1>
           <div style={{ display: 'flex', gap: 4, marginBottom: 4, flexShrink: 0 }}>
             <button
               type="button"
@@ -1193,7 +1067,7 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
             getBuildCostDebuffSourcesForPlayer={isOmensEnabled(game) ? (pid) => getBuildCostDebuffSources(game, pid as PlayerId) : undefined}
             omenCardsPurchased={
               isOmensEnabled(game)
-                ? game.players.reduce((s, p) => s + (p.omensHand?.length ?? 0), 0) + (game.omensDiscardPile?.length ?? 0)
+                ? (currentPlayer?.omenCardsPurchased ?? 0)
                 : undefined
             }
             omenCardsTotal={isOmensEnabled(game) ? TOTAL_OMEN_DECK_SIZE : undefined}
@@ -1258,11 +1132,16 @@ export function MultiplayerGame({ gameId, myPlayerIndex, initialState }: Props) 
             </>
           )}
           {sidebarTab === 'log' && (
-            <GameHistory gameLog={game.gameLog ?? []} maxHeight={420} />
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <GameHistory gameLog={game.gameLog ?? []} fillHeight />
+            </div>
           )}
           {game.phase === 'setup' && <p style={{ fontSize: 14, color: 'var(--text)', padding: '8px 10px', borderRadius: 8, background: 'rgba(44,26,10,0.08)', border: '1px solid rgba(44,26,10,0.15)' }}>{isMyTurn ? (!isSetupRoad ? 'Click an empty spot to place a settlement.' : 'Click an edge connected to your settlement to place a road.') : `Waiting for Player ${setupPlayerIndex + 1}…`}</p>}
           {isPlaying && !isMyTurn && <p style={{ fontSize: 14, color: 'var(--text)', padding: '8px 10px', borderRadius: 8, background: 'rgba(44,26,10,0.08)', border: '1px solid rgba(44,26,10,0.15)' }}>Waiting for Player {game.currentPlayerIndex + 1}…</p>}
           {winner && <a href="/" style={{ padding: '10px 20px', background: 'var(--accent)', color: '#fff', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer', marginTop: 8, textAlign: 'center', textDecoration: 'none' }}>Back to home</a>}
+          </div>
+          <div style={{ flexShrink: 0, marginTop: 'auto', paddingTop: 12, paddingBottom: 'max(8px, env(safe-area-inset-bottom))', borderTop: '1px solid rgba(42,26,10,0.12)' }}>
+            <GameGuide variant="inline" />
           </div>
         </aside>
         </div>

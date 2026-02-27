@@ -4,9 +4,11 @@ import type { GameLogEntry } from '../game/types'
 interface GameHistoryProps {
   gameLog: GameLogEntry[]
   maxHeight?: number
+  /** When true, fills available space in flex parent instead of using maxHeight */
+  fillHeight?: boolean
 }
 
-export function GameHistory({ gameLog, maxHeight = 320 }: GameHistoryProps) {
+export function GameHistory({ gameLog, maxHeight = 320, fillHeight = false }: GameHistoryProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -23,12 +25,14 @@ export function GameHistory({ gameLog, maxHeight = 320 }: GameHistoryProps) {
     )
   }
 
+  const displayOrder = [...gameLog].reverse()
+
   return (
     <div
       ref={scrollRef}
       style={{
         overflowY: 'auto',
-        maxHeight,
+        ...(fillHeight ? { flex: 1, minHeight: 0 } : { maxHeight }),
         display: 'flex',
         flexDirection: 'column',
         gap: 4,
@@ -37,7 +41,7 @@ export function GameHistory({ gameLog, maxHeight = 320 }: GameHistoryProps) {
       role="log"
       aria-label="Game log"
     >
-      {gameLog.map((entry) => (
+      {displayOrder.map((entry) => (
         <div
           key={entry.id}
           style={{
