@@ -20,6 +20,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    date: '2026-02-16',
+    dateLabel: 'Feb 16, 2026',
+    items: [
+      'Trading: In 2–4 player games vs AI, you can now offer trades to the table. All AI opponents evaluate your offer; if multiple accept, you choose who to trade with. Rejections no longer reveal which resources the AI lacks.',
+      'Log: Messages now show newest first and the log uses the full sidebar height on desktop.',
+      'Omen Cards: The purchase counter now shows your own cards purchased, not the total across all players.',
+      'Water Tiles: Updated water hex art to the designer’s tile with correct proportions; hex outline restored.',
+      'UI: Dice and zoom controls no longer overlap on desktop; Game Guide button has clearer labeling.',
+    ],
+  },
+  {
     date: '2026-02-15',
     dateLabel: 'Feb 15, 2026',
     items: [
