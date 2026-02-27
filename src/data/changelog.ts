@@ -20,8 +20,8 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
-    date: '2026-02-16',
-    dateLabel: 'Feb 16, 2026',
+    date: '2026-02-26',
+    dateLabel: 'Feb 26, 2026',
     items: [
       'Trading: In 2–4 player games vs AI, you can now offer trades to the table. All AI opponents evaluate your offer; if multiple accept, you choose who to trade with. Rejections no longer reveal which resources the AI lacks.',
       'Log: Messages now show newest first and the log uses the full sidebar height on desktop.',
